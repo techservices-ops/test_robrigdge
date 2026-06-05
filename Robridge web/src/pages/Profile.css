@@ -1,0 +1,482 @@
+.profile-page {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  background: #ffffff;
+  min-height: 100vh;
+}
+
+/* Message Banner */
+.message-banner {
+  padding: 16px 24px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 500;
+  animation: slideDown 0.3s ease;
+}
+
+.message-banner.success {
+  background: #d4edda;
+  color: #27ae60;
+  border: 2px solid #27ae60;
+}
+
+.message-banner.error {
+  background: #f8d7da;
+  color: #e74c3c;
+  border: 2px solid #e74c3c;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.profile-layout {
+  margin-top: 32px;
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  gap: 40px;
+  align-items: start;
+}
+
+/* Avatar Card - Left Side */
+.avatar-card {
+  background: white;
+  border-radius: 20px;
+  padding: 48px 32px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border: 2px solid #f8f9fa;
+  text-align: center;
+  position: sticky;
+  top: 24px;
+}
+
+.avatar-container {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 24px;
+}
+
+.avatar-circle {
+  width: 160px;
+  height: 160px;
+  background: linear-gradient(135deg, #E3821E 0%, #D6730A 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 64px;
+  box-shadow: 0 8px 24px rgba(227, 130, 30, 0.3);
+  border: 6px solid white;
+}
+
+.camera-button {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 44px;
+  height: 44px;
+  background: white;
+  border: 3px solid #E3821E;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #E3821E;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.camera-button:hover {
+  background: #E3821E;
+  color: white;
+  transform: scale(1.1);
+}
+
+.profile-pic-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.remove-pic-btn {
+  display: block;
+  margin: 16px auto 0;
+  background: none;
+  border: none;
+  color: #e74c3c;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+  text-decoration: underline;
+}
+
+.remove-pic-btn:hover {
+  background: rgba(231, 76, 60, 0.1);
+  color: #c0392b;
+  text-decoration: none;
+}
+
+.user-info-section h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #2c3e50;
+  margin: 0 0 12px 0;
+}
+
+.user-id-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #E3821E 0%, #D6730A 100%);
+  color: white;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 8px 20px;
+  border-radius: 20px;
+  margin: 0 0 16px 0;
+  box-shadow: 0 2px 8px rgba(227, 130, 30, 0.3);
+}
+
+.member-date {
+  font-size: 14px;
+  color: #7f8c8d;
+  margin: 0;
+}
+
+/* Account Card - Right Side */
+.account-card {
+  background: white;
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border: 2px solid #f8f9fa;
+}
+
+.account-card h3 {
+  font-size: 26px;
+  font-weight: 700;
+  color: #2c3e50;
+  margin: 0 0 32px 0;
+  padding-bottom: 20px;
+  border-bottom: 3px solid #fff5eb;
+}
+
+.form-field {
+  margin-bottom: 28px;
+}
+
+.form-field label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #E3821E;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.form-field label svg {
+  font-size: 16px;
+}
+
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-wrapper input {
+  width: 100%;
+  padding: 14px 50px 14px 18px;
+  border: 2px solid #e8eaed;
+  border-radius: 12px;
+  font-size: 15px;
+  color: #2c3e50;
+  background: #f8f9fa;
+  transition: all 0.3s ease;
+  font-weight: 500;
+}
+
+.input-wrapper input.editing {
+  background: white;
+  border-color: #ffffff;
+  box-shadow: 0 0 0 4px rgba(227, 130, 30, 0.1);
+}
+
+.input-wrapper input:focus {
+  outline: none;
+  border-color: #E3821E;
+  background: white;
+  box-shadow: 0 0 0 4px rgba(227, 130, 30, 0.1);
+}
+
+.input-wrapper input:disabled {
+  background: #f8f9fa;
+  color: #95a5a6;
+  cursor: not-allowed;
+  border-color: #e8eaed;
+}
+
+.input-wrapper input[readonly]:not(.editing) {
+  cursor: default;
+}
+
+.edit-btn {
+  position: absolute;
+  right: 16px;
+  color: #E3821E;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 4px;
+}
+
+.edit-btn:hover {
+  color: #D6730A;
+  transform: scale(1.15);
+}
+
+.save-btn {
+  width: 100%;
+  padding: 16px;
+  font-size: 16px;
+  font-weight: 700;
+  margin-top: 36px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 12px rgba(227, 130, 30, 0.3);
+  transition: all 0.3s ease;
+}
+
+.save-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(227, 130, 30, 0.4);
+}
+
+.save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Password Section */
+.password-section {
+  margin-top: 48px;
+  padding-top: 40px;
+  border-top: 3px solid #fff5eb;
+}
+
+.password-section h3 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #2c3e50;
+  margin: 0 0 28px 0;
+}
+
+.password-section .save-btn {
+  background: #E3821E;
+  color: #ffffff;
+  margin-top: 24px;
+}
+
+.password-section .save-btn:hover:not(:disabled) {
+  background: #D6730A;
+  box-shadow: 0 6px 16px rgba(227, 130, 30, 0.4);
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .profile-layout {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .avatar-card {
+    position: static;
+    padding: 40px 24px;
+  }
+
+  .account-card {
+    padding: 32px 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-page {
+    padding: 16px;
+  }
+
+  .avatar-circle {
+    width: 130px;
+    height: 130px;
+    font-size: 52px;
+  }
+
+  .camera-button {
+    width: 38px;
+    height: 38px;
+    font-size: 16px;
+  }
+
+  .user-info-section h2 {
+    font-size: 24px;
+  }
+
+  .account-card h3 {
+    font-size: 22px;
+  }
+
+  .input-wrapper input {
+    padding: 12px 45px 12px 16px;
+    font-size: 14px;
+  }
+}
+
+/* Password Change Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.password-modal {
+  background: white;
+  border-radius: 20px;
+  padding: 40px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  position: relative;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #7f8c8d;
+  cursor: pointer;
+  transition: color 0.3s ease;
+  padding: 4px;
+}
+
+.modal-close:hover {
+  color: #2c3e50;
+}
+
+.password-modal h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #2c3e50;
+  margin: 0 0 8px 0;
+}
+
+.modal-subtitle {
+  font-size: 14px;
+  color: #7f8c8d;
+  margin: 0 0 32px 0;
+}
+
+.modal-form {
+  margin-bottom: 0;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 32px;
+}
+
+.modal-actions button {
+  flex: 1;
+  margin: 0 !important;
+  padding: 14px 24px;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #E3821E;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.btn-secondary {
+  background: #ffffff;
+  color: #E3821E;
+}
+
+.btn-secondary:hover {
+  background: #FFF5EB;
+  border-color: #D6730A;
+  color: #D6730A;
+}
+
+.btn-primary {
+  background: #E3821E;
+  color: white;
+  border-color: #E3821E;
+  box-shadow: 0 4px 12px rgba(227, 130, 30, 0.2);
+}
+
+.btn-primary:hover {
+  background: #D6730A;
+  border-color: #D6730A;
+  box-shadow: 0 6px 16px rgba(227, 130, 30, 0.4);
+}

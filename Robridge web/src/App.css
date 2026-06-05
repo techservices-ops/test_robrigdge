@@ -1,0 +1,155 @@
+.App {
+  display: flex;
+  min-height: 100vh;
+}
+
+.app-main-content {
+  flex: 1;
+  padding: 24px;
+  background-color: #ffffff;
+  overflow-y: auto;
+  margin-left: 280px;
+  min-height: 100vh;
+  transition: margin-left 0.3s ease;
+}
+
+/* Handle collapsed sidebar */
+body.sidebar-collapsed .app-main-content {
+  margin-left: 80px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .app-main-content {
+    padding: 16px;
+    margin-left: 0;
+  }
+
+  body.sidebar-collapsed .app-main-content {
+    margin-left: 0;
+  }
+}
+
+/* Page transitions */
+.page-enter {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 300ms, transform 300ms;
+}
+
+.page-exit {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.page-exit-active {
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: opacity 300ms, transform 300ms;
+}
+
+/* Loading Container */
+.loading-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2c2c2c 50%, #1a1a1a 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.loading-spinner {
+  text-align: center;
+  color: #e0e0e0;
+}
+
+.loading-spinner .spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(227, 130, 30, 0.2);
+  border-top: 4px solid #E3821E;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+.loading-spinner p {
+  font-size: 18px;
+  font-weight: 500;
+  margin: 0;
+  color: #b0b0b0;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Access Denied Page */
+.access-denied {
+  min-height: 100vh;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  padding: 20px;
+}
+
+.access-denied-content {
+  text-align: center;
+  background: #fff5eb;
+  border: 2px solid #E3821E;
+  border-radius: 16px;
+  padding: 40px;
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(227, 130, 30, 0.2);
+}
+
+.access-denied-content h2 {
+  color: #EA4335;
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.access-denied-content p {
+  color: #2c3e50;
+  font-size: 16px;
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+.access-denied-content button {
+  background: #E3821E;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 20px;
+}
+
+.access-denied-content button:hover {
+  background: #D6730A;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(227, 130, 30, 0.3);
+}
+
+.access-denied-content button:active {
+  transform: translateY(0);
+}

@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barcode Generator Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .form-container {
+            padding: 40px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 1.1em;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .location-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+        }
+
+        .barcode-type-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            flex: 1;
+        }
+
+        .btn-2d {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-3d {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .result-container {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .result-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .result-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .barcode-image {
+            max-width: 100%;
+            height: auto;
+            margin-top: 15px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .database-info {
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
+            color: #1565c0;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .database-info h3 {
+            margin-bottom: 10px;
+        }
+
+        .database-info ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .database-info li {
+            padding: 5px 0;
+            border-bottom: 1px solid #bbdefb;
+        }
+
+        .database-info li:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏷️ Barcode Generator</h1>
+            <p>Generate 2D and 3D barcodes for your products</p>
+        </div>
+
+        <div class="form-container">
+            <form id="barcodeForm">
+                <div class="form-group">
+                    <label for="productName">Product Name *</label>
+                    <input type="text" id="productName" name="productName" required placeholder="Enter product name">
+                </div>
+
+                <div class="form-group">
+                    <label for="productId">Product ID *</label>
+                    <input type="text" id="productId" name="productId" required placeholder="Enter product ID">
+                </div>
+
+                <div class="form-group">
+                    <label>Location (X, Y, Z) *</label>
+                    <div class="location-group">
+                        <input type="number" id="locationX" name="locationX" required placeholder="X coordinate" step="0.01">
+                        <input type="number" id="locationY" name="locationY" required placeholder="Y coordinate" step="0.01">
+                        <input type="number" id="locationZ" name="locationZ" required placeholder="Z coordinate" step="0.01">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="category">Category *</label>
+                    <select id="category" name="category" required>
+                        <option value="">Select a category</option>
+                        <option value="electronics">Electronics</option>
+                        <option value="clothing">Clothing</option>
+                        <option value="books">Books</option>
+                        <option value="food">Food & Beverages</option>
+                        <option value="automotive">Automotive</option>
+                        <option value="healthcare">Healthcare</option>
+                        <option value="sports">Sports & Fitness</option>
+                        <option value="home">Home & Garden</option>
+                        <option value="toys">Toys & Games</option>
+                        <option value="stationary">Stationary</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+
+                <div class="barcode-type-buttons">
+                    <button type="button" class="btn btn-2d" onclick="generateBarcode('qr')">
+                        🎯 Generate 2D Barcode (QR)
+                    </button>
+                    <button type="button" class="btn btn-3d" onclick="generateBarcode('code128')">
+                        📊 Generate 1D Barcode (Code128)
+                    </button>
+                </div>
+            </form>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Generating barcode...</p>
+            </div>
+
+            <div class="result-container" id="resultContainer"></div>
+
+            <div class="database-info" id="databaseInfo" style="display: none;">
+                <h3>📊 Database Information</h3>
+                <div id="databaseContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:5000';
+
+        async function generateBarcode(barcodeType) {
+            const form = document.getElementById('barcodeForm');
+            const loading = document.getElementById('loading');
+            const resultContainer = document.getElementById('resultContainer');
+            const databaseInfo = document.getElementById('databaseInfo');
+
+            // Validate form
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+
+            // Get form data
+            const formData = new FormData(form);
+            const productName = formData.get('productName');
+            const productId = formData.get('productId');
+            const locationX = formData.get('locationX');
+            const locationY = formData.get('locationY');
+            const locationZ = formData.get('locationZ');
+            const category = formData.get('category');
+
+            // Create barcode data
+            const barcodeData = JSON.stringify({
+                product_name: productName,
+                product_id: productId,
+                location: {
+                    x: parseFloat(locationX),
+                    y: parseFloat(locationY),
+                    z: parseFloat(locationZ)
+                },
+                category: category,
+                timestamp: new Date().toISOString()
+            });
+
+            // Show loading
+            loading.style.display = 'block';
+            resultContainer.style.display = 'none';
+            databaseInfo.style.display = 'none';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/generate_barcode`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        data: barcodeData,
+                        type: barcodeType,
+                        source: 'web',
+                        metadata: {
+                            product_name: productName,
+                            product_id: productId,
+                            location: {
+                                x: parseFloat(locationX),
+                                y: parseFloat(locationY),
+                                z: parseFloat(locationZ)
+                            },
+                            category: category,
+                            user_agent: navigator.userAgent
+                        }
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showSuccess(result, barcodeType);
+                    await updateDatabaseInfo();
+                } else {
+                    showError(result.error || 'Failed to generate barcode');
+                }
+            } catch (error) {
+                showError('Connection error: ' + error.message);
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        function showSuccess(result, barcodeType) {
+            const resultContainer = document.getElementById('resultContainer');
+            const barcodeTypeText = barcodeType === 'qr' ? '2D QR Code' : '1D Code128 Barcode';
+            const barcodeData = JSON.parse(result.data);
+            
+            resultContainer.innerHTML = `
+                <div class="result-success">
+                    <h3>✅ ${barcodeTypeText} Generated Successfully!</h3>
+                    <p><strong>🎯 Barcode ID:</strong> <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">${result.barcode_id}</code></p>
+                    <p><strong>📦 Product:</strong> ${barcodeData.product_name}</p>
+                    <p><strong>🆔 Product ID:</strong> ${barcodeData.product_id}</p>
+                    <p><strong>🏷️ Category:</strong> ${barcodeData.category}</p>
+                    <p><strong>📍 Location:</strong> X: ${barcodeData.location.x}, Y: ${barcodeData.location.y}, Z: ${barcodeData.location.z}</p>
+                    <p><strong>⏰ Generated:</strong> ${new Date().toLocaleString()}</p>
+                    <p><strong>💾 Database ID:</strong> ${result.id || 'N/A'}</p>
+                    <img src="${API_BASE_URL}/get_barcode/${result.filename.split('/').pop()}" alt="Generated Barcode" class="barcode-image">
+                </div>
+            `;
+            resultContainer.style.display = 'block';
+        }
+
+        function showError(message) {
+            const resultContainer = document.getElementById('resultContainer');
+            resultContainer.innerHTML = `
+                <div class="result-error">
+                    <h3>❌ Error</h3>
+                    <p>${message}</p>
+                </div>
+            `;
+            resultContainer.style.display = 'block';
+        }
+
+        async function updateDatabaseInfo() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/list_barcodes`);
+                const result = await response.json();
+
+                if (response.ok) {
+                    const databaseContent = document.getElementById('databaseContent');
+                    const databaseInfo = document.getElementById('databaseInfo');
+                    
+                    databaseContent.innerHTML = `
+                        <p><strong>Total Barcodes:</strong> ${result.barcodes.length}</p>
+                        <ul>
+                            ${result.barcodes.slice(0, 5).map(barcode => {
+                                const data = JSON.parse(barcode.data);
+                                return `<li>
+                                    <strong>🎯 ${barcode.barcode_id}</strong><br>
+                                    📦 ${data.product_name} (${barcode.type.toUpperCase()})<br>
+                                    📍 Location: X:${barcode.location_x || 'N/A'}, Y:${barcode.location_y || 'N/A'}, Z:${barcode.location_z || 'N/A'}<br>
+                                    ⏰ ${new Date(barcode.created_at).toLocaleString()}
+                                </li>`;
+                            }).join('')}
+                        </ul>
+                        ${result.barcodes.length > 5 ? `<p><em>... and ${result.barcodes.length - 5} more</em></p>` : ''}
+                    `;
+                    databaseInfo.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Failed to fetch database info:', error);
+            }
+        }
+
+        // Load database info on page load
+        window.addEventListener('load', updateDatabaseInfo);
+    </script>
+</body>
+</html>

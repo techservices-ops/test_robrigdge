@@ -1,0 +1,245 @@
+/* ===================================
+   MODERN AUTH LAYOUT - PROFESSIONAL DESIGN
+   =================================== */
+
+.auth-layout {
+    display: flex;
+    min-height: 100vh;
+    max-height: 100vh;
+    background: #ffffff;
+    overflow: hidden;
+}
+
+/* ===================================
+   LEFT SIDE - LOGIN FORM
+   =================================== */
+.auth-left {
+    flex: 0 0 45%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    background: #ffffff;
+    position: relative;
+    z-index: 2;
+    overflow-y: auto;
+}
+
+@media (max-width: 1024px) {
+    .auth-left {
+        flex: 0 0 100%;
+        padding: 30px 20px;
+    }
+}
+
+/* ===================================
+   RIGHT SIDE - ANIMATED HERO SECTION
+   =================================== */
+.auth-right {
+    flex: 1;
+    position: relative;
+    background: linear-gradient(135deg, #FF8C00 0%, #FFA500 50%, #FFB84D 100%);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@media (max-width: 1024px) {
+    .auth-right {
+        display: none;
+    }
+}
+
+/* ===================================
+   RIGHT CONTENT OVERLAY
+   =================================== */
+.right-content {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 650px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 25px;
+}
+
+/* ===================================
+   HERO SECTION
+   =================================== */
+.hero-section {
+    text-align: center;
+    animation: fadeInUp 0.8s ease-out;
+}
+
+/* Scanner Image Container */
+.scanner-image-container {
+    position: relative;
+    width: 100%;
+    max-width: 700px;
+    height: 320px;
+    margin: 0 auto 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0px;
+    left: -100px;
+}
+
+.model-text {
+    font-size: 48px;
+    font-weight: 900;
+    color: #ffffff;
+    text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    letter-spacing: 2px;
+    white-space: nowrap;
+    position: relative;
+    z-index: 3;
+    margin-left: -200px;
+}
+
+.scanner-image {
+    width: 700px;
+    height: 700px;
+    object-fit: contain;
+    filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.3));
+    position: relative;
+    top: -30px;
+    z-index: 2;
+}
+
+.scanner-glow {
+    position: absolute;
+    width: 430px;
+    height: 430px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(40px);
+    opacity: 0.6;
+    z-index: 1;
+    left: 0;
+}
+
+.hero-title {
+    font-size: 36px;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 10px 0;
+    line-height: 1.2;
+    text-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    animation: fadeInUp 0.8s ease-out 0.2s both;
+}
+
+.hero-subtitle {
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.95);
+    margin: 0;
+    line-height: 1.4;
+    animation: fadeInUp 0.8s ease-out 0.4s both;
+}
+
+/* ===================================
+   FEATURE CARDS
+   =================================== */
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    animation: fadeInUp 0.8s ease-out 0.6s both;
+}
+
+.feature-card {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 16px 14px;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease;
+}
+
+.feature-card:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.feature-icon {
+    font-size: 28px;
+    margin-bottom: 8px;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
+}
+
+.feature-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0 0 6px 0;
+}
+
+.feature-description {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.9);
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* ===================================
+   ANIMATIONS
+   =================================== */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ===================================
+   RESPONSIVE DESIGN
+   =================================== */
+@media (max-width: 768px) {
+    .auth-left {
+        padding: 30px 20px;
+    }
+
+    .hero-title {
+        font-size: 28px;
+    }
+
+    .hero-subtitle {
+        font-size: 13px;
+    }
+
+    .scanner-image-container {
+        flex-direction: column;
+        height: auto;
+        gap: 12px;
+        margin-bottom: 15px;
+    }
+
+    .model-text {
+        font-size: 36px;
+    }
+
+    .scanner-image {
+        width: 220px;
+        height: 220px;
+    }
+
+    .scanner-glow {
+        width: 270px;
+        height: 270px;
+    }
+
+    .features-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+}

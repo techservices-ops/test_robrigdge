@@ -1,0 +1,48 @@
+/* ── Work Orders Page ── */
+.ims-wo-page { padding: var(--spacing-xl); max-width: 1400px; }
+
+.wo-kpi-strip { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+.wo-kpi-card { background: var(--bg-primary); border-radius: var(--radius-md); padding: 16px 20px; display: flex; align-items: center; gap: 14px; flex: 1; min-width: 140px; box-shadow: var(--shadow-sm); border: 1px solid var(--border-light); border-left: 4px solid; }
+.wo-kpi-icon { font-size: 22px; }
+.wo-kpi-value { font-size: 28px; font-weight: 800; line-height: 1; }
+.wo-kpi-label { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+.wo-layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; }
+
+.wo-list-panel { display: flex; flex-direction: column; gap: 12px; }
+.wo-controls { display: flex; gap: 10px; }
+.wo-cards { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: calc(100vh - 320px); }
+
+.wo-card { background: var(--bg-primary); border-radius: var(--radius-md); padding: 16px; cursor: pointer; border: 1.5px solid var(--border-light); transition: all 0.2s ease; }
+.wo-card:hover { border-color: var(--primary-orange); box-shadow: var(--shadow-md); }
+.wo-card.active { border-color: var(--primary-orange); background: #fff9f0; }
+.wo-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.wo-id { font-size: 12px; font-weight: 700; color: var(--text-tertiary); font-family: monospace; }
+.wo-status-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+.wo-status-badge.large { font-size: 13px; padding: 5px 14px; }
+.wo-product { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
+.wo-meta { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+.wo-meta svg { margin-right: 3px; }
+.wo-shortage-flag { color: #e74c3c !important; font-weight: 700; }
+.wo-progress-bar { width: 100%; height: 5px; background: var(--bg-tertiary); border-radius: 10px; overflow: hidden; margin-bottom: 4px; }
+.wo-progress-fill { height: 100%; border-radius: 10px; transition: width 0.8s ease; }
+.wo-pct { font-size: 11px; color: var(--text-tertiary); text-align: right; }
+
+.wo-detail-panel { background: var(--bg-primary); border-radius: var(--radius-lg); padding: 24px; box-shadow: var(--shadow-md); border: 1px solid var(--border-light); }
+.wo-empty-detail { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 12px; color: var(--text-tertiary); min-height: 400px; }
+.wo-empty-icon { font-size: 56px; opacity: 0.25; }
+.wo-detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+.wo-detail-header h2 { margin: 0 0 4px 0; font-size: 22px; }
+.wo-detail-id { font-size: 13px; color: var(--text-tertiary); font-family: monospace; }
+.wo-detail-stats { display: flex; gap: 24px; background: var(--bg-secondary); border-radius: var(--radius-md); padding: 16px 20px; margin-bottom: 20px; flex-wrap: wrap; }
+.wo-stat { display: flex; flex-direction: column; align-items: center; }
+.wo-stat-val { font-size: 28px; font-weight: 800; color: var(--primary-orange); }
+.wo-stat-lbl { font-size: 12px; color: var(--text-secondary); }
+.wo-materials-section h3 { font-size: 15px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.wo-bom-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+.wo-bom-table th { background: var(--bg-secondary); padding: 10px 12px; text-align: left; font-size: 12px; color: var(--text-secondary); border-bottom: 2px solid var(--border-light); }
+.wo-bom-table td { padding: 10px 12px; border-bottom: 1px solid var(--border-light); font-size: 14px; }
+.bom-status { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+.bom-status.ok { background: #eafaf1; color: #27ae60; }
+.bom-status.short { background: #fdf0ed; color: #e74c3c; }
+.wo-actions { display: flex; gap: 10px; flex-wrap: wrap; }

@@ -1,0 +1,18 @@
+﻿// Add this after line 141 in Dashboard.js
+
+// Fetch recent scans
+const fetchRecentScans = useCallback(async () => {
+  try {
+    const serverURL = getServerURL();
+    const token = localStorage.getItem('robridge_token');
+    const response = await fetch(${serverURL}/api/barcodes/scanned?limit=10, {
+      headers: { 'Authorization': Bearer  }
+    });
+    const data = await response.json();
+    if (data.success) {
+      setRecentScans(data.scans || []);
+    }
+  } catch (error) {
+    console.error('Error fetching recent scans:', error);
+  }
+}, []);

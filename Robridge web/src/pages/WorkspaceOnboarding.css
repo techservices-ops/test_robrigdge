@@ -1,0 +1,583 @@
+/* ================================================================
+   WorkspaceOnboarding — Matches RoBridge IMS Orange Design System
+   Primary: #E3821E  |  Hover: #D6730A  |  Dark: #1a1a2e
+   ================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+.ws-onboarding-root {
+  display: flex;
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+  background: #f5f6f8;
+}
+
+/* ── Left Panel ────────────────────────────────────────────── */
+.ws-onboarding-left {
+  width: 440px;
+  flex-shrink: 0;
+  background: linear-gradient(145deg, #1a1a2e 0%, #2d1a0e 50%, #1a1a2e 100%);
+  padding: 48px 40px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Orange glow top-right */
+.ws-onboarding-left::before {
+  content: '';
+  position: absolute;
+  top: -80px; right: -80px;
+  width: 320px; height: 320px;
+  border-radius: 50%;
+  background: rgba(227, 130, 30, 0.18);
+  filter: blur(70px);
+  pointer-events: none;
+}
+
+/* Subtle warm glow bottom-left */
+.ws-onboarding-left::after {
+  content: '';
+  position: absolute;
+  bottom: -100px; left: -60px;
+  width: 350px; height: 350px;
+  border-radius: 50%;
+  background: rgba(227, 130, 30, 0.08);
+  filter: blur(80px);
+  pointer-events: none;
+}
+
+.ws-onboarding-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 60px;
+  position: relative;
+  z-index: 1;
+}
+
+.ws-ob-logo {
+  height: 36px;
+  object-fit: contain;
+}
+
+.ws-ob-brand-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+.ws-ob-hero {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 48px;
+}
+
+.ws-ob-hero h1 {
+  font-size: 32px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.25;
+  margin: 0 0 16px;
+}
+
+/* Orange accent text gradient */
+.ws-ob-accent {
+  background: linear-gradient(90deg, #E3821E, #f5a623);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.ws-ob-hero p {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.7;
+  margin: 0;
+}
+
+.ws-ob-features {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  position: relative;
+  z-index: 1;
+  flex: 1;
+}
+
+.ws-ob-feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.ws-ob-feature-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: rgba(227, 130, 30, 0.15);
+  border: 1px solid rgba(227, 130, 30, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #E3821E;
+  font-size: 14px;
+}
+
+.ws-ob-feature-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 2px;
+}
+
+.ws-ob-feature-desc {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Step indicator dots */
+.ws-ob-dots {
+  display: flex;
+  gap: 8px;
+  margin-top: 40px;
+  position: relative;
+  z-index: 1;
+}
+
+.ws-ob-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+}
+
+.ws-ob-dot.active {
+  width: 24px;
+  border-radius: 4px;
+  background: #E3821E;
+}
+
+/* ── Right Panel ───────────────────────────────────────────── */
+.ws-onboarding-right {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  overflow-y: auto;
+  background: #f5f6f8;
+}
+
+.ws-ob-right-inner {
+  width: 100%;
+  max-width: 520px;
+}
+
+/* ── Steps ──────────────────────────────────────────────────── */
+.ws-ob-step {
+  animation: ws-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes ws-enter {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Greeting ────────────────────────────────────────────────── */
+.ws-ob-greeting {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 36px;
+}
+
+/* Orange avatar */
+.ws-ob-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #E3821E, #D6730A);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 16px rgba(227, 130, 30, 0.4);
+}
+
+.ws-ob-welcome {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.ws-ob-sub {
+  font-size: 13px;
+  color: #7f8c8d;
+  margin-top: 2px;
+}
+
+/* ── Mode Cards ─────────────────────────────────────────────── */
+.ws-ob-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ws-ob-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 22px 20px;
+  background: #fff;
+  border: 2px solid #e8ecf0;
+  border-radius: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.22s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  width: 100%;
+}
+
+.ws-ob-card:hover {
+  border-color: #E3821E;
+  box-shadow: 0 8px 30px rgba(227, 130, 30, 0.14);
+  transform: translateY(-2px);
+}
+
+.ws-ob-card:hover .ws-ob-card-arrow {
+  transform: translateX(4px);
+  color: #E3821E;
+}
+
+.ws-ob-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+/* Create icon — orange */
+.create-icon {
+  background: rgba(227, 130, 30, 0.1);
+  color: #E3821E;
+}
+
+/* Join icon — slightly warmer green to complement orange */
+.join-icon {
+  background: rgba(39, 174, 96, 0.1);
+  color: #27ae60;
+}
+
+.ws-ob-card-body {
+  flex: 1;
+}
+
+.ws-ob-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin-bottom: 4px;
+}
+
+.ws-ob-card-desc {
+  font-size: 12px;
+  color: #7f8c8d;
+  line-height: 1.5;
+}
+
+.ws-ob-card-arrow {
+  color: #bdc3c7;
+  font-size: 14px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+/* ── Forms ──────────────────────────────────────────────────── */
+.ws-ob-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #7f8c8d;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 28px;
+  transition: color 0.2s;
+}
+
+.ws-ob-back:hover { color: #E3821E; }
+
+.ws-ob-form-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: #1a1a2e;
+  margin: 0 0 8px;
+}
+
+.ws-ob-form-sub {
+  font-size: 14px;
+  color: #7f8c8d;
+  margin: 0 0 32px;
+  line-height: 1.6;
+}
+
+.ws-ob-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ws-ob-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ws-ob-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.ws-ob-input {
+  width: 100%;
+  padding: 13px 16px;
+  border: 2px solid #e8ecf0;
+  border-radius: 10px;
+  font-size: 15px;
+  color: #1a1a2e;
+  background: #fff;
+  transition: all 0.2s;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+/* Orange focus ring */
+.ws-ob-input:focus {
+  outline: none;
+  border-color: #E3821E;
+  box-shadow: 0 0 0 4px rgba(227, 130, 30, 0.12);
+}
+
+.ws-ob-input.error {
+  border-color: #e74c3c;
+}
+
+/* Org type grid */
+.ws-ob-org-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ws-ob-org-btn {
+  padding: 12px;
+  border: 2px solid #e8ecf0;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #5d6d7e;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+}
+
+.ws-ob-org-btn:hover {
+  border-color: #E3821E;
+  color: #E3821E;
+  background: rgba(227, 130, 30, 0.05);
+}
+
+.ws-ob-org-btn.selected {
+  border-color: #E3821E;
+  color: #E3821E;
+  background: rgba(227, 130, 30, 0.08);
+  font-weight: 700;
+}
+
+/* Validate invite button */
+.ws-ob-preview-btn {
+  margin-top: 8px;
+  background: none;
+  border: 1px solid #E3821E;
+  color: #E3821E;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 600;
+  align-self: flex-start;
+  font-family: inherit;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ws-ob-preview-btn:hover {
+  background: rgba(227, 130, 30, 0.08);
+}
+
+/* Invite preview card */
+.ws-ob-preview-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(39, 174, 96, 0.06);
+  border: 1.5px solid rgba(39, 174, 96, 0.3);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.ws-ob-preview-check {
+  color: #27ae60;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.ws-ob-preview-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.ws-ob-preview-role {
+  font-size: 12px;
+  color: #7f8c8d;
+  margin-top: 2px;
+}
+
+.ws-ob-preview-role strong {
+  color: #27ae60;
+  text-transform: capitalize;
+}
+
+/* Error */
+.ws-ob-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(231, 76, 60, 0.06);
+  border: 1px solid rgba(231, 76, 60, 0.25);
+  color: #c0392b;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* ── Submit Button — IMS Orange ─────────────────────────────── */
+.ws-ob-submit-btn {
+  width: 100%;
+  padding: 15px;
+  background: linear-gradient(135deg, #E3821E, #D6730A);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.22s ease;
+  box-shadow: 0 4px 20px rgba(227, 130, 30, 0.35);
+  font-family: inherit;
+  margin-top: 8px;
+}
+
+.ws-ob-submit-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(227, 130, 30, 0.45);
+  background: linear-gradient(135deg, #D6730A, #c4620a);
+}
+
+.ws-ob-submit-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.ws-ob-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Join button — keep green to differentiate action */
+.ws-ob-submit-btn.join {
+  background: linear-gradient(135deg, #27ae60, #229954);
+  box-shadow: 0 4px 20px rgba(39, 174, 96, 0.3);
+}
+
+.ws-ob-submit-btn.join:hover:not(:disabled) {
+  box-shadow: 0 8px 30px rgba(39, 174, 96, 0.4);
+}
+
+/* ── Success State ─────────────────────────────────────────── */
+.ws-ob-success {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.ws-ob-success-icon {
+  font-size: 72px;
+  line-height: 1;
+  margin-bottom: 24px;
+  animation: ws-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.1s both;
+}
+
+@keyframes ws-pop {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+.ws-ob-success h2 {
+  font-size: 28px;
+  font-weight: 800;
+  color: #1a1a2e;
+  margin: 0 0 12px;
+}
+
+.ws-ob-success p {
+  font-size: 15px;
+  color: #7f8c8d;
+  line-height: 1.6;
+  margin: 0 0 36px;
+}
+
+/* Spinner */
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .ws-onboarding-left {
+    display: none;
+  }
+  .ws-onboarding-right {
+    padding: 24px 20px;
+  }
+}

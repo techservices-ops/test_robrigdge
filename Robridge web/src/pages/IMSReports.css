@@ -1,0 +1,26 @@
+/* ── Reports & Analytics Page ── */
+.ims-reports-page { padding: var(--spacing-xl); max-width: 1400px; }
+
+.reports-layout { display: grid; grid-template-columns: 240px 1fr; gap: 20px; }
+
+.reports-sidebar { background: var(--bg-primary); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow-md); border: 1px solid var(--border-light); height: fit-content; }
+.reports-sidebar-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-tertiary); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-light); }
+.report-type-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 10px; border-radius: var(--radius-md); cursor: pointer; margin-bottom: 4px; border-left: 3px solid transparent; transition: all 0.2s; }
+.report-type-item:hover { background: var(--bg-secondary); }
+.rti-label { font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 2px; }
+.rti-desc { font-size: 11px; color: var(--text-tertiary); line-height: 1.4; }
+
+.reports-content { background: var(--bg-primary); border-radius: var(--radius-lg); padding: 24px; box-shadow: var(--shadow-md); border: 1px solid var(--border-light); }
+.reports-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border-light); flex-wrap: wrap; gap: 12px; }
+.reports-title { font-size: 20px; font-weight: 700; color: var(--text-primary); }
+
+.report-summary-strip { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.rss-card { flex: 1; min-width: 130px; background: var(--bg-secondary); border-radius: var(--radius-md); padding: 16px; border-top: 3px solid; }
+.rss-val { font-size: 28px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+.rss-lbl { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+
+.shortage-intro { display: flex; align-items: flex-start; gap: 12px; background: #fdf0ed; border: 1px solid #f1948a; border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 16px; }
+
+.report-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 360px; gap: 12px; color: var(--text-tertiary); text-align: center; }
+.report-placeholder h3 { margin: 0; color: var(--text-primary); }
+.report-placeholder p { margin: 0; font-size: 14px; }

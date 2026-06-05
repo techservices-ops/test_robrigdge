@@ -1,0 +1,43 @@
+services:
+  # React Frontend (Static Site)
+  - type: static
+    name: robridge-frontend
+    buildCommand: cd "Robridge web" && npm install && npm run build
+    staticPublishPath: ./Robridge web/build
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://robridge-express.onrender.com
+      - key: REACT_APP_AI_SERVER_URL
+        value: https://robridge-ai.onrender.com
+
+  # Express.js Backend Server (API Only)
+  - type: web
+    name: robridge-express
+    env: node
+    plan: free
+    buildCommand: cd "Robridge web" && npm install
+    startCommand: cd "Robridge web" && node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AI_SERVER_URL
+        value: https://robridge-ai-tgc9.onrender.com
+      - key: DATABASE_URL
+        value: postgresql://robridgedb_user:8NcVhAHtrzMemZsRjcOVxztpxoxySsi5@dpg-d4kn2nk9c44c73f2hhdg-a.oregon-postgres.render.com/robridgedb
+      - key: CORS_ORIGIN
+        value: https://robridgelabs.com
+
+  # AI Analysis Server (FastAPI)
+  - type: web
+    name: robridge-ai
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements_ai.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false

@@ -1,0 +1,40 @@
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+
+export default function DashboardScreen() {
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Dashboard</Text>
+      <Text style={styles.subtitle}>Welcome to RobBridge Mobile</Text>
+      <Text style={styles.description}>This is the dashboard screen</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F6F7',
+    padding: 20,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#202124',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#5F6368',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  description: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+});

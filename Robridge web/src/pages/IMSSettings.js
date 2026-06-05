@@ -1,0 +1,361 @@
+import React, { useState, useEffect } from 'react';
+import {
+  FaBell, FaToggleOn, FaToggleOff, 
+  FaSave, FaCheckCircle, FaLock, FaBrain, 
+  FaRobot, FaPlug, FaMoneyBillWave, FaChartLine, 
+  FaPlus, FaTrash, FaLayerGroup, FaExchangeAlt
+} from 'react-icons/fa';
+import './IMSSettings.css';
+import { useWorkspace } from '../contexts/WorkspaceContext';
+import { useConfirm } from '../components/ConfirmModal';
+
+const IMSSettings = () => {
+  const { imsFetch, activeWorkspaceId } = useWorkspace();
+  const confirm = useConfirm();
+  
+  // Master Dynamic State
+  const [categories, setCategories] = useState([]);
+  const [workflows, setWorkflows] = useState([]);
+
+  // Category Builder State
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatMode, setNewCatMode] = useState('FIFO');
+  const [newCatAlert, setNewCatAlert] = useState('');
+  const [newCatReorder, setNewCatReorder] = useState('');
+  const [newCatColor, setNewCatColor] = useState('#3498db');
+
+  // Workflow Builder State
+  const [newFlowName, setNewFlowName] = useState('');
+  const [newFlowColor, setNewFlowColor] = useState('#3498db');
+
+  // Other Settings
+  const [alerts, setAlerts] = useState({ email: true, dashboard: true, sms: false, push: true });
+  const [security, setSecurity] = useState({ batchStrict: true, managerApproval: false, immutableLogs: true, requireSSO: false });
+  const [aiSettings, setAiSettings] = useState({ autoReorder: true, predictiveBuffer: true, dynamicThresholds: true, advisoryMode: false });
+  const [integrations, setIntegrations] = useState({ sap: true, oracle: false, vendorEmail: true, zebraPrinter: true });
+  const [scannerPrefs, setScannerPrefs] = useState({ autoLog: true, sound: true, vibration: true });
+
+  const [procurementAction, setProcurementAction] = useState('draft'); // draft, email, erp
+  const [spendLimit, setSpendLimit] = useState(5000);
+  const [bufferPct, setBufferPct] = useState(15);
+  const [saved, setSaved] = useState(false);
+
+  // Fetch data on mount
+  useEffect(() => {
+    if(!activeWorkspaceId) return;
+    const loadData = async () => {
+       try {
+          const catRes = await imsFetch('/api/ims/categories');
+          const catData = await catRes.json();
+          if(catData.success) setCategories(catData.categories);
+
+          const wfRes = await imsFetch('/api/ims/workflows');
+          const wfData = await wfRes.json();
+          if(wfData.success) setWorkflows(wfData.workflows);
+
+          const setRes = await imsFetch('/api/ims/settings');
+          const setData = await setRes.json();
+          if(setData.success && setData.settings && Object.keys(setData.settings).length > 0) {
+             const prefs = setData.settings;
+             if(prefs.alerts) setAlerts(prefs.alerts);
+             if(prefs.security) setSecurity(prefs.security);
+             if(prefs.aiSettings) setAiSettings(prefs.aiSettings);
+             if(prefs.integrations) setIntegrations(prefs.integrations);
+             if(prefs.scannerPrefs) setScannerPrefs(prefs.scannerPrefs);
+             if(prefs.procurementAction) setProcurementAction(prefs.procurementAction);
+             if(prefs.spendLimit) setSpendLimit(prefs.spendLimit);
+             if(prefs.bufferPct) setBufferPct(prefs.bufferPct);
+          }
+       } catch (err) { console.error("Error fetching IMS data", err); }
+    };
+    loadData();
+  }, [activeWorkspaceId]);
+
+  const handleToggle = (setter, key) => setter(prev => ({ ...prev, [key]: !prev[key] }));
+
+  // Dynamic Add Methods
+  const addCategory = async () => {
+    if (!newCatName || !newCatAlert || !newCatReorder) return;
+    try {
+      const res = await imsFetch('/api/ims/categories', {
+        method: 'POST',
+        body: JSON.stringify({ name: newCatName, mode: newCatMode, alertAt: Number(newCatAlert), reorderAt: Number(newCatReorder), color: newCatColor })
+      });
+      const data = await res.json();
+      if(data.success) {
+        setCategories([...categories, data.category]);
+        setNewCatName(''); setNewCatAlert(''); setNewCatReorder('');
+      }
+    } catch(err) { console.error(err); }
+  };
+
+  const removeCategory = async (id, name) => {
+    const ok = await confirm({
+      title: `Delete category "${name}"?`,
+      message: 'Items using this category will retain their current category label but lose threshold enforcement.',
+      type: 'danger', confirmLabel: 'Delete Category'
+    });
+    if (!ok) return;
+    try {
+      await imsFetch(`/api/ims/categories/${id}`, { method: 'DELETE' });
+      setCategories(categories.filter(c => c.id !== id));
+    } catch(err) { console.error(err); }
+  };
+
+  const addWorkflow = async () => {
+    if (!newFlowName) return;
+    try {
+      const res = await imsFetch('/api/ims/workflows', {
+        method: 'POST',
+        body: JSON.stringify({ name: newFlowName, color: newFlowColor })
+      });
+      const data = await res.json();
+      if(data.success) {
+        setWorkflows([...workflows, data.workflow]);
+        setNewFlowName('');
+      }
+    } catch(err) { console.error(err); }
+  };
+
+  const removeWorkflow = async (id, name) => {
+    const ok = await confirm({
+      title: `Delete workflow "${name}"?`,
+      message: 'Scans using this workflow will lose their workflow classification.',
+      type: 'danger', confirmLabel: 'Delete Workflow'
+    });
+    if (!ok) return;
+    try {
+      await imsFetch(`/api/ims/workflows/${id}`, { method: 'DELETE' });
+      setWorkflows(workflows.filter(w => w.id !== id));
+    } catch(err) { console.error(err); }
+  };
+
+  const handleSave = async () => {
+    const settings = { alerts, security, aiSettings, integrations, scannerPrefs, procurementAction, spendLimit, bufferPct };
+    try {
+      const res = await imsFetch('/api/ims/settings', {
+        method: 'POST',
+        body: JSON.stringify({ settings })
+      });
+      const data = await res.json();
+      if(data.success) {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+      }
+    } catch(err) { console.error(err); }
+  };
+
+  return (
+    <div className="ims-settings-page">
+      <div className="page-header ims-page-header">
+        <div className="ims-header-left">
+          <h1>IMS Decision Control</h1>
+          <p>Configure autonomous rules, thresholds, and dynamic parameters</p>
+        </div>
+        <div className="ims-header-right">
+          <button className="btn btn-primary btn-save-settings" onClick={handleSave}>
+            {saved ? <><FaCheckCircle /> Saved!</> : <><FaSave /> Deploy Settings</>}
+          </button>
+        </div>
+      </div>
+
+      <div className="settings-grid">
+        
+        {/* ── ALERTS & NOTIFICATIONS ── */}
+        <div className="settings-card alerts-card">
+          <div className="settings-card-header">
+            <FaBell className="settings-card-icon" />
+            <h2>Alert Distribution</h2>
+          </div>
+          <div className="alert-toggles">
+            {[
+              { key: 'dashboard', label: 'Dashboard Alerts', desc: 'Show critical flags on IMS Command Center' },
+              { key: 'email', label: 'Email Notifications', desc: 'Send daily digests and critical alerts to Admins' },
+              { key: 'push', label: 'Mobile Push Notifications', desc: 'Real-time push to staff devices for stock-outs' },
+              { key: 'sms', label: 'SMS Escallation', desc: 'Text supply chain managers on emergency shortages' },
+            ].map(a => (
+              <div key={a.key} className="alert-toggle-row" onClick={() => handleToggle(setAlerts, a.key)}>
+                <div className="toggle-info">
+                  <div className="toggle-label">{a.label}</div>
+                  <div className="toggle-desc">{a.desc}</div>
+                </div>
+                {alerts[a.key] ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── AI ENGINE CONFIGURATION ── */}
+        <div className="settings-card ai-card">
+          <div className="settings-card-header">
+            <FaBrain className="settings-card-icon ai-icon" />
+            <h2>Autonomous AI Engine</h2>
+            <span className="ai-badge">Brain Config</span>
+          </div>
+          
+          <div className="alert-toggles">
+            <div className="alert-toggle-row" onClick={() => handleToggle(setAiSettings, 'autoReorder')}>
+              <div className="toggle-info">
+                <div className="toggle-label">Autonomous Procurement</div>
+                <div className="toggle-desc">Allow AI to form restock requests based on velocity</div>
+              </div>
+              {aiSettings.autoReorder ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
+            </div>
+            <div className="alert-toggle-row" onClick={() => handleToggle(setAiSettings, 'dynamicThresholds')}>
+              <div className="toggle-info">
+                <div className="toggle-label">Dynamic Thresholds</div>
+                <div className="toggle-desc">AI shifts minimums based on seasonal demand</div>
+              </div>
+              {aiSettings.dynamicThresholds ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
+            </div>
+          </div>
+
+          <div className="settings-slider-group">
+            <div className="slider-header">
+              <span><FaChartLine /> Predictive Safety Buffer</span>
+              <strong>+{bufferPct}%</strong>
+            </div>
+            <input type="range" min="0" max="50" step="5" value={bufferPct} onChange={(e) => setBufferPct(e.target.value)} className="slider-input" />
+          </div>
+
+          <div className="settings-slider-group">
+            <div className="slider-header">
+              <span><FaMoneyBillWave /> Auto-Approval Spend Limit</span>
+              <strong>${spendLimit.toLocaleString()}</strong>
+            </div>
+            <input type="range" min="0" max="25000" step="1000" value={spendLimit} onChange={(e) => setSpendLimit(e.target.value)} className="slider-input" />
+          </div>
+
+          <div className="dropdown-group">
+            <p className="dropdown-label"><FaRobot /> AI Procurement Action</p>
+            <select value={procurementAction} onChange={e => setProcurementAction(e.target.value)} className="form-select dropdown-select">
+              <option value="draft">Draft PO for Manager Review (Safest)</option>
+              <option value="email">Auto-Email Authorized Vendors</option>
+              <option value="erp">Push Directly to ERP (SAP/Oracle)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* ── EXTERNAL INTEGRATIONS ── */}
+        <div className="settings-card integrations-card">
+          <div className="settings-card-header">
+            <FaPlug className="settings-card-icon sync-icon" />
+            <h2>System Integrations</h2>
+          </div>
+          <div className="alert-toggles">
+            {[
+              { key: 'sap', label: 'SAP Data Sync', desc: 'Bi-directional sync of inventory counts & POs' },
+              { key: 'oracle', label: 'Oracle NetSuite', desc: 'Sync material mastering and financial ledgers' },
+              { key: 'vendorEmail', label: 'Vendor EDI/Email', desc: 'Automated outgoing vendor communications' },
+              { key: 'zebraPrinter', label: 'Zebra Label Printers', desc: 'Auto-print barcode tags on receiving items' },
+            ].map(a => (
+              <div key={a.key} className="alert-toggle-row" onClick={() => handleToggle(setIntegrations, a.key)}>
+                <div className="toggle-info">
+                  <div className="toggle-label">{a.label}</div>
+                  <div className="toggle-desc">{a.desc}</div>
+                </div>
+                {integrations[a.key] ? <FaToggleOn className="toggle-icon sync-on" /> : <FaToggleOff className="toggle-icon off" />}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── DYNAMIC CATEGORY BUILDER (New) ── */}
+        <div className="settings-card category-builder-card">
+          <div className="settings-card-header">
+            <FaLayerGroup className="settings-card-icon" style={{color: '#f39c12'}} />
+            <h2>Master Category Builder</h2>
+          </div>
+          <div className="builder-desc">Defined categories are synced to Catalog Master and enforce rotational behaviour (FEFO/FIFO).</div>
+          
+          <div className="builder-form">
+            <div className="bf-inputs flex-row">
+              <input type="text" placeholder="Cat Name (e.g. Chemicals)" value={newCatName} onChange={e => setNewCatName(e.target.value)} className="form-input" />
+              <select value={newCatMode} onChange={e => setNewCatMode(e.target.value)} className="form-select">
+                <option value="FIFO">FIFO (First In First Out)</option>
+                <option value="FEFO">FEFO (First Expire First Out)</option>
+                <option value="LIFO">LIFO (Last In First Out)</option>
+              </select>
+            </div>
+            <div className="bf-inputs flex-row">
+              <input type="number" placeholder="Alert Threshold" value={newCatAlert} onChange={e => setNewCatAlert(e.target.value)} className="form-input" />
+              <input type="number" placeholder="Reorder point" value={newCatReorder} onChange={e => setNewCatReorder(e.target.value)} className="form-input" />
+              <input type="color" value={newCatColor} onChange={e => setNewCatColor(e.target.value)} className="color-picker" title="Tag Color" />
+              <button className="btn btn-secondary btn-icon-only" onClick={addCategory}><FaPlus /></button>
+            </div>
+          </div>
+
+          <div className="builder-list">
+            {categories.map(cat => (
+              <div key={cat.id} className="builder-row">
+                <span className="builder-color-dot" style={{background: cat.color}}></span>
+                <div className="builder-info">
+                  <strong>{cat.name}</strong> <span className="cat-mode-badge">{cat.mode}</span>
+                  <div className="cat-limits">Alert: {cat.alertAt} · Reorder: {cat.reorderAt}</div>
+                </div>
+                <button className="btn-icon danger" onClick={() => removeCategory(cat.id, cat.name)}><FaTrash /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── DYNAMIC SCANNER WORKFLOWS (New) ── */}
+        <div className="settings-card workflow-builder-card">
+          <div className="settings-card-header">
+            <FaExchangeAlt className="settings-card-icon" style={{color: '#3498db'}} />
+            <h2>Scanner Operations Definition</h2>
+          </div>
+          <div className="builder-desc">Custom action modes loaded dynamically into the Smart Scanner app.</div>
+          
+          <div className="builder-form flex-row">
+            <input type="text" placeholder="Operation (e.g. Return To Vendor)" value={newFlowName} onChange={e => setNewFlowName(e.target.value)} className="form-input" />
+            <input type="color" value={newFlowColor} onChange={e => setNewFlowColor(e.target.value)} className="color-picker" />
+            <button className="btn btn-secondary btn-icon-only" onClick={addWorkflow}><FaPlus /></button>
+          </div>
+
+          <div className="workflows-grid">
+            {workflows.map(flow => (
+              <div key={flow.id} className="workflow-pill" style={{borderLeftColor: flow.color}}>
+                <span className="wf-name">{flow.name}</span>
+                <FaTrash className="wf-del" onClick={() => removeWorkflow(flow.id)} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── SECURITY ── */}
+        <div className="settings-card compliance-card">
+          <div className="settings-card-header">
+            <FaLock className="settings-card-icon" style={{ color: '#e74c3c' }} />
+            <h2>Security & Audit Compliance</h2>
+          </div>
+          <div className="alert-toggles">
+            {[
+              { key: 'batchStrict', label: 'Strict Traceability', desc: 'Prevent stock changes without valid Batch/Serial inputs' },
+              { key: 'managerApproval', label: 'Manager Overrides', desc: 'Require supervisor PIN for manual quantity adjustments' },
+              { key: 'immutableLogs', label: 'Immutable Audit Trail', desc: 'Lock scan history from deletion (FDA / ISO compliance)' },
+              { key: 'requireSSO', label: 'Enterprise SSO', desc: 'Enforce Microsoft Entra ID / Okta login for portal access' },
+            ].map(a => (
+              <div key={a.key} className="alert-toggle-row" onClick={() => handleToggle(setSecurity, a.key)}>
+                <div className="toggle-info">
+                  <div className="toggle-label">{a.label}</div>
+                  <div className="toggle-desc">{a.desc}</div>
+                </div>
+                {security[a.key] ? <FaToggleOn className="toggle-icon on-red" /> : <FaToggleOff className="toggle-icon off" />}
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </div>
+
+      {saved && (
+        <div className="save-toast">
+          <FaCheckCircle /> Configuration Deployed Successfully!
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default IMSSettings;

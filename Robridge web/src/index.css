@@ -1,0 +1,193 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #F5F5F5;
+  color: #3D3E41;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+html, #root {
+  min-height: 100vh;
+  height: 100%;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F5F6F7;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #DADCE0;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #B8BEC3;
+}
+
+/* Button base styles */
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-primary {
+  background-color: #E3821E;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #D6730A;
+}
+
+.btn-secondary {
+  background-color: white;
+  color: #E3821E;
+  border: 2px solid #E3821E;
+}
+
+.btn-secondary:hover {
+  background-color: #F8F9FA;
+}
+
+.btn-success {
+  background-color: #34A853;
+  color: white;
+}
+
+.btn-success:hover {
+  background-color: #2D8A47;
+}
+
+.btn-warning {
+  background-color: #FBBC05;
+  color: #202124;
+}
+
+.btn-warning:hover {
+  background-color: #F4B400;
+}
+
+.btn-danger {
+  background-color: #EA4335;
+  color: white;
+}
+
+.btn-danger:hover {
+  background-color: #D93025;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Card styles */
+.card {
+  background: #FFFFFF;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  margin: 16px 0;
+}
+
+/* Input styles */
+.input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #DADCE0;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #E3821E;
+}
+
+.input:disabled {
+  background-color: #F5F6F7;
+  cursor: not-allowed;
+}
+
+/* Label styles */
+.label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #3D3E41;
+}
+
+/* Status indicators */
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-connected {
+  background-color: #E8F5E8;
+  color: #34A853;
+}
+
+.status-disconnected {
+  background-color: #FEE7E6;
+  color: #EA4335;
+}
+
+.status-warning {
+  background-color: #FEF7E0;
+  color: #FBBC05;
+}
+
+/* Animation classes */
+.fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(-20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
