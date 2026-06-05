@@ -136,6 +136,19 @@ app.get('/bvs/*', (req, res) => {
   res.sendFile(path.join(__dirname, 'build', 'index.html'));
 });
 
+// Fallback redirect for root-level routes directly hitting the backend in production / dev
+app.get('/verify-email', (req, res) => {
+  const token = req.query.token;
+  const target = NODE_ENV === 'production' ? '/bvs/verify-email' : 'http://localhost:3000/verify-email';
+  res.redirect(token ? `${target}?token=${token}` : target);
+});
+
+app.get('/reset-password', (req, res) => {
+  const token = req.query.token;
+  const target = NODE_ENV === 'production' ? '/bvs/reset-password' : 'http://localhost:3000/reset-password';
+  res.redirect(token ? `${target}?token=${token}` : target);
+});
+
 // Store the Python process
 let pythonProcess = null;
 
@@ -724,9 +737,17 @@ app.post('/api/auth/register', async (req, res) => {
     const user = result.rows[0];
 
     // Send verification email
-    const clientUrl = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
+    const origin = req.headers.origin;
+    let clientUrl = origin || process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
       ? 'https://robridgelabs.com/bvs'
       : 'http://localhost:3000');
+    
+    // Normalize clientUrl: ensure it has /bvs subdirectory prefix if in production and not localhost/127.0.0.1
+    const isLocalhost = clientUrl.includes('localhost') || clientUrl.includes('127.0.0.1');
+    if (process.env.NODE_ENV === 'production' && !isLocalhost && !clientUrl.endsWith('/bvs') && !clientUrl.includes('/bvs/')) {
+      clientUrl = clientUrl.replace(/\/$/, '') + '/bvs';
+    }
+    
     const verificationLink = `${clientUrl}/verify-email?token=${verificationToken}`;
     const mailOptions = {
       from: `"RoBridge Support" <${process.env.EMAIL_USER}>`,
@@ -1521,9 +1542,17 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     );
     // Create reset link
     // Changes domain based on environment
-    const clientUrl = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
+    const origin = req.headers.origin;
+    let clientUrl = origin || process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
       ? 'https://robridgelabs.com/bvs' // Adjust if your base path is strictly /bvs
       : 'http://localhost:3000'); // Development
+
+    // Normalize clientUrl: ensure it has /bvs subdirectory prefix if in production and not localhost/127.0.0.1
+    const isLocalhost = clientUrl.includes('localhost') || clientUrl.includes('127.0.0.1');
+    if (process.env.NODE_ENV === 'production' && !isLocalhost && !clientUrl.endsWith('/bvs') && !clientUrl.includes('/bvs/')) {
+      clientUrl = clientUrl.replace(/\/$/, '') + '/bvs';
+    }
+
     // IMPORTANT: Frontend route will be /reset-password/:token or /reset-password?token=...
     // We'll use query parameter for simplicity in React Router
     const resetLink = `${clientUrl}/reset-password?token=${token}`;
