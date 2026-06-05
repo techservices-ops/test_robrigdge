@@ -724,9 +724,9 @@ app.post('/api/auth/register', async (req, res) => {
     const user = result.rows[0];
 
     // Send verification email
-    const clientUrl = process.env.NODE_ENV === 'production'
+    const clientUrl = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
       ? 'https://robridgelabs.com/bvs'
-      : 'http://localhost:3000';
+      : 'http://localhost:3000');
     const verificationLink = `${clientUrl}/verify-email?token=${verificationToken}`;
     const mailOptions = {
       from: `"RoBridge Support" <${process.env.EMAIL_USER}>`,
@@ -1521,9 +1521,9 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     );
     // Create reset link
     // Changes domain based on environment
-    const clientUrl = process.env.NODE_ENV === 'production'
+    const clientUrl = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
       ? 'https://robridgelabs.com/bvs' // Adjust if your base path is strictly /bvs
-      : 'http://localhost:3000'; // Development
+      : 'http://localhost:3000'); // Development
     // IMPORTANT: Frontend route will be /reset-password/:token or /reset-password?token=...
     // We'll use query parameter for simplicity in React Router
     const resetLink = `${clientUrl}/reset-password?token=${token}`;
