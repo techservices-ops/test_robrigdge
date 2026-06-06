@@ -766,8 +766,13 @@ app.post('/api/auth/register', async (req, res) => {
       `
     };
     if (nodemailer && transporter && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-      await transporter.sendMail(mailOptions);
-      console.log(`📧 Verification email sent to ${user.email}`);
+      try {
+        await transporter.sendMail(mailOptions);
+        console.log(`📧 Verification email sent to ${user.email}`);
+      } catch (emailError) {
+        console.error('⚠️ Failed to send verification email, but user was created:', emailError.message);
+        console.log(`⚠️ Fallback Verification link: ${verificationLink}`);
+      }
     } else {
       console.log(`⚠️ Email service unavailable. Verification link: ${verificationLink}`);
     }
