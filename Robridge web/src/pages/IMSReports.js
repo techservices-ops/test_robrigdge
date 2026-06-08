@@ -108,7 +108,7 @@ export default function IMSReports() {
 
       {/* Scan History Filters */}
       {tab === 'scan' && (
-        <div style={{ background: '#fff', borderRadius: 12, padding: '14px 16px', marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+        <div style={{ background: '#fff', borderRadius: 12, padding: '14px 16px', marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
           <div className="form-group" style={{ flex: 1, minWidth: 140 }}>
             <label className="form-label">From Date</label>
             <input type="date" className="form-input" value={filters.from} onChange={e => setFilters(f => ({ ...f, from: e.target.value }))} />
@@ -125,24 +125,29 @@ export default function IMSReports() {
             <label className="form-label">Barcode Search</label>
             <input className="form-input" placeholder="Search barcode..." value={filters.barcode} onChange={e => setFilters(f => ({ ...f, barcode: e.target.value }))} />
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-            <button className="btn btn-primary" onClick={() => load('scan')}><FaFilter /> Apply</button>
-          </div>
+          <button className="btn btn-primary" style={{ height: '40px', padding: '0 18px', whiteSpace: 'nowrap', flexShrink: 0, marginBottom: '16px' }} onClick={() => load('scan')}><FaFilter /> Apply</button>
         </div>
+
       )}
 
       {tab === 'movement' && (
-        <div style={{ background: '#fff', borderRadius: 12, padding: '14px 16px', marginBottom: 16, display: 'flex', gap: 12, alignItems: 'flex-end', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div className="form-group">
-            <label className="form-label">Date Range</label>
-            <select className="form-select" value={filters.days} onChange={e => setFilters(f => ({ ...f, days: e.target.value }))}>
+        <div className="movement-filter-bar">
+          <span className="movement-filter-label">Date Range</span>
+          <div className="movement-filter-row">
+            <select
+              className="movement-filter-select"
+              value={filters.days}
+              onChange={e => setFilters(f => ({ ...f, days: e.target.value }))}
+            >
               <option value={7}>Last 7 days</option>
               <option value={30}>Last 30 days</option>
               <option value={90}>Last 90 days</option>
               <option value={365}>Last 12 months</option>
             </select>
+            <button className="btn btn-primary movement-apply-btn" onClick={() => load('movement')}>
+              <FaFilter /> Apply
+            </button>
           </div>
-          <button className="btn btn-primary" onClick={() => load('movement')}><FaFilter /> Apply</button>
         </div>
       )}
 

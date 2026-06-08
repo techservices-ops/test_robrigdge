@@ -24,3 +24,64 @@
 .report-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 360px; gap: 12px; color: var(--text-tertiary); text-align: center; }
 .report-placeholder h3 { margin: 0; color: var(--text-primary); }
 .report-placeholder p { margin: 0; font-size: 14px; }
+
+/* Movement Report Filter Bar */
+.movement-filter-bar {
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  display: inline-flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.movement-filter-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #5f6368;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.movement-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.movement-filter-select {
+  height: 40px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-family: inherit;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  background: #fff;
+  color: #202124;
+  cursor: pointer;
+  min-width: 160px;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.movement-filter-select:focus {
+  border-color: var(--primary-orange);
+  box-shadow: 0 0 0 3px var(--primary-orange-lighter, #fff3e6);
+}
+
+.movement-apply-btn {
+  height: 40px !important;
+  padding: 0 18px !important;
+  font-size: 14px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  border-radius: 8px !important;
+  white-space: nowrap !important;
+  box-sizing: border-box !important;
+}
+
