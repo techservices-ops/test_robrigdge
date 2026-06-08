@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FaBoxes, FaExchangeAlt, FaExclamationTriangle, FaDatabase,
   FaArrowUp, FaArrowDown, FaClock, FaCheckCircle, FaBell,
@@ -8,6 +8,7 @@ import {
 } from 'react-icons/fa';
 import './IMSDashboard.css';
 import { useWorkspace } from '../contexts/WorkspaceContext';
+import { useToast } from '../components/Toast';
 
 // ─── Dynamic Mock Generators (Moved inside component) ────────────────────────
 const weekLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -72,6 +73,8 @@ const WeeklyLineChart = ({ animated, trends }) => {
 const IMSDashboard = () => {
   const { imsFetch, activeWorkspaceId } = useWorkspace();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const showToast = useToast();
 
   const [animated, setAnimated] = useState(false);
   const [data, setData] = useState(() => {
@@ -79,6 +82,20 @@ const IMSDashboard = () => {
     return cached ? JSON.parse(cached) : null;
   });
   const [loading, setLoading] = useState(!data);
+
+  useEffect(() => {
+    const status = searchParams.get('status');
+    if (status === 'success') {
+      showToast('Email verified successfully! Welcome to your new workspace.', 'success');
+      // Clean up search parameters so they don't re-trigger on refresh
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+    } else if (status === 'already_verified') {
+      // Silently clean up search parameters
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+    }
+  }, [searchParams, showToast]);
 
   useEffect(() => {
     const timer = setTimeout(() => setAnimated(true), 100);

@@ -59,47 +59,76 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const savedUser = localStorage.getItem('robridge_user');
+        // 1. Check if there is a token in the URL query parameters (redirect from email verification)
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlToken = urlParams.get('token');
+        
+        let tokenToVerify = urlToken;
+        let isFromUrl = false;
+        
+        if (urlToken) {
+          isFromUrl = true;
+        } else {
+          tokenToVerify = localStorage.getItem('robridge_token');
+        }
 
-        if (savedUser) {
+        if (tokenToVerify) {
           // Verify token with backend
-          try {
-            const response = await fetch(`${getServerURL()}/api/auth/verify`, {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              credentials: 'include'
-            });
+          const response = await fetch(`${getServerURL()}/api/auth/verify`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${tokenToVerify}`
+            },
+            credentials: 'include'
+          });
 
-            if (response.ok) {
-              const data = await response.json();
-              if (data.success) {
-                const userData = {
-                  ...data.user,
-                  isAuthenticated: true,
-                  allowedPages: PAGE_ACCESS[data.user.role] || []
-                };
-                setUser(userData);
-                localStorage.setItem('robridge_user', JSON.stringify(userData));
-              } else {
-                // Token invalid, clear storage
-                localStorage.removeItem('robridge_user');
-              }
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+              const userData = {
+                ...data.user,
+                isAuthenticated: true,
+                allowedPages: PAGE_ACCESS[data.user.role] || []
+              };
+              setUser(userData);
+              localStorage.setItem('robridge_user', JSON.stringify(userData));
+              localStorage.setItem('robridge_token', tokenToVerify);
             } else {
-              // Token invalid, clear storage
-              localStorage.removeItem('robridge_user');
+              // Token invalid, clear storage if it wasn't a fresh URL token
+              if (!isFromUrl) {
+                localStorage.removeItem('robridge_user');
+                localStorage.removeItem('robridge_token');
+                setUser(null);
+              }
             }
-          } catch (error) {
-            console.error('Error verifying token:', error);
-            // If verification fails, try to use saved user data (offline mode)
-            const userData = JSON.parse(savedUser);
-            setUser(userData);
+          } else {
+            if (!isFromUrl) {
+              localStorage.removeItem('robridge_user');
+              localStorage.removeItem('robridge_token');
+              setUser(null);
+            }
           }
+        } else {
+          // No token found anywhere, ensure clean unauthenticated state
+          setUser(null);
         }
       } catch (error) {
-        console.error('Error loading user data:', error);
-        localStorage.removeItem('robridge_user');
+        console.error('Error verifying token on app load:', error);
+        // Fallback to saved user data in localStorage if offline or fetch fails
+        const savedUser = localStorage.getItem('robridge_user');
+        if (savedUser) {
+          try {
+            const userData = JSON.parse(savedUser);
+            setUser(userData);
+          } catch (e) {
+            localStorage.removeItem('robridge_user');
+            localStorage.removeItem('robridge_token');
+            setUser(null);
+          }
+        } else {
+          setUser(null);
+        }
       } finally {
         setIsLoading(false);
       }
