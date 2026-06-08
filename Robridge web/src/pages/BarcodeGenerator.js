@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getServerURL } from '../config/api';
 import { FaQrcode, FaSave, FaSync, FaDownload, FaDatabase, FaBarcode } from 'react-icons/fa';
 import jsPDF from 'jspdf';
 import './BarcodeGenerator.css';
@@ -27,8 +28,8 @@ const BarcodeGenerator = () => {
   const [barcodeId, setBarcodeId] = useState('');
   const [backendStatus, setBackendStatus] = useState('checking'); // 'checking', 'running', 'starting', 'error'
 
-  // API URL - always use production
-  const API_BASE_URL = 'https://robridge-express-zl9j.onrender.com';
+  // API URL - dynamic
+  const API_BASE_URL = getServerURL();
 
 
   const barcodeTypes = [

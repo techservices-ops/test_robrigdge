@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FaEnvelope, FaPaperPlane, FaArrowLeft } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
+import { getServerURL } from '../config/api';
 import './LoginPage.css'; // Re-use login styles
 
 const ForgotPassword = () => {
@@ -17,7 +18,7 @@ const ForgotPassword = () => {
 
         try {
             // Use the backend API URL
-            const apiUrl = process.env.REACT_APP_API_URL || 'https://robridge-express-zl9j.onrender.com';
+            const apiUrl = getServerURL();
 
             const response = await fetch(`${apiUrl}/api/auth/forgot-password`, {
                 method: 'POST',

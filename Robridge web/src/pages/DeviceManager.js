@@ -295,6 +295,7 @@ const DeviceManager = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('robridge_token')}`
                 },
                 body: JSON.stringify({
                     barcode_data: latestScan.barcodeData,
@@ -674,6 +675,11 @@ const DeviceManager = () => {
                                 }
                                 return null;
                             })()}
+                            <div className="save-scan-btn-container" style={{ marginTop: '15px' }}>
+                                <button className="btn btn-primary" onClick={handleSaveScan} style={{ width: '100%' }}>
+                                    Save Scan
+                                </button>
+                            </div>
                         </div>
                     ) : (
                         <div className="no-scan-card">
@@ -697,6 +703,11 @@ const DeviceManager = () => {
                         {qrCodeUrl && (
                             <div className="qr-code-container">
                                 <img src={qrCodeUrl} alt="Pairing QR Code" className="qr-code" />
+                            </div>
+                        )}
+                        {pairingCode && (
+                            <div className="pairing-code-text" style={{ marginTop: '15px', marginBottom: '15px', fontSize: '16px', fontWeight: 'bold', letterSpacing: '1px', textAlign: 'center' }}>
+                                Pairing Code: <code style={{ background: '#f1f3f4', padding: '4px 8px', borderRadius: '4px', fontFamily: 'monospace' }}>{pairingCode}</code>
                             </div>
                         )}
                         <button className="modal-done-btn" onClick={closePairingModal}>

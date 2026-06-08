@@ -8,11 +8,31 @@ const pool = new Pool({
 });
 
 async function testCompleteFlow() {
+    let userId = null;
+    let otherUserId = null;
     try {
         console.log('🧪 COMPLETE END-TO-END TEST\n');
         console.log('='.repeat(60));
 
-        const userId = 11; // testuser1
+        // Create main test user
+        const userResult = await pool.query(`
+            INSERT INTO users (email, password_hash, name, role)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+            RETURNING id
+        `, ['testuser1@example.com', 'dummy_hash', 'Test User 1', 'admin']);
+        userId = userResult.rows[0].id;
+        console.log(`✅ Main test user created/verified with ID: ${userId}`);
+
+        // Create other test user
+        const otherUserResult = await pool.query(`
+            INSERT INTO users (email, password_hash, name, role)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+            RETURNING id
+        `, ['testuser2@example.com', 'dummy_hash', 'Test User 2', 'admin']);
+        otherUserId = otherUserResult.rows[0].id;
+        console.log(`✅ Other test user created/verified with ID: ${otherUserId}`);
 
         // Step 1: Clear existing test data
         console.log('\n📝 Step 1: Clearing existing test data...');
@@ -164,7 +184,6 @@ async function testCompleteFlow() {
 
         // Step 7: Test data isolation (check other user can't see data)
         console.log('\n📝 Step 7: Testing data isolation...');
-        const otherUserId = 12; // testuser2
         const otherUserTemp = await pool.query(
             'SELECT COUNT(*) as count FROM temporary_scans WHERE user_id = $1',
             [otherUserId]
@@ -194,6 +213,21 @@ async function testCompleteFlow() {
     } catch (error) {
         console.error('❌ Test failed:', error);
     } finally {
+        try {
+            if (userId) {
+                await pool.query('DELETE FROM temporary_scans WHERE user_id = $1', [userId]);
+                await pool.query('DELETE FROM saved_scans WHERE user_id = $1', [userId]);
+                await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+            }
+            if (otherUserId) {
+                await pool.query('DELETE FROM temporary_scans WHERE user_id = $1', [otherUserId]);
+                await pool.query('DELETE FROM saved_scans WHERE user_id = $1', [otherUserId]);
+                await pool.query('DELETE FROM users WHERE id = $1', [otherUserId]);
+            }
+            console.log('✅ Cleaned up test users and scans from database');
+        } catch (cleanupErr) {
+            console.error('⚠️ Cleanup error:', cleanupErr.message);
+        }
         await pool.end();
     }
 }

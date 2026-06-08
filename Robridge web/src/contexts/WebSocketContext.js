@@ -151,7 +151,7 @@ export const WebSocketProvider = ({ children }) => {
           };
 
           setLatestScan(completeScan);
-          autoSaveScanToDatabase(completeScan);
+          // autoSaveScanToDatabase(completeScan); // Commented out to prevent duplicate saves/overwrites
 
           setTimeout(() => {
             setIsProcessingScan(false);

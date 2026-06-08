@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getServerURL } from '../config/api';
 import {
   FaWarehouse,
   FaMapMarkerAlt,
@@ -38,7 +39,7 @@ const RackStatus = () => {
   const loadRackStatus = async () => {
     try {
       setIsLoading(true);
-      const serverURL = 'https://robridge-express-zl9j.onrender.com';
+      const serverURL = getServerURL();
       const response = await fetch(`${serverURL}/api/rack-status`);
 
       if (!response.ok) {
