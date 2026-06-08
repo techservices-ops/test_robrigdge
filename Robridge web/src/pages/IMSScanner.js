@@ -120,7 +120,7 @@ const IMSScanner = () => {
     loadData();
   }, [activeWorkspaceId]);
 
-  const recordScanEvent = async (item, workflow, qty = 1, batch = '', serial = '', nameFallback = '') => {
+  const recordScanEvent = async (item, workflow, qty = 1, batch = '', serial = '', nameFallback = '', notes = '') => {
     try {
       const res = await imsFetch('/api/ims/scanner/scan', {
         method: 'POST',
@@ -134,7 +134,8 @@ const IMSScanner = () => {
           category: item ? item.category : onboardForm.category,
           trackingMode: item ? item.trackingMode : onboardForm.tracking,
           batchNo: batch,
-          serialNo: serial
+          serialNo: serial,
+          notes: notes
         })
       });
       const data = await res.json();
@@ -173,13 +174,16 @@ const IMSScanner = () => {
         setScanMatch({ type: 'GRN', ...data });
         setScanResult(data.matched ? 'scan_match' : 'scan_nomatch');
 
-        // Also look up catalog item for right-panel product info (display only — no stock change here;
-        // stock is updated when the GRN is approved, not on individual scans)
+        // Also look up catalog item for right-panel product info
         try {
           const lookupRes = await imsFetch(`/api/ims/scanner/lookup/${encodeURIComponent(val)}`);
           const lookupData = await lookupRes.json();
           if (lookupData.success && lookupData.found) {
             setFoundItem(lookupData.item);
+            if (data.matched && autoLogEnabled) {
+              const prefix = scanStage === 'DISPATCH' ? 'DN:' : 'GRN:';
+              await recordScanEvent(lookupData.item, scanStage, 1, '', '', '', prefix + data.grn.docNo);
+            }
           }
         } catch (e) { /* catalog lookup failure is non-fatal */ }
 
@@ -200,13 +204,15 @@ const IMSScanner = () => {
         setScanMatch({ type: 'WO', ...data });
         setScanResult(data.matched ? 'scan_match' : 'scan_nomatch');
 
-        // Also look up catalog item for right-panel product info (display only — no stock change here;
-        // stock is updated when the Work Order is completed, not on individual scans)
+        // Also look up catalog item for right-panel product info
         try {
           const lookupRes = await imsFetch(`/api/ims/scanner/lookup/${encodeURIComponent(val)}`);
           const lookupData = await lookupRes.json();
           if (lookupData.success && lookupData.found) {
             setFoundItem(lookupData.item);
+            if (data.matched && autoLogEnabled) {
+              await recordScanEvent(lookupData.item, scanStage, 1, '', '', '', 'WO:' + data.wo.woNumber);
+            }
           }
         } catch (e) { /* catalog lookup failure is non-fatal */ }
 

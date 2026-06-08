@@ -22,6 +22,7 @@ export const WebSocketProvider = ({ children }) => {
   const [scanBuffer, setScanBuffer] = useState({});
   const socketRef = useRef(null);
   const heartbeatIntervalRef = useRef(null);
+  const isProcessingScanRef = useRef(false);
 
 
   // Server URL is now imported from centralized config
@@ -57,22 +58,20 @@ export const WebSocketProvider = ({ children }) => {
           deviceName: scanData.deviceName || 'ESP32 Scanner',
           deviceId: scanData.deviceId || 'unknown',
           scanType: scanData.scanType || 'unknown',
-          source: 'ESP32',
+          scannedAt: scanData.timestamp,
           productName: scanData.productInfo?.productName || `Scanned Product ${scanData.barcodeData}`,
           productId: scanData.barcodeData,
-          price: 0,
-          locationX: 0,
-          locationY: 0,
-          locationZ: 0,
+          weight: scanData.weight || null,
+          dimensions: scanData.dimensions || null,
           category: scanData.productInfo?.productType || 'Scanned',
-          metadata: {
+          aiAnalysis: {
             deviceName: scanData.deviceName || 'ESP32 Scanner',
             deviceId: scanData.deviceId || 'unknown',
             scanType: scanData.scanType || 'unknown',
             timestamp: scanData.timestamp || new Date().toISOString(),
             productDetails: scanData.productInfo?.productDetails || '',
             foundInLocalDB: scanData.productInfo?.foundInLocalDB || false,
-            autoSaved: true,
+            aiAnalysis: scanData.aiAnalysis,
             source: 'live_scanner'
           }
         })
@@ -81,7 +80,6 @@ export const WebSocketProvider = ({ children }) => {
       if (response.ok) {
         const result = await response.json();
         console.log('Live Scanner result auto-saved to database:', result);
-        return result;
       } else {
         console.error('Failed to auto-save Live Scanner result:', response.statusText);
       }
@@ -120,8 +118,9 @@ export const WebSocketProvider = ({ children }) => {
     // Check completeness
     setTimeout(() => {
       setScanBuffer(currentBuffer => {
-        if (isCompleteScanData(currentBuffer) && !isProcessingScan) {
+        if (isCompleteScanData(currentBuffer) && !isProcessingScanRef.current) {
           console.log('✅ Complete scan data found, processing...');
+          isProcessingScanRef.current = true;
           setIsProcessingScan(true);
 
           const hasValidTimestamp = (ts) => {
@@ -130,8 +129,9 @@ export const WebSocketProvider = ({ children }) => {
             return !isNaN(date.getTime()) && date.getFullYear() > 2020;
           };
 
-          const validTimestamp = hasValidTimestamp(currentBuffer.timestamp)
-            ? currentBuffer.timestamp
+          const rawTs = currentBuffer.timestamp || currentBuffer.scanned_at || currentBuffer.created_at;
+          const validTimestamp = hasValidTimestamp(rawTs)
+            ? rawTs
             : Date.now();
 
           const completeScan = {
@@ -154,6 +154,7 @@ export const WebSocketProvider = ({ children }) => {
           // autoSaveScanToDatabase(completeScan); // Commented out to prevent duplicate saves/overwrites
 
           setTimeout(() => {
+            isProcessingScanRef.current = false;
             setIsProcessingScan(false);
             setScanBuffer({});
           }, 2000);
