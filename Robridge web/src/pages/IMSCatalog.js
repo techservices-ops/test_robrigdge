@@ -83,6 +83,8 @@ const IMSCatalog = () => {
   const [bomAnalyzing, setBomAnalyzing] = useState(false);
   const [bomReport, setBomReport] = useState(null);
 
+  const [locations, setLocations] = useState([]);
+
   const barcodeRef = useRef(null);
 
   // Load masters, dynamic categories & workflows on mount
@@ -91,6 +93,12 @@ const IMSCatalog = () => {
     imsFetch('/api/ims/masters')
       .then(r => r.json())
       .then(d => { if (d.success) setMasters(d.masters); })
+      .catch(console.error);
+
+    // Fetch locations/zones from Zone Tracking
+    imsFetch('/api/ims/locations')
+      .then(r => r.json())
+      .then(d => { if (d.success) setLocations(d.locations || []); })
       .catch(console.error);
 
     // Fetch dynamic categories from Settings
@@ -618,7 +626,7 @@ const IMSCatalog = () => {
                     </div>
                     <div className="form-group" style={{ flex: 1 }}>
                       <label className="form-label">Location (Zone)</label>
-                      <input className="form-input" placeholder="e.g. Zone A" value={form.locations?.[0]?.zone || ''} onChange={e => {
+                      <select className="form-select" value={form.locations?.[0]?.zone || ''} onChange={e => {
                         const val = e.target.value;
                         setForm(f => {
                           const locs = [...(f.locations || [{zone: '', qty: ''}])];
@@ -627,7 +635,12 @@ const IMSCatalog = () => {
                           if (!locs[0].qty && f.stock) locs[0].qty = f.stock;
                           return { ...f, locations: locs };
                         });
-                      }} />
+                      }}>
+                        <option value="">— Select Location Zone —</option>
+                        {locations.map(loc => (
+                          <option key={loc.id} value={loc.name}>{loc.name} ({loc.type})</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </>

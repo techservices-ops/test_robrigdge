@@ -605,3 +605,18 @@
   white-space: normal;
   min-width: 180px;
 }
+
+/* Custom premium select styling for form fields in catalog */
+.ims-catalog-page select.form-select,
+.ims-catalog-page select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-image: url("data:image/svg+xml;utf8,<svg fill='%232c3e50' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/><path d='M0 0h24v24H0z' fill='none'/></svg>") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 14px center !important;
+  background-size: 20px !important;
+  padding-right: 36px !important;
+  text-align: left !important;
+  text-align-last: left !important;
+}
