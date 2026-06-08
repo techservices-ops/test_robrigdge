@@ -74,3 +74,14 @@
 .bom-status.ok { background: #eafaf1; color: #27ae60; }
 .bom-status.short { background: #fdf0ed; color: #e74c3c; }
 .wo-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* Align text cursor and input content to the left in Create Work Order modal */
+.ims-modal-overlay .form-input,
+.ims-modal-overlay .form-select,
+.ims-modal-overlay input,
+.ims-modal-overlay select,
+.ims-modal-overlay textarea {
+  text-align: left !important;
+  padding: 12px 16px !important; /* Reset padding to standard to override LoginPage.css global leak */
+}
+
