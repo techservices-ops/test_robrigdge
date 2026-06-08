@@ -3,7 +3,7 @@ import {
   FaBarcode, FaSearch, FaCheckCircle, FaExclamationCircle,
   FaPlus, FaTimes, FaClock,
   FaCubes, FaLayerGroup, FaTag, FaBoxOpen, FaSave,
-  FaCogs, FaFileInvoice, FaTruck, FaArrowDown, FaArrowUp
+  FaCogs, FaFileInvoice, FaTruck, FaArrowDown, FaArrowUp, FaChevronDown, FaFilter
 } from 'react-icons/fa';
 import './IMSScanner.css';
 import { useWorkspace } from '../contexts/WorkspaceContext';
@@ -36,6 +36,21 @@ const IMSScanner = () => {
   const inputRef = useRef(null);
   // GRN/Dispatch/WO verify-scan result state
   const [scanMatch, setScanMatch] = useState(null); // { matched, type, data, message }
+  const [searchQuery, setSearchQuery] = useState('');
+  const [actionFilter, setActionFilter] = useState('All');
+  const [showActionDropdown, setShowActionDropdown] = useState(false);
+  const actionDropdownRef = useRef(null);
+
+  // Close action dropdown when clicking outside
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (actionDropdownRef.current && !actionDropdownRef.current.contains(e.target)) {
+        setShowActionDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   // Fetch recent scan events
   const fetchEvents = async () => {
@@ -249,6 +264,45 @@ const IMSScanner = () => {
       setFoundItem(null);
       inputRef.current?.focus();
     }, 1200);
+  };
+
+  const filteredLog = scanLog.filter(entry => {
+    const matchesSearch = 
+      entry.barcode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      entry.product.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      entry.action.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesAction = 
+      actionFilter === 'All' || 
+      entry.action.toUpperCase() === actionFilter.toUpperCase();
+    
+    return matchesSearch && matchesAction;
+  });
+
+  const exportToCSV = () => {
+    if (filteredLog.length === 0) return;
+    const headers = ['Time', 'Action', 'Barcode', 'Product', 'Quantity', 'Traceability'];
+    const rows = filteredLog.map(entry => [
+      entry.time,
+      entry.action,
+      entry.barcode,
+      entry.product,
+      entry.qty,
+      entry.trace || '-'
+    ]);
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `scan_history_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
 
@@ -502,18 +556,40 @@ const IMSScanner = () => {
                <FaClock style={{ color: '#e3821e', fontSize: '20px' }} />
                <h2 style={{ margin: 0, fontSize: '18px' }}>Scan History Explorer</h2>
             </div>
-            <div style={{ display: 'flex', gap: '12px' }}>
-                <div className="search-input" style={{ width: '250px' }}>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <div className="logs-search-wrapper" style={{ width: '220px' }}>
                   <FaSearch className="search-icon" />
-                  <input type="text" placeholder="Search logs..." />
+                  <input
+                    type="text"
+                    placeholder="Search logs..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                  />
                 </div>
-                 <div className="filter-dropdown">
-                   <select>
-                     <option>All Actions</option>
-                     {dynamicStages.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                   </select>
-                 </div>
-                <button className="btn btn-secondary">Export CSV</button>
+                <div className="action-dropdown-wrapper" ref={actionDropdownRef}>
+                  <button
+                    className="action-dropdown-trigger"
+                    onClick={() => setShowActionDropdown(v => !v)}
+                  >
+                    <FaFilter className="action-dd-icon" />
+                    <span>{actionFilter === 'All' ? 'All Actions' : actionFilter}</span>
+                    <FaChevronDown className={`action-dd-chevron${showActionDropdown ? ' open' : ''}`} />
+                  </button>
+                  {showActionDropdown && (
+                    <div className="action-dropdown-menu">
+                      {['All', ...dynamicStages.map(s => s.name)].map(opt => (
+                        <button
+                          key={opt}
+                          className={`action-dd-option${actionFilter === opt ? ' selected' : ''}`}
+                          onClick={() => { setActionFilter(opt); setShowActionDropdown(false); }}
+                        >
+                          {opt === 'All' ? 'All Actions' : opt}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button className="btn btn-secondary export-csv-btn" onClick={exportToCSV}>Export CSV</button>
             </div>
           </div>
           <div className="card-body" style={{ padding: 0 }}>
@@ -532,7 +608,7 @@ const IMSScanner = () => {
                       </tr>
                    </thead>
                    <tbody>
-                      {scanLog.map((entry, i) => (
+                      {filteredLog.map((entry, i) => (
                          <tr key={`log-${i}`}>
                             <td style={{ color: '#5f6368', fontSize: '13px' }}>{entry.time}</td>
                             <td><span className={`log-action-badge action-${entry.action.toLowerCase()}`}>{entry.action}</span></td>
@@ -548,10 +624,10 @@ const IMSScanner = () => {
                             </td>
                          </tr>
                       ))}
-                      {scanLog.length === 0 && (
+                      {filteredLog.length === 0 && (
                          <tr>
                             <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: '#95a5a6' }}>
-                               No scans logged in this session yet.
+                               No matching scans found.
                             </td>
                          </tr>
                       )}

@@ -158,7 +158,7 @@ export default function IMSWorkOrders() {
         {/* Left List */}
         <div className="wo-list-panel">
           <div className="wo-controls">
-            <div className="search-input" style={{ flex: 1 }}>
+            <div className="wo-search-wrapper" style={{ flex: 1 }}>
               <FaSearch className="search-icon" />
               <input type="text" placeholder="Search work orders..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>

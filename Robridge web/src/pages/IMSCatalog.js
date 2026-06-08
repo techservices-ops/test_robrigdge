@@ -15,8 +15,46 @@ import ImportMapper from '../components/ImportMapper';
 
 const trackingColors = { FEFO: '#e74c3c', FIFO: '#3498db', LIFO: '#27ae60' };
 
-const emptyForm = { barcode: '', name: '', category: 'General', baseUnit: 'Unit', stock: '', trackingMode: 'FIFO', parentBarcode: '', multiplier: '', supplier: '', locations: [{zone: '', qty: ''}], bom: [], weight: '', cost: '', itemType: 'Raw Material' };
+const emptyForm = { barcode: '', name: '', category: 'General', baseUnit: 'Unit', stock: '', trackingMode: 'FIFO', parentBarcode: '', multiplier: '', supplier: '', locations: [{zone: '', qty: ''}], bom: [], weight: '', cost: '', itemType: 'Raw Material', imageUrl: '' };
 const ITEM_TYPES = ['Raw Material', 'Finished Product'];
+
+const compressImage = (file, maxW = 300, maxH = 300) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxW) {
+            height *= maxW / width;
+            width = maxW;
+          }
+        } else {
+          if (height > maxH) {
+            width *= maxH / height;
+            height = maxH;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        resolve(dataUrl);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
 const DEFAULT_CATEGORIES = ['All', 'Pharmacy', 'PPE', 'Hygiene', 'General', 'Electronics', 'Food & Beverage'];
 
 const IMSCatalog = () => {
@@ -101,7 +139,7 @@ const IMSCatalog = () => {
   }, [form.barcode, activeTab, showModal]);
 
   const openAdd = () => { setForm(emptyForm); setEditProduct(null); setActiveTab('general'); setShowModal(true); };
-  const openEdit = (p) => { setForm({ ...p, multiplier: p.multiplier || '', parentBarcode: p.parentBarcode || '' }); setEditProduct(p); setActiveTab('general'); setShowModal(true); };
+  const openEdit = (p) => { setForm({ ...p, multiplier: p.multiplier || '', parentBarcode: p.parentBarcode || '', imageUrl: p.imageUrl || '' }); setEditProduct(p); setActiveTab('general'); setShowModal(true); };
 
   const handleDelete = async (id) => {
     if (!activeMaster) return;
@@ -260,7 +298,7 @@ const IMSCatalog = () => {
           <div className="ims-modal-overlay" onClick={() => setShowMasterModal(false)}>
             <div className="ims-modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
-                <div><h2>Create New Master</h2><p>Define a new separated catalog space</p></div>
+                <div style={{ flex: 1, paddingRight: '24px' }}><h2>Create New Master</h2><p>Define a new separated catalog space</p></div>
                 <button className="modal-close" onClick={() => setShowMasterModal(false)}><FaTimes /></button>
               </div>
               <div className="modal-body">
@@ -293,7 +331,7 @@ const IMSCatalog = () => {
           <div className="ims-modal bom-analyzer-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px' }}>
             <div className="modal-header" style={{borderBottom: '1px solid #eee', paddingBottom: '15px'}}>
               <FaClipboardList className="modal-icon" style={{ color: '#9b59b6', fontSize: '24px' }} />
-              <div>
+              <div style={{ flex: 1, paddingRight: '24px' }}>
                  <h2 style={{margin: 0}}>BOM Inventory Feasibility Analyzer</h2>
                  <p style={{margin: 0, color: '#7f8c8d', fontSize: '13px'}}>Upload a Customer BOM to cross-reference stock levels across ALL Masters.</p>
               </div>
@@ -455,7 +493,14 @@ const IMSCatalog = () => {
               {filtered.map(p => (
                 <tr key={p.id}>
                   <td><code className="barcode-code">{p.barcode}</code></td>
-                  <td><strong>{p.name}</strong><div className="supplier-sub">{p.supplier}</div></td>
+                  <td>
+                    <div className="product-name-cell">
+                      <div>
+                        <strong>{p.name}</strong>
+                        <div className="supplier-sub">{p.supplier}</div>
+                      </div>
+                    </div>
+                  </td>
                   <td><span className="badge badge-info">{p.category}</span></td>
                   <td>
                     <span className="badge" style={{ background: p.itemType === 'Finished Product' ? '#1abc9c18' : '#3498db18', color: p.itemType === 'Finished Product' ? '#1abc9c' : '#3498db', fontWeight: 600 }}>
@@ -495,7 +540,7 @@ const IMSCatalog = () => {
           <div className="ims-modal catalog-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <FaPlus className="modal-icon" />
-              <div><h2>{editProduct ? 'Edit Product' : 'Add New Product'}</h2><p>{editProduct ? `Editing ${editProduct.name}` : 'Fill in product details'}</p></div>
+              <div style={{ flex: 1, paddingRight: '24px' }}><h2>{editProduct ? 'Edit Product' : 'Add New Product'}</h2><p>{editProduct ? `Editing ${editProduct.name}` : 'Fill in product details'}</p></div>
               <button className="modal-close" onClick={() => setShowModal(false)}><FaTimes /></button>
             </div>
             <div className="modal-tabs">
@@ -508,14 +553,14 @@ const IMSCatalog = () => {
               {activeTab === 'general' && (
                 <>
                   <div className="modal-row">
-                    <div className="form-group">
+                    <div className="form-group" style={{ flex: 1 }}>
                       <label className="form-label">Barcode *</label>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <input className="form-input" placeholder="e.g. PACK001" value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} style={{ flex: 1 }} />
-                        <button className="btn btn-secondary" onClick={generateBarcode} title="Generate Autocode" style={{ padding: '0 12px' }}><FaMagic /></button>
+                      <div className="barcode-input-wrapper">
+                        <input className="form-input" placeholder="e.g. PACK001" value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} />
+                        <button type="button" className="btn btn-secondary" onClick={generateBarcode} title="Generate Autocode"><FaMagic /></button>
                       </div>
                     </div>
-                    <div className="form-group" style={{ flex: 2 }}>
+                    <div className="form-group" style={{ flex: 1 }}>
                       <label className="form-label">Product Name *</label>
                       <input className="form-input" placeholder="e.g. Paracetamol 500mg" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
                     </div>
@@ -535,7 +580,7 @@ const IMSCatalog = () => {
                     </div>
                   </div>
                   <div className="modal-row">
-                    <div className="form-group" style={{ flex: 1 }}>
+                    <div className="form-group" style={{ flex: 1, maxWidth: 'calc(50% - 8px)' }}>
                       <label className="form-label">Opening Stock</label>
                       <input className="form-input" type="number" placeholder="0" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} />
                     </div>
