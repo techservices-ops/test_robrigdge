@@ -86,7 +86,7 @@ const IMSScanner = () => {
       if (lastProcessedScanRef.current === latestScan.timestamp) return;
       lastProcessedScanRef.current = latestScan.timestamp;
       
-      doScan(latestScan.barcodeData);
+      doScan(latestScan.barcodeData, latestScan.id);
     }
   }, [latestScan]);
 
@@ -122,7 +122,7 @@ const IMSScanner = () => {
     loadData();
   }, [activeWorkspaceId]);
 
-  const recordScanEvent = async (item, workflow, qty = 1, batch = '', serial = '', nameFallback = '', notes = '') => {
+  const recordScanEvent = async (item, workflow, qty = 1, batch = '', serial = '', nameFallback = '', notes = '', websocketScanId = '') => {
     try {
       const res = await imsFetch('/api/ims/scanner/scan', {
         method: 'POST',
@@ -137,7 +137,8 @@ const IMSScanner = () => {
           trackingMode: item ? item.trackingMode : onboardForm.tracking,
           batchNo: batch,
           serialNo: serial,
-          notes: notes
+          notes: notes,
+          websocketScanId: websocketScanId
         })
       });
       const data = await res.json();
@@ -153,7 +154,7 @@ const IMSScanner = () => {
   const isGrnMode = (stage) => stage === 'RECEIVE' || stage === 'DISPATCH';
   const isWoMode = (stage) => stage === 'PUTAWAY';
 
-  const doScan = async (code) => {
+  const doScan = async (code, websocketScanId = null) => {
     const val = code || scanInput.trim();
     if (!val) return;
 
@@ -223,10 +224,10 @@ const IMSScanner = () => {
           if (autoLogEnabled && itemToLog) {
             if (data.matched) {
               const prefix = scanStage === 'DISPATCH' ? 'DN:' : 'GRN:';
-              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', prefix + data.grn.docNo);
+              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', prefix + data.grn.docNo, websocketScanId);
             } else {
               // Standalone scan (not matching GRN but autoLog is enabled)
-              await recordScanEvent(itemToLog, scanStage, 1);
+              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', '', websocketScanId);
             }
           }
         } catch (e) { /* catalog lookup failure is non-fatal */ }
@@ -282,10 +283,10 @@ const IMSScanner = () => {
 
           if (autoLogEnabled && itemToLog) {
             if (data.matched) {
-              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', 'WO:' + data.wo.woNumber);
+              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', 'WO:' + data.wo.woNumber, websocketScanId);
             } else {
               // Standalone scan
-              await recordScanEvent(itemToLog, scanStage, 1);
+              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', '', websocketScanId);
             }
           }
         } catch (e) { /* catalog lookup failure is non-fatal */ }
@@ -312,7 +313,7 @@ const IMSScanner = () => {
           } catch(e) { setFefoRec([]); }
         } else { setFefoRec([]); }
         setScanResult('known');
-        await recordScanEvent(data.item, scanStage, 1);
+        await recordScanEvent(data.item, scanStage, 1, '', '', '', '', websocketScanId);
         setTimeout(() => inputRef.current?.focus(), 100);
       } else {
         setScanResult('unknown');
@@ -614,9 +615,17 @@ const IMSScanner = () => {
                   <span className="fd-value">{foundItem.location}</span>
                 </div>
               </div>
-              {(scanMatch === null || scanMatch?.matched) ? (
+              {scanMatch === null ? (
                 <div className="found-actions" style={{ justifyContent: 'center', background: '#f0fff5', borderTop: '1px solid #c3e6cb', color: '#155724', padding: '12px', fontWeight: 'bold', width: '100%' }}>
                   <FaCheckCircle style={{ marginRight: '8px' }} /> Successfully Auto-Logged
+                </div>
+              ) : scanMatch.matched ? (
+                <div className="found-actions" style={{ justifyContent: 'center', background: '#f0fff5', borderTop: '1px solid #c3e6cb', color: '#155724', padding: '12px', fontWeight: 'bold', width: '100%' }}>
+                  <FaCheckCircle style={{ marginRight: '8px' }} /> Verification Successful — Logged
+                </div>
+              ) : autoLogEnabled ? (
+                <div className="found-actions" style={{ justifyContent: 'center', background: '#fff9e6', borderTop: '1px solid #ffeeba', color: '#856404', padding: '12px', fontWeight: 'bold', width: '100%' }}>
+                  <FaExclamationCircle style={{ marginRight: '8px' }} /> Verification Failed — Logged as Standalone
                 </div>
               ) : (
                 <div className="found-actions" style={{ justifyContent: 'center', background: '#fff0f0', borderTop: '1px solid #f5c6cb', color: '#721c24', padding: '12px', fontWeight: 'bold', width: '100%' }}>
