@@ -59,47 +59,54 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const savedUser = localStorage.getItem('robridge_user');
+        // Always verify with backend using credentials: 'include' (cookie)
+        const response = await fetch(`${getServerURL()}/api/auth/verify`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        });
 
-        if (savedUser) {
-          // Verify token with backend
-          try {
-            const response = await fetch(`${getServerURL()}/api/auth/verify`, {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              credentials: 'include'
-            });
-
-            if (response.ok) {
-              const data = await response.json();
-              if (data.success) {
-                const userData = {
-                  ...data.user,
-                  isAuthenticated: true,
-                  allowedPages: PAGE_ACCESS[data.user.role] || []
-                };
-                setUser(userData);
-                localStorage.setItem('robridge_user', JSON.stringify(userData));
-              } else {
-                // Token invalid, clear storage
-                localStorage.removeItem('robridge_user');
-              }
-            } else {
-              // Token invalid, clear storage
-              localStorage.removeItem('robridge_user');
-            }
-          } catch (error) {
-            console.error('Error verifying token:', error);
-            // If verification fails, try to use saved user data (offline mode)
-            const userData = JSON.parse(savedUser);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            const userData = {
+              ...data.user,
+              isAuthenticated: true,
+              allowedPages: PAGE_ACCESS[data.user.role] || []
+            };
             setUser(userData);
+            localStorage.setItem('robridge_user', JSON.stringify(userData));
+            if (data.token) {
+              localStorage.setItem('robridge_token', data.token);
+            }
+          } else {
+            // Session invalid, clear state
+            localStorage.removeItem('robridge_user');
+            localStorage.removeItem('robridge_token');
+            setUser(null);
           }
+        } else {
+          // Verification failed, clear state
+          localStorage.removeItem('robridge_user');
+          localStorage.removeItem('robridge_token');
+          setUser(null);
         }
       } catch (error) {
-        console.error('Error loading user data:', error);
-        localStorage.removeItem('robridge_user');
+        console.error('Error verifying token on app load:', error);
+        // Fallback to saved user data in localStorage if offline or fetch fails
+        const savedUser = localStorage.getItem('robridge_user');
+        if (savedUser) {
+          try {
+            const userData = JSON.parse(savedUser);
+            setUser(userData);
+          } catch (e) {
+            localStorage.removeItem('robridge_user');
+            localStorage.removeItem('robridge_token');
+            setUser(null);
+          }
+        }
       } finally {
         setIsLoading(false);
       }

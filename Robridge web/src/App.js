@@ -133,6 +133,7 @@ function AppContent() {
           <main className="app-main-content">
             <Routes>
               <Route path="/" element={<ProtectedRoute requiredPath="/"><IMSDashboard /></ProtectedRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute requiredPath="/"><IMSDashboard /></ProtectedRoute>} />
               <Route path="/generator" element={<ProtectedRoute requiredPath="/generator"><BarcodeGenerator /></ProtectedRoute>} />
               <Route path="/image-processing" element={<ProtectedRoute requiredPath="/image-processing"><ImageProcessing /></ProtectedRoute>} />
               <Route path="/robot-control" element={<ProtectedRoute requiredPath="/robot-control"><RobotControl /></ProtectedRoute>} />
