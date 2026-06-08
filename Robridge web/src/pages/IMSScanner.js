@@ -192,12 +192,26 @@ const IMSScanner = () => {
         try {
           const lookupRes = await imsFetch(`/api/ims/scanner/lookup/${encodeURIComponent(val)}`);
           const lookupData = await lookupRes.json();
+          let itemToLog = null;
           if (lookupData.success && lookupData.found) {
+            itemToLog = lookupData.item;
             setFoundItem(lookupData.item);
-            if (data.matched && autoLogEnabled) {
-              const prefix = scanStage === 'DISPATCH' ? 'DN:' : 'GRN:';
-              await recordScanEvent(lookupData.item, scanStage, 1, '', '', '', prefix + data.grn.docNo);
-            }
+          } else if (data.matched) {
+            // Construct a temporary catalog item from GRN item info
+            itemToLog = {
+              name: data.item.name,
+              barcode: val,
+              category: 'General',
+              baseUnit: data.item.unit || 'Unit',
+              trackingMode: 'FIFO',
+              stock: 0
+            };
+            setFoundItem(itemToLog);
+          }
+
+          if (data.matched && autoLogEnabled && itemToLog) {
+            const prefix = scanStage === 'DISPATCH' ? 'DN:' : 'GRN:';
+            await recordScanEvent(itemToLog, scanStage, 1, '', '', '', prefix + data.grn.docNo);
           }
         } catch (e) { /* catalog lookup failure is non-fatal */ }
 
@@ -222,11 +236,25 @@ const IMSScanner = () => {
         try {
           const lookupRes = await imsFetch(`/api/ims/scanner/lookup/${encodeURIComponent(val)}`);
           const lookupData = await lookupRes.json();
+          let itemToLog = null;
           if (lookupData.success && lookupData.found) {
+            itemToLog = lookupData.item;
             setFoundItem(lookupData.item);
-            if (data.matched && autoLogEnabled) {
-              await recordScanEvent(lookupData.item, scanStage, 1, '', '', '', 'WO:' + data.wo.woNumber);
-            }
+          } else if (data.matched) {
+            // Construct a temporary catalog item from WO info
+            itemToLog = {
+              name: data.wo.productName,
+              barcode: val,
+              category: 'General',
+              baseUnit: 'Unit',
+              trackingMode: 'FIFO',
+              stock: 0
+            };
+            setFoundItem(itemToLog);
+          }
+
+          if (data.matched && autoLogEnabled && itemToLog) {
+            await recordScanEvent(itemToLog, scanStage, 1, '', '', '', 'WO:' + data.wo.woNumber);
           }
         } catch (e) { /* catalog lookup failure is non-fatal */ }
 
@@ -268,15 +296,24 @@ const IMSScanner = () => {
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter') doScan();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      doScan();
+    }
   };
 
 
   const handleOnboardSave = async () => {
-    // For unknown items, we don't insert into catalog automatically yet, just record the scan event
-    await recordScanEvent(null, scanStage, onboardForm.qty || 1, '', '', onboardForm.name || 'New Item');
+    const tempItem = {
+      name: onboardForm.name || 'New Item',
+      barcode: newItemBarcode,
+      category: onboardForm.category,
+      baseUnit: onboardForm.unit,
+      trackingMode: onboardForm.tracking,
+      stock: 0
+    };
+    await recordScanEvent(tempItem, scanStage, onboardForm.qty || 1, '', '', tempItem.name);
     setShowOnboard(false);
-    setScanResult('onboarded');
     setOnboardForm({ name: '', category: 'General', unit: 'Unit', qty: '', tracking: 'FIFO' });
     setTimeout(() => inputRef.current?.focus(), 100);
   };
@@ -470,7 +507,7 @@ const IMSScanner = () => {
 
         {/* Right — Product Info */}
         <div className="scanner-right">
-          {(scanResult === 'known' || scanResult === 'pending_confirm' || scanResult === 'scan_match' || scanResult === 'scan_nomatch') && foundItem ? (
+          {foundItem ? (
             <div className="found-item-card">
               <div className="found-header">
                 <div className="found-name">{foundItem.name}</div>
@@ -545,9 +582,15 @@ const IMSScanner = () => {
                   <span className="fd-value">{foundItem.location}</span>
                 </div>
               </div>
-              <div className="found-actions" style={{ justifyContent: 'center', background: '#f0fff5', borderTop: '1px solid #c3e6cb', color: '#155724', padding: '12px', fontWeight: 'bold', width: '100%' }}>
-                <FaCheckCircle style={{ marginRight: '8px' }} /> Successfully Auto-Logged
-              </div>
+              {(scanMatch === null || scanMatch?.matched) ? (
+                <div className="found-actions" style={{ justifyContent: 'center', background: '#f0fff5', borderTop: '1px solid #c3e6cb', color: '#155724', padding: '12px', fontWeight: 'bold', width: '100%' }}>
+                  <FaCheckCircle style={{ marginRight: '8px' }} /> Successfully Auto-Logged
+                </div>
+              ) : (
+                <div className="found-actions" style={{ justifyContent: 'center', background: '#fff0f0', borderTop: '1px solid #f5c6cb', color: '#721c24', padding: '12px', fontWeight: 'bold', width: '100%' }}>
+                  <FaExclamationCircle style={{ marginRight: '8px' }} /> Verification Failed — Not Logged
+                </div>
+              )}
             </div>
           ) : (
              <div className="empty-state" style={{ background: '#fff', border: '1px solid #dadce0', borderRadius: '12px', height: '100%' }}>
