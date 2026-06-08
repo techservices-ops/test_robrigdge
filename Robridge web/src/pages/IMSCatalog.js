@@ -239,10 +239,42 @@ const IMSCatalog = () => {
     return matchSearch && matchCat;
   });
 
-  // Calculate dynamic custom columns from filtered products
+  // Calculate dynamic custom columns from filtered products, excluding duplicate built-in fields
+  const excludedKeys = ['barcode', 'name', 'category', 'itemtype', 'baseunit', 'stock', 'tracking', 'trackingmode', 'location', 'locations', 'supplier'];
   const customCols = Array.from(new Set(
     filtered.flatMap(p => Object.keys(p.customFields || {}))
-  ));
+  )).filter(col => !excludedKeys.includes(col.toLowerCase().replace(/\s+/g, '')));
+
+  const handleExport = () => {
+    if (filtered.length === 0) return;
+    const rows = filtered.map(p => {
+      const row = {
+        Barcode: p.barcode,
+        Name: p.name,
+        Category: p.category,
+        'Item Type': p.itemType || 'Raw Material',
+        'Base Unit': p.baseUnit,
+        Stock: p.stock,
+        'Tracking Mode': p.trackingMode || 'FIFO',
+        Supplier: p.supplier || '',
+        Locations: p.locations && p.locations.length > 0
+          ? p.locations.map(loc => `${loc.zone}:${loc.qty}`).join(', ')
+          : 'Unassigned'
+      };
+      
+      if (p.customFields) {
+        Object.entries(p.customFields).forEach(([key, val]) => {
+          row[key] = val;
+        });
+      }
+      return row;
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Products');
+    XLSX.writeFile(wb, `${activeMaster?.name || 'Catalog'}_products.xlsx`);
+  };
 
   if (!activeMaster) {
     return (
@@ -277,7 +309,7 @@ const IMSCatalog = () => {
                   </div>
                 </div>
                 <button
-                  className="icon-btn delete-btn"
+                  className="icon-btn catalog-delete-btn"
                   title="Delete Master Catalog"
                   onClick={(e) => handleDeleteMaster(e, m)}
                   style={{
@@ -287,7 +319,7 @@ const IMSCatalog = () => {
                   onMouseEnter={e => e.currentTarget.style.opacity = 1}
                   onMouseLeave={e => e.currentTarget.style.opacity = 0.6}
                 >
-                  <FaTrash />
+                  <FaTimes />
                 </button>
               </div>
             );
@@ -448,7 +480,7 @@ const IMSCatalog = () => {
       </div>
 
       <div className="catalog-controls">
-        <div className="search-input" style={{ maxWidth: '340px', flex: 1 }}>
+        <div className="catalog-search-wrapper" style={{ maxWidth: '340px', flex: 1 }}>
           <FaSearch className="search-icon" />
           <input type="text" placeholder="Search name or barcode..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
@@ -458,7 +490,9 @@ const IMSCatalog = () => {
             {categories.map(c => <option key={c}>{c}</option>)}
           </select>
         </div>
-        <button className="btn btn-secondary" style={{ marginLeft: 'auto' }}><FaDownload /> Export</button>
+        <button className="btn btn-secondary" onClick={handleExport} disabled={filtered.length === 0} style={{ marginLeft: 'auto' }}>
+          <FaDownload /> Export
+        </button>
         <span className="catalog-count">{filtered.length} of {products.length} products</span>
       </div>
 
@@ -520,8 +554,8 @@ const IMSCatalog = () => {
                   {customCols.map(c => <td key={c}>{p.customFields?.[c] || <span className="text-tertiary">—</span>}</td>)}
                   <td>
                     <div className="table-actions">
-                      <button className="icon-btn edit-btn" onClick={() => openEdit(p)}><FaEdit /></button>
-                      <button className="icon-btn delete-btn" onClick={() => handleDelete(p.id)}><FaTrash /></button>
+                      <button className="icon-btn catalog-edit-btn" onClick={() => openEdit(p)} title="Edit Product"><FaEdit /></button>
+                      <button className="icon-btn catalog-delete-btn" onClick={() => handleDelete(p.id)} title="Delete Product"><FaTimes /></button>
                     </div>
                   </td>
                 </tr>
@@ -578,9 +612,22 @@ const IMSCatalog = () => {
                     </div>
                   </div>
                   <div className="modal-row">
-                    <div className="form-group" style={{ flex: 1, maxWidth: 'calc(50% - 8px)' }}>
+                    <div className="form-group" style={{ flex: 1 }}>
                       <label className="form-label">Opening Stock</label>
                       <input className="form-input" type="number" placeholder="0" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} />
+                    </div>
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label className="form-label">Location (Zone)</label>
+                      <input className="form-input" placeholder="e.g. Zone A" value={form.locations?.[0]?.zone || ''} onChange={e => {
+                        const val = e.target.value;
+                        setForm(f => {
+                          const locs = [...(f.locations || [{zone: '', qty: ''}])];
+                          if (!locs[0]) locs[0] = { zone: '', qty: '' };
+                          locs[0].zone = val;
+                          if (!locs[0].qty && f.stock) locs[0].qty = f.stock;
+                          return { ...f, locations: locs };
+                        });
+                      }} />
                     </div>
                   </div>
                 </>
