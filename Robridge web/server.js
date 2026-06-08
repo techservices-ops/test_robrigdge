@@ -1055,7 +1055,7 @@ app.get('/api/auth/verify', async (req, res) => {
 
       if (wsCheck.rows.length > 0) {
         // Workspace ALREADY exists: Skip creation entirely, redirect to dashboard
-        return res.redirect(`${frontendUrl}/dashboard?status=already_verified`);
+        return res.redirect(`${frontendUrl}/dashboard?status=already_verified&token=${jwtToken}`);
       } else {
         // No workspace exists: Create exactly ONE workspace in transaction
         try {
@@ -1077,7 +1077,7 @@ app.get('/api/auth/verify', async (req, res) => {
           await pool.query('COMMIT');
 
           // Redirect to dashboard with success status
-          return res.redirect(`${frontendUrl}/dashboard?status=success`);
+          return res.redirect(`${frontendUrl}/dashboard?status=success&token=${jwtToken}`);
         } catch (dbErr) {
           await pool.query('ROLLBACK');
           console.error('Error creating workspace during verification:', dbErr);

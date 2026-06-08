@@ -59,38 +59,58 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Always verify with backend using credentials: 'include' (cookie)
-        const response = await fetch(`${getServerURL()}/api/auth/verify`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
-        });
+        // 1. Check if there is a token in the URL query parameters (redirect from email verification)
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlToken = urlParams.get('token');
+        
+        let tokenToVerify = urlToken;
+        let isFromUrl = false;
+        
+        if (urlToken) {
+          isFromUrl = true;
+        } else {
+          tokenToVerify = localStorage.getItem('robridge_token');
+        }
 
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            const userData = {
-              ...data.user,
-              isAuthenticated: true,
-              allowedPages: PAGE_ACCESS[data.user.role] || []
-            };
-            setUser(userData);
-            localStorage.setItem('robridge_user', JSON.stringify(userData));
-            if (data.token) {
-              localStorage.setItem('robridge_token', data.token);
+        if (tokenToVerify) {
+          // Verify token with backend
+          const response = await fetch(`${getServerURL()}/api/auth/verify`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${tokenToVerify}`
+            },
+            credentials: 'include'
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+              const userData = {
+                ...data.user,
+                isAuthenticated: true,
+                allowedPages: PAGE_ACCESS[data.user.role] || []
+              };
+              setUser(userData);
+              localStorage.setItem('robridge_user', JSON.stringify(userData));
+              localStorage.setItem('robridge_token', tokenToVerify);
+            } else {
+              // Token invalid, clear storage if it wasn't a fresh URL token
+              if (!isFromUrl) {
+                localStorage.removeItem('robridge_user');
+                localStorage.removeItem('robridge_token');
+                setUser(null);
+              }
             }
           } else {
-            // Session invalid, clear state
-            localStorage.removeItem('robridge_user');
-            localStorage.removeItem('robridge_token');
-            setUser(null);
+            if (!isFromUrl) {
+              localStorage.removeItem('robridge_user');
+              localStorage.removeItem('robridge_token');
+              setUser(null);
+            }
           }
         } else {
-          // Verification failed, clear state
-          localStorage.removeItem('robridge_user');
-          localStorage.removeItem('robridge_token');
+          // No token found anywhere, ensure clean unauthenticated state
           setUser(null);
         }
       } catch (error) {
@@ -106,6 +126,8 @@ export const AuthProvider = ({ children }) => {
             localStorage.removeItem('robridge_token');
             setUser(null);
           }
+        } else {
+          setUser(null);
         }
       } finally {
         setIsLoading(false);
