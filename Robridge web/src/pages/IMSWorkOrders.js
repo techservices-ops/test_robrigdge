@@ -162,7 +162,7 @@ export default function IMSWorkOrders() {
               <FaSearch className="search-icon" />
               <input type="text" placeholder="Search work orders..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <select className="form-select" value={filter} onChange={e => setFilter(e.target.value)} style={{ width: 140 }}>
+            <select className="form-select" value={filter} onChange={e => setFilter(e.target.value)} style={{ width: 145 }}>
               <option value="ALL">All Status</option>
               {Object.entries(statusConfig).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
