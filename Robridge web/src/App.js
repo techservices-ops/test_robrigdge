@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { WorkspaceProvider, useWorkspace } from './contexts/WorkspaceContext';
+import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { WebSocketProvider } from './contexts/WebSocketContext';
 import { UIProvider } from './contexts/UIContext';
 import GlobalUIComponents from './components/GlobalUI/GlobalUIComponents';
@@ -47,7 +47,6 @@ import './App.css';
 // Protected Route Component with Role-based Access Control
 function ProtectedRoute({ children, requiredPath }) {
   const { isAuthenticated, hasPageAccess, isLoading } = useAuth();
-  const { workspaces, loadingWorkspaces } = useWorkspace();
 
   // Optimistic rendering: If authenticated (optimistically), render children even if loading.
   if (isLoading && !isAuthenticated()) {
