@@ -5700,10 +5700,21 @@ app.put('/api/ims/workorders/:id/status', authenticateToken, requireWorkspace, a
       }
       // Add finished product to stock
       if (w.product_barcode) {
-        await client.query(
-          `UPDATE ims_items SET stock = stock + $1, updated_at=CURRENT_TIMESTAMP WHERE barcode=$2 AND workspace_id=$3`,
-          [w.target_qty, w.product_barcode, req.workspace_id]
+        const scannedRes = await client.query(
+          `SELECT COALESCE(SUM(quantity), 0) as scanned_qty 
+           FROM ims_scan_events 
+           WHERE workspace_id = $1 AND barcode = $2 AND notes = $3`,
+          [req.workspace_id, w.product_barcode, 'WO:' + w.wo_number]
         );
+        const scannedQty = Number(scannedRes.rows[0].scanned_qty || 0);
+        const remainingQty = Math.max(0, Number(w.target_qty) - scannedQty);
+
+        if (remainingQty > 0) {
+          await client.query(
+            `UPDATE ims_items SET stock = stock + $1, updated_at=CURRENT_TIMESTAMP WHERE barcode=$2 AND workspace_id=$3`,
+            [remainingQty, w.product_barcode, req.workspace_id]
+          );
+        }
       }
     }
     await client.query(
@@ -5813,12 +5824,24 @@ app.post('/api/ims/grn/:id/approve', authenticateToken, requireWorkspace, requir
     const items = await client.query('SELECT * FROM ims_grn_items WHERE grn_id=$1', [req.params.id]);
     for (const it of items.rows) {
       const qty = Number(it.received_qty);
-      if (g.type === 'INWARD') {
-        await client.query(`UPDATE ims_items SET stock=stock+$1,updated_at=CURRENT_TIMESTAMP WHERE barcode=$2 AND workspace_id=$3`, [qty, it.barcode, req.workspace_id]);
-        await client.query(`INSERT INTO ims_scan_events (user_id,workspace_id,barcode,item_name,workflow,quantity,notes) VALUES ($1,$2,$3,$4,'RECEIVE',$5,'GRN:'||$6)`, [req.user.id, req.workspace_id, it.barcode, it.name, qty, g.doc_no]);
-      } else {
-        await client.query(`UPDATE ims_items SET stock=GREATEST(stock-$1,0),updated_at=CURRENT_TIMESTAMP WHERE barcode=$2 AND workspace_id=$3`, [qty, it.barcode, req.workspace_id]);
-        await client.query(`INSERT INTO ims_scan_events (user_id,workspace_id,barcode,item_name,workflow,quantity,notes) VALUES ($1,$2,$3,$4,'DISPATCH',$5,'DN:'||$6)`, [req.user.id, req.workspace_id, it.barcode, it.name, qty, g.doc_no]);
+      const notesVal = g.type === 'INWARD' ? 'GRN:' + g.doc_no : 'DN:' + g.doc_no;
+      const scannedRes = await client.query(
+        `SELECT COALESCE(SUM(quantity), 0) as scanned_qty 
+         FROM ims_scan_events 
+         WHERE workspace_id = $1 AND barcode = $2 AND notes = $3`,
+        [req.workspace_id, it.barcode, notesVal]
+      );
+      const scannedQty = Number(scannedRes.rows[0].scanned_qty || 0);
+      const remainingQty = Math.max(0, qty - scannedQty);
+
+      if (remainingQty > 0) {
+        if (g.type === 'INWARD') {
+          await client.query(`UPDATE ims_items SET stock=stock+$1,updated_at=CURRENT_TIMESTAMP WHERE barcode=$2 AND workspace_id=$3`, [remainingQty, it.barcode, req.workspace_id]);
+          await client.query(`INSERT INTO ims_scan_events (user_id,workspace_id,barcode,item_name,workflow,quantity,notes) VALUES ($1,$2,$3,$4,'RECEIVE',$5,$6)`, [req.user.id, req.workspace_id, it.barcode, it.name, remainingQty, notesVal]);
+        } else {
+          await client.query(`UPDATE ims_items SET stock=GREATEST(stock-$1,0),updated_at=CURRENT_TIMESTAMP WHERE barcode=$2 AND workspace_id=$3`, [remainingQty, it.barcode, req.workspace_id]);
+          await client.query(`INSERT INTO ims_scan_events (user_id,workspace_id,barcode,item_name,workflow,quantity,notes) VALUES ($1,$2,$3,$4,'DISPATCH',$5,$6)`, [req.user.id, req.workspace_id, it.barcode, it.name, remainingQty, notesVal]);
+        }
       }
     }
     await client.query(`UPDATE ims_grn SET status='APPROVED',approved_by=$1,approved_at=CURRENT_TIMESTAMP WHERE id=$2`, [req.user.id, req.params.id]);
