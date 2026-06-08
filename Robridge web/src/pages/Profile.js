@@ -350,15 +350,7 @@ const Profile = () => {
                 <div className="workspace-card" style={{ marginTop: '20px', padding: '15px', background: '#F8F9FA', borderRadius: '12px', border: '1px solid #EAEAEA', textAlign: 'left' }}>
                   <h4 style={{ margin: '0 0 10px', fontSize: '14px', color: '#333' }}>Current Workspace</h4>
                   <div style={{ fontWeight: '600', fontSize: '16px', color: '#fa1804' }}>{activeWorkspace?.name || 'No Workspace'}</div>
-                  <div style={{ marginTop: '15px' }}>
-                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#666', marginBottom: '5px' }}>
-                        <span>SKU Limit</span>
-                        <span>{activeWorkspace?.max_skus ? `Max ${activeWorkspace.max_skus}` : 'Unlimited'}</span>
-                     </div>
-                     <div style={{ height: '6px', background: '#e0e0e0', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: '12.5%', background: '#4CAF50' }}></div>
-                     </div>
-                  </div>
+
                 </div>
               </div>
             </>
