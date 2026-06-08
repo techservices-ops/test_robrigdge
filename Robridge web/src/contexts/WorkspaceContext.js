@@ -88,6 +88,11 @@ export const WorkspaceProvider = ({ children }) => {
   // Convenience fetch wrapper — injects workspace header + always sends cookie
   // Only redirects to login on 401 (truly unauthenticated). 403 = permissions issue, not logout.
   const imsFetch = useCallback(async (path, options = {}) => {
+    const method = (options.method || 'GET').toUpperCase();
+    if (method !== 'GET' && activeWorkspaceId) {
+      sessionStorage.removeItem(`ims_dashboard_cache_${activeWorkspaceId}`);
+    }
+
     const headers = { ...getImsHeaders(), ...(options.headers || {}) };
     const response = await fetch(`${getServerURL()}${path}`, {
       ...options,
