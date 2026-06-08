@@ -260,7 +260,7 @@ const IMSCatalog = () => {
           <div className="ims-modal-overlay" onClick={() => setShowMasterModal(false)}>
             <div className="ims-modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
-                <div><h2>Create New Master</h2><p>Define a new separated catalog space</p></div>
+                <div style={{ flex: 1, paddingRight: '24px' }}><h2>Create New Master</h2><p>Define a new separated catalog space</p></div>
                 <button className="modal-close" onClick={() => setShowMasterModal(false)}><FaTimes /></button>
               </div>
               <div className="modal-body">
@@ -293,7 +293,7 @@ const IMSCatalog = () => {
           <div className="ims-modal bom-analyzer-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px' }}>
             <div className="modal-header" style={{borderBottom: '1px solid #eee', paddingBottom: '15px'}}>
               <FaClipboardList className="modal-icon" style={{ color: '#9b59b6', fontSize: '24px' }} />
-              <div>
+              <div style={{ flex: 1, paddingRight: '24px' }}>
                  <h2 style={{margin: 0}}>BOM Inventory Feasibility Analyzer</h2>
                  <p style={{margin: 0, color: '#7f8c8d', fontSize: '13px'}}>Upload a Customer BOM to cross-reference stock levels across ALL Masters.</p>
               </div>
@@ -495,7 +495,7 @@ const IMSCatalog = () => {
           <div className="ims-modal catalog-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <FaPlus className="modal-icon" />
-              <div><h2>{editProduct ? 'Edit Product' : 'Add New Product'}</h2><p>{editProduct ? `Editing ${editProduct.name}` : 'Fill in product details'}</p></div>
+              <div style={{ flex: 1, paddingRight: '24px' }}><h2>{editProduct ? 'Edit Product' : 'Add New Product'}</h2><p>{editProduct ? `Editing ${editProduct.name}` : 'Fill in product details'}</p></div>
               <button className="modal-close" onClick={() => setShowModal(false)}><FaTimes /></button>
             </div>
             <div className="modal-tabs">
