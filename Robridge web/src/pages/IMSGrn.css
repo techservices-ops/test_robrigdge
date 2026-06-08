@@ -29,3 +29,64 @@
 .grn-detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
 .grn-detail-header h2 { margin: 0 0 4px 0; font-size: 22px; }
 .grn-approval-strip { display: flex; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-light); }
+
+/* Ensure search input cursor starts from the left with proper icon clearance */
+.ims-grn-page .search-input {
+  padding: 0 !important;
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.ims-grn-page .search-input input {
+  text-align: left !important;
+  padding: 10px 12px 10px 36px !important;
+  width: 100%;
+  border: 2px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  background: var(--bg-primary);
+  outline: none;
+}
+
+.ims-grn-page .search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Align all modal inputs and selects to the left */
+.ims-grn-page .ims-modal .form-input,
+.ims-grn-page .ims-modal .form-select,
+.ims-grn-page .ims-modal input,
+.ims-grn-page .ims-modal select,
+.ims-grn-page .ims-modal textarea {
+  text-align: left !important;
+  text-align-last: left !important;
+  padding: 12px 16px !important; /* Reset padding to standard to override LoginPage.css global leak */
+}
+
+/* Custom premium select styling to place arrow on the far-right */
+.ims-grn-page .ims-modal .form-select,
+.ims-grn-page .ims-modal select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-image: url("data:image/svg+xml;utf8,<svg fill='%232c3e50' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/><path d='M0 0h24v24H0z' fill='none'/></svg>") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 12px center !important;
+  background-size: 20px !important;
+  padding-right: 40px !important;
+}
+
+/* Ensure line items table input values are fully visible and clear padding leak */
+.ims-grn-page .ims-modal table input {
+  padding: 4px 8px !important;
+  text-align: left !important;
+}
+
+

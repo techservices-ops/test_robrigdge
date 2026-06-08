@@ -225,7 +225,7 @@
 
 .modal-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--spacing-md);
   padding: var(--spacing-lg);
   border-bottom: 1px solid var(--border-light);
@@ -235,7 +235,7 @@
   z-index: 1;
 }
 
-.modal-icon { font-size: 24px; color: var(--primary-orange); margin-top: 2px; flex-shrink: 0; }
+.modal-icon { font-size: 24px; color: var(--primary-orange); margin: 0; flex-shrink: 0; }
 
 .modal-header h2 { font-size: var(--text-xl); font-weight: var(--font-bold); margin: 0 0 2px 0; }
 .modal-header p { font-size: var(--text-sm); color: var(--text-secondary); margin: 0; }

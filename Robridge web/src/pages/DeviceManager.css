@@ -147,24 +147,24 @@
 
 .device-manager .device-controls {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
     margin-bottom: 20px;
-    flex-wrap: wrap;
-    gap: 12px;
+    flex-wrap: nowrap;
+    gap: 24px;
 }
 
 .device-manager .search-section {
     display: flex;
-    gap: 12px;
-    flex: 1;
-    min-width: 300px;
+    gap: 24px;
+    min-width: 200px;
+    align-items: center;
 }
 
 .device-manager .search-box {
     position: relative;
     flex: 1;
-    max-width: 400px;
+    max-width: 250px;
 }
 
 .device-manager .search-icon {
@@ -211,6 +211,7 @@
 
 .device-manager .action-buttons {
     display: flex;
+    align-items: center;
     gap: 12px;
 }
 
@@ -224,7 +225,7 @@
     align-items: center;
     gap: 8px;
     transition: all 0.3s ease;
-    border: none;
+    border: 1px solid transparent;
 }
 
 .device-manager .btn-primary {

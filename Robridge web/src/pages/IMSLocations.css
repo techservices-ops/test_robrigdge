@@ -23,3 +23,69 @@
 .loc-history-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--primary-orange); flex-shrink: 0; }
 
 @media (max-width: 1024px) { .loc-zone-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* Ensure search input cursor starts from the left with proper icon clearance */
+.ims-locations-page .search-input {
+  padding: 0 !important;
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.ims-locations-page .search-input input {
+  text-align: left !important;
+  padding: 10px 12px 10px 36px !important;
+  width: 100%;
+  border: 2px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  background: var(--bg-primary);
+  outline: none;
+}
+
+.ims-locations-page .search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Reduce unwanted spacing in modals */
+.ims-modal .modal-header {
+  padding-bottom: 16px !important;
+}
+
+.ims-modal .modal-body {
+  padding-top: 0 !important;
+}
+
+/* Align all modal inputs and selects to the left */
+.ims-modal .form-input,
+.ims-modal .form-select,
+.ims-modal input,
+.ims-modal select,
+.ims-modal textarea {
+  text-align: left !important;
+  text-align-last: left !important;
+}
+
+/* Custom premium select styling to place arrow on the far-right */
+.ims-modal .form-select,
+.ims-modal select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-image: url("data:image/svg+xml;utf8,<svg fill='%232c3e50' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/><path d='M0 0h24v24H0z' fill='none'/></svg>") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 12px center !important;
+  background-size: 20px !important;
+  padding-right: 40px !important;
+}
+
+
+
+
+

@@ -29,8 +29,3 @@
 .prod-summary-card.rej .psc-icon { color: #e74c3c; }
 .prod-summary-card.total .psc-icon { color: var(--primary-orange); }
 .psc-val { font-size: 32px; font-weight: 800; line-height: 1; }
-.prod-summary-card.fwd .psc-val { color: #27ae60; }
-.prod-summary-card.rew .psc-val { color: #e67e22; }
-.prod-summary-card.rej .psc-val { color: #e74c3c; }
-.prod-summary-card.total .psc-val { color: var(--primary-orange); }
-.psc-lbl { font-size: 12px; color: var(--text-secondary); font-weight: 600; text-align: center; }

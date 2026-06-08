@@ -486,31 +486,26 @@ const DeviceManager = () => {
                 <div className="device-fleet">
                     {/* Toolbar */}
                     <div className="device-controls">
-                        <div className="search-section">
-                            <div className="search-box">
-                                <FaSearch className="search-icon" />
-                                <input
-                                    type="text"
-                                    placeholder="Search devices..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                />
-                            </div>
-                            <button
-                                className="filter-btn"
-                                onClick={() => setShowFilters(!showFilters)}
-                            >
-                                <FaFilter />
-                                Filters
-                            </button>
+                        <div className="search-box">
+                            <FaSearch className="search-icon" />
+                            <input
+                                type="text"
+                                placeholder="Search devices..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
                         </div>
-
-                        <div className="action-buttons">
-                            <button className="btn btn-primary" onClick={exportDeviceData}>
-                                <FaDownload />
-                                Export
-                            </button>
-                        </div>
+                        <button
+                            className="filter-btn"
+                            onClick={() => setShowFilters(!showFilters)}
+                        >
+                            <FaFilter />
+                            Filters
+                        </button>
+                        <button className="btn btn-primary" onClick={exportDeviceData}>
+                            <FaDownload />
+                            Export
+                        </button>
                     </div>
 
                     {/* Filters Panel */}

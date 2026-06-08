@@ -130,13 +130,13 @@ export default function IMSProduction() {
 
           <div className="form-group" style={{ marginBottom: 12 }}>
             <label className="form-label">Barcode *</label>
-            <input className="form-input" placeholder="Scan or type barcode..." value={scan.barcode}
+            <input className="form-input" placeholder="Scan or type barcode..." value={scan.barcode} style={{ textAlign: 'left' }}
               onChange={e => setScan(s => ({ ...s, barcode: e.target.value }))}
               onKeyDown={e => e.key === 'Enter' && recordScan()} autoFocus />
           </div>
           <div className="form-group" style={{ marginBottom: 12 }}>
             <label className="form-label">Item Name</label>
-            <input className="form-input" placeholder="Optional" value={scan.itemName} onChange={e => setScan(s => ({ ...s, itemName: e.target.value }))} />
+            <input className="form-input" placeholder="Optional" value={scan.itemName} style={{ textAlign: 'left' }} onChange={e => setScan(s => ({ ...s, itemName: e.target.value }))} />
           </div>
 
           <div style={{ marginBottom: 12 }}>
@@ -154,17 +154,17 @@ export default function IMSProduction() {
           <div className="modal-row" style={{ marginBottom: 12 }}>
             <div className="form-group">
               <label className="form-label">Qty</label>
-              <input className="form-input" type="number" value={scan.qty} onChange={e => setScan(s => ({ ...s, qty: e.target.value }))} />
+              <input className="form-input" type="number" value={scan.qty} style={{ textAlign: 'center' }} onChange={e => setScan(s => ({ ...s, qty: e.target.value }))} />
             </div>
             <div className="form-group" style={{ flex: 2 }}>
               <label className="form-label">Batch No</label>
-              <input className="form-input" placeholder="Optional" value={scan.batchNo} onChange={e => setScan(s => ({ ...s, batchNo: e.target.value }))} />
+              <input className="form-input" placeholder="Optional" value={scan.batchNo} style={{ textAlign: 'left' }} onChange={e => setScan(s => ({ ...s, batchNo: e.target.value }))} />
             </div>
           </div>
 
           <div className="form-group" style={{ marginBottom: 16 }}>
             <label className="form-label">Notes</label>
-            <input className="form-input" placeholder="Reason for rework/reject..." value={scan.notes} onChange={e => setScan(s => ({ ...s, notes: e.target.value }))} />
+            <input className="form-input" placeholder="Reason for rework/reject..." value={scan.notes} style={{ textAlign: 'left' }} onChange={e => setScan(s => ({ ...s, notes: e.target.value }))} />
           </div>
 
           <button className="btn btn-primary" style={{ width: '100%' }} onClick={recordScan} disabled={saving || !scan.barcode || !selectedStage}>
