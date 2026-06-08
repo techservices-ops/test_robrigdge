@@ -153,6 +153,18 @@ export const WebSocketProvider = ({ children }) => {
           setLatestScan(completeScan);
           // autoSaveScanToDatabase(completeScan); // Commented out to prevent duplicate saves/overwrites
 
+          // Clear dashboard caches to keep data consistent across pages
+          try {
+            Object.keys(sessionStorage).forEach(key => {
+              if (key.startsWith('ims_dashboard_cache_')) {
+                sessionStorage.removeItem(key);
+              }
+            });
+            console.log('🧹 Cleared dashboard cache on WebSocket scan');
+          } catch (e) {
+            console.error('Error clearing sessionStorage:', e);
+          }
+
           setTimeout(() => {
             isProcessingScanRef.current = false;
             setIsProcessingScan(false);

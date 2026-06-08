@@ -157,9 +157,9 @@ const IMSScanner = () => {
     const val = code || scanInput.trim();
     if (!val) return;
 
-    // Debounce: ignore scans of the exact same barcode within 1200ms
+    // Debounce: ignore scans of the exact same barcode within 2500ms
     const now = Date.now();
-    if (val === lastScanBarcodeRef.current && now - lastScanTimeRef.current < 1200) {
+    if (val === lastScanBarcodeRef.current && now - lastScanTimeRef.current < 2500) {
       console.log('🚫 Ignoring duplicate scan (debounce):', val);
       return;
     }
@@ -207,11 +207,27 @@ const IMSScanner = () => {
               stock: 0
             };
             setFoundItem(itemToLog);
+          } else {
+            // Not in catalog and not on GRN/WO -> trigger onboarding
+            setScanResult('unknown');
+            setNewItemBarcode(val);
+            setShowOnboard(true);
+            
+            setScanning(false);
+            setScanInput('');
+            isScanningRef.current = false;
+            setTimeout(() => inputRef.current?.focus(), 300);
+            return;
           }
 
-          if (data.matched && autoLogEnabled && itemToLog) {
-            const prefix = scanStage === 'DISPATCH' ? 'DN:' : 'GRN:';
-            await recordScanEvent(itemToLog, scanStage, 1, '', '', '', prefix + data.grn.docNo);
+          if (autoLogEnabled && itemToLog) {
+            if (data.matched) {
+              const prefix = scanStage === 'DISPATCH' ? 'DN:' : 'GRN:';
+              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', prefix + data.grn.docNo);
+            } else {
+              // Standalone scan (not matching GRN but autoLog is enabled)
+              await recordScanEvent(itemToLog, scanStage, 1);
+            }
           }
         } catch (e) { /* catalog lookup failure is non-fatal */ }
 
@@ -251,10 +267,26 @@ const IMSScanner = () => {
               stock: 0
             };
             setFoundItem(itemToLog);
+          } else {
+            // Not in catalog and not on Work Order -> trigger onboarding
+            setScanResult('unknown');
+            setNewItemBarcode(val);
+            setShowOnboard(true);
+            
+            setScanning(false);
+            setScanInput('');
+            isScanningRef.current = false;
+            setTimeout(() => inputRef.current?.focus(), 300);
+            return;
           }
 
-          if (data.matched && autoLogEnabled && itemToLog) {
-            await recordScanEvent(itemToLog, scanStage, 1, '', '', '', 'WO:' + data.wo.woNumber);
+          if (autoLogEnabled && itemToLog) {
+            if (data.matched) {
+              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', 'WO:' + data.wo.woNumber);
+            } else {
+              // Standalone scan
+              await recordScanEvent(itemToLog, scanStage, 1);
+            }
           }
         } catch (e) { /* catalog lookup failure is non-fatal */ }
 
