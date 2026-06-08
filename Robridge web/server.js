@@ -317,6 +317,7 @@ const initDatabase = async () => {
           bom JSONB DEFAULT '[]',
           weight NUMERIC,
           cost NUMERIC,
+          image_url TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (master_id) REFERENCES ims_masters(id) ON DELETE CASCADE,
@@ -352,6 +353,7 @@ const initDatabase = async () => {
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS alert_at NUMERIC DEFAULT 0`);
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS custom_fields JSONB DEFAULT '{}'`);
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS item_type VARCHAR(50) DEFAULT 'Raw Material'`);
+        await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS image_url TEXT`);
       } catch (alterErr) { console.log('Notice: Could not alter tables (might be fresh DB)'); }
       console.log('Starting user migration (batch mode)...');
       // BATCH: Create default workspaces for ALL users that don't have one — in one query
@@ -5024,7 +5026,8 @@ app.get('/api/ims/masters/:masterId/items', authenticateToken, requireWorkspace,
       multiplier: r.multiplier ? Number(r.multiplier) : null,
       supplier: r.supplier || '', locations: r.locations || [],
       bom: r.bom || [], weight: r.weight, cost: r.cost,
-      alertAt: r.alert_at, customFields: r.custom_fields || {}
+      alertAt: r.alert_at, customFields: r.custom_fields || {},
+      imageUrl: r.image_url
     }));
     res.json({ success: true, items });
   } catch (error) {
@@ -5034,18 +5037,18 @@ app.get('/api/ims/masters/:masterId/items', authenticateToken, requireWorkspace,
 
 app.post('/api/ims/masters/:masterId/items', authenticateToken, requireWorkspace, async (req, res) => {
   try {
-    const { barcode, name, category, baseUnit, stock, trackingMode, parentBarcode, multiplier, supplier, locations, bom, weight, cost } = req.body;
+    const { barcode, name, category, baseUnit, stock, trackingMode, parentBarcode, multiplier, supplier, locations, bom, weight, cost, imageUrl } = req.body;
     if (!barcode || !name) return res.status(400).json({ success: false, error: 'Barcode and name are required' });
     const result = await pool.query(
       `INSERT INTO ims_items 
-        (master_id, user_id, workspace_id, barcode, name, category, base_unit, stock, tracking_mode, parent_barcode, multiplier, supplier, locations, bom, weight, cost)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        (master_id, user_id, workspace_id, barcode, name, category, base_unit, stock, tracking_mode, parent_barcode, multiplier, supplier, locations, bom, weight, cost, image_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        ON CONFLICT (master_id, barcode)
-       DO UPDATE SET name=$5, category=$6, base_unit=$7, stock=$8, tracking_mode=$9, parent_barcode=$10, multiplier=$11, supplier=$12, locations=$13, bom=$14, weight=$15, cost=$16, updated_at=CURRENT_TIMESTAMP
+       DO UPDATE SET name=$5, category=$6, base_unit=$7, stock=$8, tracking_mode=$9, parent_barcode=$10, multiplier=$11, supplier=$12, locations=$13, bom=$14, weight=$15, cost=$16, image_url=$17, updated_at=CURRENT_TIMESTAMP
        RETURNING *`,
       [req.params.masterId, req.user.id, req.workspace_id, barcode, name, category||'General', baseUnit||'Unit',
        Number(stock)||0, trackingMode||'FIFO', parentBarcode||null, multiplier?Number(multiplier):null,
-       supplier||null, JSON.stringify(locations||[]), JSON.stringify(bom||[]), weight?Number(weight):null, cost?Number(cost):null]
+       supplier||null, JSON.stringify(locations||[]), JSON.stringify(bom||[]), weight?Number(weight):null, cost?Number(cost):null, imageUrl||null]
     );
     const r = result.rows[0];
     res.json({ success: true, item: {
@@ -5053,7 +5056,8 @@ app.post('/api/ims/masters/:masterId/items', authenticateToken, requireWorkspace
       category: r.category, baseUnit: r.base_unit, stock: Number(r.stock),
       trackingMode: r.tracking_mode, parentBarcode: r.parent_barcode || '',
       multiplier: r.multiplier ? Number(r.multiplier) : null,
-      supplier: r.supplier || '', locations: r.locations || [], bom: r.bom || []
+      supplier: r.supplier || '', locations: r.locations || [], bom: r.bom || [],
+      imageUrl: r.image_url
     }});
   } catch (error) {
     console.error('Error saving item:', error);
@@ -5063,14 +5067,14 @@ app.post('/api/ims/masters/:masterId/items', authenticateToken, requireWorkspace
 
 app.put('/api/ims/masters/:masterId/items/:itemId', authenticateToken, requireWorkspace, async (req, res) => {
   try {
-    const { barcode, name, category, baseUnit, stock, trackingMode, parentBarcode, multiplier, supplier, locations, bom, weight, cost } = req.body;
+    const { barcode, name, category, baseUnit, stock, trackingMode, parentBarcode, multiplier, supplier, locations, bom, weight, cost, imageUrl } = req.body;
     const result = await pool.query(
       `UPDATE ims_items SET barcode=$1, name=$2, category=$3, base_unit=$4, stock=$5, tracking_mode=$6,
-       parent_barcode=$7, multiplier=$8, supplier=$9, locations=$10, bom=$11, weight=$12, cost=$13, updated_at=CURRENT_TIMESTAMP
-       WHERE id=$14 AND master_id=$15 AND workspace_id=$16 RETURNING *`,
+       parent_barcode=$7, multiplier=$8, supplier=$9, locations=$10, bom=$11, weight=$12, cost=$13, image_url=$14, updated_at=CURRENT_TIMESTAMP
+       WHERE id=$15 AND master_id=$16 AND workspace_id=$17 RETURNING *`,
       [barcode, name, category||'General', baseUnit||'Unit', Number(stock)||0, trackingMode||'FIFO',
        parentBarcode||null, multiplier?Number(multiplier):null, supplier||null,
-       JSON.stringify(locations||[]), JSON.stringify(bom||[]), weight?Number(weight):null, cost?Number(cost):null,
+       JSON.stringify(locations||[]), JSON.stringify(bom||[]), weight?Number(weight):null, cost?Number(cost):null, imageUrl||null,
        req.params.itemId, req.params.masterId, req.workspace_id]
     );
     if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Item not found' });

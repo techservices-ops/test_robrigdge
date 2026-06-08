@@ -286,6 +286,7 @@
   display: flex;
   gap: var(--spacing-md);
   margin-bottom: 0;
+  align-items: flex-start;
 }
 
 .modal-row .form-group { flex: 1; }
@@ -427,4 +428,124 @@
 .filter-dropdown select:focus {
   outline: none;
   border-color: var(--primary-orange);
+}
+
+/* Product image and thumbnail styling */
+.product-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.product-list-thumbnail {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--border-light);
+  background: var(--bg-secondary);
+}
+
+.product-list-thumbnail-placeholder {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  border: 1px solid var(--border-light);
+}
+
+.image-upload-container {
+  margin-top: 6px;
+  width: 100%;
+}
+
+.image-preview-wrapper {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: 8px;
+  border: 1px solid var(--border-medium);
+  overflow: hidden;
+}
+
+.uploaded-image-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.btn-remove-image {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(231, 76, 60, 0.9);
+  color: white;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: background 0.2s;
+}
+
+.btn-remove-image:hover {
+  background: rgb(231, 76, 60);
+}
+
+.image-upload-placeholder {
+  width: 120px;
+  height: 120px;
+  border-radius: 8px;
+  border: 2px dashed var(--border-medium);
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+}
+
+.image-upload-placeholder:hover {
+  border-color: var(--primary-orange);
+  background: var(--primary-orange-lighter);
+  color: var(--primary-orange);
+}
+
+/* Custom barcode layout adjustments */
+.barcode-input-wrapper {
+  display: flex !important;
+  gap: 8px !important;
+  width: 100% !important;
+  align-items: center !important;
+}
+
+.barcode-input-wrapper .form-input {
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+
+.barcode-input-wrapper .btn {
+  width: 42px !important;
+  height: 38px !important;
+  min-width: 42px !important;
+  max-width: 42px !important;
+  flex-shrink: 0 !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
