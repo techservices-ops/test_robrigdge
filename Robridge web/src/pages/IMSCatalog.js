@@ -500,8 +500,6 @@ const IMSCatalog = () => {
             </div>
             <div className="modal-tabs">
               <button className={`modal-tab ${activeTab === 'general' ? 'active' : ''}`} onClick={() => setActiveTab('general')}>General & SKU</button>
-              <button className={`modal-tab ${activeTab === 'locations' ? 'active' : ''}`} onClick={() => setActiveTab('locations')}>Locations & UOM</button>
-              <button className={`modal-tab ${activeTab === 'bom' ? 'active' : ''}`} onClick={() => setActiveTab('bom')}>Bill of Materials</button>
             </div>
 
             <div className="modal-body">
