@@ -35,6 +35,8 @@ const IMSScanner = () => {
   const [dynamicCategories, setDynamicCategories] = useState(['General', 'Pharmacy', 'PPE', 'Hygiene', 'Electronics', 'Food & Beverage']);
   const inputRef = useRef(null);
   const isScanningRef = useRef(false); // guard against concurrent doScan() calls
+  const lastScanTimeRef = useRef(0);
+  const lastScanBarcodeRef = useRef('');
   // GRN/Dispatch/WO verify-scan result state
   const [scanMatch, setScanMatch] = useState(null); // { matched, type, data, message }
   const [searchQuery, setSearchQuery] = useState('');
@@ -140,7 +142,9 @@ const IMSScanner = () => {
       });
       const data = await res.json();
       if (data.success && data.updatedStock !== undefined) {
-        setFoundItem(prev => prev ? { ...prev, stock: data.updatedStock } : null);
+        if (item) {
+          setFoundItem({ ...item, stock: data.updatedStock });
+        }
       }
       fetchEvents();
     } catch (e) { console.error('Error recording scan'); }
@@ -152,6 +156,16 @@ const IMSScanner = () => {
   const doScan = async (code) => {
     const val = code || scanInput.trim();
     if (!val) return;
+
+    // Debounce: ignore scans of the exact same barcode within 1200ms
+    const now = Date.now();
+    if (val === lastScanBarcodeRef.current && now - lastScanTimeRef.current < 1200) {
+      console.log('🚫 Ignoring duplicate scan (debounce):', val);
+      return;
+    }
+    lastScanBarcodeRef.current = val;
+    lastScanTimeRef.current = now;
+
     // Prevent double-firing from concurrent event sources (WebSocket + keyboard/button)
     if (isScanningRef.current) return;
     isScanningRef.current = true;
