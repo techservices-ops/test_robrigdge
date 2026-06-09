@@ -88,92 +88,30 @@ export const WebSocketProvider = ({ children }) => {
     }
   };
 
-  // Function to buffer and process scan data
   const processScanData = (scanData, eventType) => {
-    console.log(`🔄 Processing ${eventType}:`, scanData);
-    console.log('📊 AI Analysis in scan data:', scanData.aiAnalysis);
+    console.log(`🔄 Processing ${eventType} in real-time:`, scanData);
+    if (!scanData || !scanData.barcodeData) return;
 
-    // Only process ESP32 scans
-    const isEsp32Device = scanData.deviceName?.includes('Scanner') ||
-      scanData.deviceName?.includes('RobridgeAI') ||
-      scanData.deviceName?.includes('Robridge') ||
-      scanData.deviceName?.includes('ESP32-') ||
-      scanData.source === 'esp32' ||
-      scanData.source === 'esp32_basic' ||
-      scanData.source === 'ESP32_LIVE_SCANNER';
-
-    if (!isEsp32Device) {
-      return;
-    }
-
-    // Buffer the data
-    setScanBuffer(prev => ({
-      ...prev,
+    const rawTs = scanData.timestamp || scanData.scanned_at || scanData.created_at || Date.now();
+    const completeScan = {
       ...scanData,
-      aiAnalysis: scanData.aiAnalysis || prev.aiAnalysis,
-      lastUpdate: Date.now(),
-      eventType: eventType
-    }));
+      timestamp: rawTs,
+      source: 'ESP32'
+    };
 
-    // Check completeness
-    setTimeout(() => {
-      setScanBuffer(currentBuffer => {
-        if (isCompleteScanData(currentBuffer) && !isProcessingScanRef.current) {
-          console.log('✅ Complete scan data found, processing...');
-          isProcessingScanRef.current = true;
-          setIsProcessingScan(true);
+    setLatestScan(completeScan);
 
-          const hasValidTimestamp = (ts) => {
-            if (!ts) return false;
-            const date = new Date(ts);
-            return !isNaN(date.getTime()) && date.getFullYear() > 2020;
-          };
-
-          const rawTs = currentBuffer.timestamp || currentBuffer.scanned_at || currentBuffer.created_at;
-          const validTimestamp = hasValidTimestamp(rawTs)
-            ? rawTs
-            : Date.now();
-
-          const completeScan = {
-            ...currentBuffer,
-            timestamp: validTimestamp,
-            source: 'ESP32',
-            aiAnalysis: currentBuffer.aiAnalysis,
-            dbRecord: currentBuffer.productInfo ? {
-              id: currentBuffer.barcodeData,
-              name: currentBuffer.productInfo.productName,
-              category: currentBuffer.productInfo.productType,
-              price: '$0.00',
-              location: 'ESP32 Scanner',
-              lastUpdated: validTimestamp,
-              status: currentBuffer.productInfo.foundInLocalDB ? 'ACTIVE' : 'UNKNOWN'
-            } : null
-          };
-
-          setLatestScan(completeScan);
-          // autoSaveScanToDatabase(completeScan); // Commented out to prevent duplicate saves/overwrites
-
-          // Clear dashboard caches to keep data consistent across pages
-          try {
-            Object.keys(sessionStorage).forEach(key => {
-              if (key.startsWith('ims_dashboard_cache_')) {
-                sessionStorage.removeItem(key);
-              }
-            });
-            console.log('🧹 Cleared dashboard cache on WebSocket scan');
-          } catch (e) {
-            console.error('Error clearing sessionStorage:', e);
-          }
-
-          setTimeout(() => {
-            isProcessingScanRef.current = false;
-            setIsProcessingScan(false);
-            setScanBuffer({});
-          }, 2000);
+    // Clear dashboard caches to keep data consistent across pages
+    try {
+      Object.keys(sessionStorage).forEach(key => {
+        if (key.startsWith('ims_dashboard_cache_')) {
+          sessionStorage.removeItem(key);
         }
-        return currentBuffer;
       });
-    }, 500);
+      console.log('🧹 Cleared dashboard cache on WebSocket scan');
+    } catch (e) {
+      console.error('Error clearing sessionStorage:', e);
+    }
   };
 
   // Connect & Authenticate function

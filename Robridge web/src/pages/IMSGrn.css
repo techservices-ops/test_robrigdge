@@ -89,9 +89,233 @@
   text-align: left !important;
 }
 
+/* Extracted Inline Styles */
+.ims-flex-gap-10 {
+  display: flex;
+  gap: 10px;
+}
+
+.grn-kpi-icon {
+  font-size: 22px;
+}
+
+.ims-margin-y-12 {
+  margin: 12px 0;
+}
+
+.ims-loading-spinner-wrapper {
+  text-align: center;
+  padding: 30px;
+  color: #aaa;
+}
+
+.ims-empty-placeholder {
+  text-align: center;
+  padding: 30px;
+  color: #aaa;
+}
+
+.ims-grn-header-meta {
+  color: #888;
+  font-size: 14px;
+}
+
+.ims-grn-meta-strip {
+  padding: 0 0 16px;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 16px;
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.ims-meta-label {
+  font-size: 12px;
+  color: #888;
+}
+
+.ims-meta-val {
+  font-weight: 600;
+}
+
+.ims-section-title {
+  font-size: 15px;
+  margin-bottom: 12px;
+}
+
+.ims-table-container {
+  box-shadow: none;
+  border: 1px solid #eee;
+}
+
+.ims-empty-table-cell {
+  text-align: center;
+  color: #aaa;
+  padding: 20px;
+}
+
+.ims-received-qty {
+  font-weight: 600;
+}
+
+.ims-condition-badge {
+  background: #eafaf1;
+  color: #27ae60;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.ims-note-cell {
+  color: #888;
+  font-size: 13px;
+}
+
+.btn-success-green {
+  background-color: #27ae60 !important;
+}
+.btn-success-green:hover {
+  background-color: #219d53 !important;
+}
+
+.btn-danger-outline {
+  border-color: #e74c3c !important;
+  color: #e74c3c !important;
+}
+.btn-danger-outline:hover {
+  background-color: #e74c3c !important;
+  color: #fff !important;
+}
+
+.ims-empty-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #aaa;
+  gap: 12px;
+}
+
+.ims-empty-icon {
+  font-size: 48px;
+}
+
+.ims-empty-detail-desc {
+  font-size: 14px;
+}
+
+.ims-flex-2 {
+  flex: 2;
+}
+
+.ims-margin-top-16 {
+  margin-top: 16px;
+}
+
+.ims-flex-between-align-center-margin-bottom-8 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.ims-flex-gap-8 {
+  display: flex;
+  gap: 8px;
+}
+
+.ims-row-action-btn {
+  padding: 4px 10px !important;
+  font-size: 12px !important;
+  cursor: pointer !important;
+  margin: 0 !important;
+}
+
+.ims-hidden-input {
+  display: none;
+}
+
+.ims-row-action-btn-no-margin {
+  padding: 4px 10px !important;
+  font-size: 12px !important;
+}
+
+.ims-modal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.ims-modal-table-header-row {
+  background: #f8f9fa;
+}
+
+.ims-modal-table-th-left {
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.ims-modal-table-th-width-70 {
+  padding: 6px 8px;
+  width: 70px;
+}
+
+.ims-modal-table-th-width-60 {
+  padding: 6px 8px;
+  width: 60px;
+}
+
+.ims-modal-table-th-width-30 {
+  padding: 6px 8px;
+  width: 30px;
+}
+
+.ims-qty-input-r {
+  padding: 4px 8px !important;
+  font-size: 13px !important;
+  font-weight: bold !important;
+}
+
+.ims-modal-table-td {
+  padding: 4px;
+}
+
+.ims-modal-table-input {
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+}
+
+.ims-modal-table-td-center {
+  padding: 4px;
+  text-align: center;
+}
+
+.ims-delete-row-btn {
+  background: none;
+  border: none;
+  color: #e74c3c;
+  cursor: pointer;
+}
+
+.ims-modal-table-input-readonly {
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+  background: #f5f6fa !important;
+  color: #7f8c8d !important;
+}
+
 /* Hide number input spin buttons to prevent them from covering digits */
-/* ── GRN & Dispatch Page ── */
-.ims-grn-page { padding: var(--spacing-xl); max-width: 1400px; }
+.ims-grn-page input[type="number"]::-webkit-outer-spin-button,
+.ims-grn-page input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.ims-grn-page input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
 
 .grn-kpi-strip { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
 .grn-kpi-card { background: var(--bg-primary); border-radius: var(--radius-md); padding: 16px 20px; display: flex; align-items: center; gap: 14px; flex: 1; min-width: 140px; box-shadow: var(--shadow-sm); border: 1px solid var(--border-light); border-left: 4px solid; }

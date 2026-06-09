@@ -3,17 +3,21 @@ import {
   FaBarcode, FaSearch, FaCheckCircle, FaExclamationCircle,
   FaPlus, FaTimes, FaClock,
   FaCubes, FaLayerGroup, FaTag, FaBoxOpen, FaSave,
-  FaCogs, FaFileInvoice, FaTruck, FaArrowDown, FaArrowUp, FaChevronDown, FaFilter
+  FaCogs, FaChevronDown, FaFilter
 } from 'react-icons/fa';
 import './IMSScanner.css';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
+import { useToast } from '../components/Toast';
 
 const trackingColors = { FEFO: '#e74c3c', FIFO: '#3498db', LIFO: '#27ae60' };
 
 const IMSScanner = () => {
   const { imsFetch, activeWorkspaceId } = useWorkspace();
-  const { scanBuffer, latestScan } = useWebSocket();
+  const { latestScan } = useWebSocket();
+  const showToast = useToast();
+  const [locations, setLocations] = useState([]);
+  const [selectedLocation, setSelectedLocation] = useState(null);
   const [scanInput, setScanInput] = useState('');
   const [scanResult, setScanResult] = useState(null);
   const [foundItem, setFoundItem] = useState(null);
@@ -78,15 +82,29 @@ const IMSScanner = () => {
   };
 
   // Live WebSocket Updates - trigger full scan lookup when ESP32 scan arrives
-  const lastProcessedScanRef = useRef(null);
+  const lastProcessedScanRef = useRef(latestScan?.id || latestScan?.timestamp || null);
+  const mountTimeRef = useRef(Date.now());
+  const doScanRef = useRef(null);
+
+  // Keep doScanRef fresh on every render to eliminate stale closures of scanStage
+  useEffect(() => {
+    doScanRef.current = doScan;
+  });
 
   useEffect(() => {
     if (latestScan && latestScan.barcodeData) {
+      // Prevent processing historical scans on mount (older than page load time)
+      const scanTime = new Date(latestScan.timestamp || latestScan.scanned_at || latestScan.created_at || Date.now()).getTime();
+      if (scanTime < mountTimeRef.current - 1000) {
+        console.log('⏳ Skipping historical WebSocket scan on mount:', latestScan.barcodeData);
+        return;
+      }
+
       // Prevent processing the exact same scan event multiple times
-      if (lastProcessedScanRef.current === latestScan.timestamp) return;
-      lastProcessedScanRef.current = latestScan.timestamp;
+      if (lastProcessedScanRef.current === latestScan.id || lastProcessedScanRef.current === latestScan.timestamp) return;
+      lastProcessedScanRef.current = latestScan.id || latestScan.timestamp;
       
-      doScan(latestScan.barcodeData, latestScan.id);
+      doScanRef.current(latestScan.barcodeData, latestScan.id);
     }
   }, [latestScan]);
 
@@ -115,14 +133,24 @@ const IMSScanner = () => {
           if (catData.success && catData.categories.length > 0) {
             setDynamicCategories(catData.categories.map(c => c.name));
           }
+          // Fetch workspace locations
+          const locRes = await imsFetch('/api/ims/locations');
+          const locData = await locRes.json();
+          if (locData.success && locData.locations) {
+            setLocations(locData.locations);
+            if (locData.locations.length > 0) {
+              setSelectedLocation(locData.locations[0]);
+            }
+          }
           fetchEvents();
         } catch (e) { console.error('IMS fetch error:', e); }
       }
     };
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspaceId]);
 
-  const recordScanEvent = async (item, workflow, qty = 1, batch = '', serial = '', nameFallback = '', notes = '', websocketScanId = '') => {
+  const recordScanEvent = async (item, workflow, qty = 1, batch = '', serial = '', nameFallback = '', notes = '', websocketScanId = '', location = '', locationId = '') => {
     try {
       const res = await imsFetch('/api/ims/scanner/scan', {
         method: 'POST',
@@ -138,21 +166,21 @@ const IMSScanner = () => {
           batchNo: batch,
           serialNo: serial,
           notes: notes,
-          websocketScanId: websocketScanId
+          websocketScanId: websocketScanId,
+          location,
+          locationId
         })
       });
       const data = await res.json();
       if (data.success && data.updatedStock !== undefined) {
         if (item) {
-          setFoundItem({ ...item, stock: data.updatedStock });
+          const updatedLocations = location ? [{ zone: location, qty: data.updatedStock }] : item.locations;
+          setFoundItem({ ...item, stock: data.updatedStock, locations: updatedLocations });
         }
       }
       fetchEvents();
     } catch (e) { console.error('Error recording scan'); }
   };
-
-  const isGrnMode = (stage) => stage === 'RECEIVE' || stage === 'DISPATCH';
-  const isWoMode = (stage) => stage === 'PUTAWAY';
 
   const doScan = async (code, websocketScanId = null) => {
     const val = code || scanInput.trim();
@@ -179,150 +207,66 @@ const IMSScanner = () => {
     setSerialNo('');
 
     try {
-      // ── GRN / Dispatch verify-scan mode ──────────────────────────
-      if (isGrnMode(scanStage)) {
-        const res = await imsFetch('/api/ims/grn/verify-scan', {
-          method: 'POST',
-          body: JSON.stringify({ barcode: val, mode: scanStage })
-        });
-        const data = await res.json();
-        setScanMatch({ type: 'GRN', ...data });
-        setScanResult(data.matched ? 'scan_match' : 'scan_nomatch');
-
-        // Also look up catalog item for right-panel product info
-        try {
-          const lookupRes = await imsFetch(`/api/ims/scanner/lookup/${encodeURIComponent(val)}`);
-          const lookupData = await lookupRes.json();
-          let itemToLog = null;
-          if (lookupData.success && lookupData.found) {
-            itemToLog = lookupData.item;
-            setFoundItem(lookupData.item);
-          } else if (data.matched) {
-            // Construct a temporary catalog item from GRN item info
-            itemToLog = {
-              name: data.item.name,
-              barcode: val,
-              category: 'General',
-              baseUnit: data.item.unit || 'Unit',
-              trackingMode: 'FIFO',
-              stock: 0
-            };
-            setFoundItem(itemToLog);
-          } else {
-            // Not in catalog and not on GRN/WO -> trigger onboarding
-            setScanResult('unknown');
-            setNewItemBarcode(val);
-            setShowOnboard(true);
-            
-            setScanning(false);
-            setScanInput('');
-            isScanningRef.current = false;
-            setTimeout(() => inputRef.current?.focus(), 300);
-            return;
-          }
-
-          if (autoLogEnabled && itemToLog) {
-            if (data.matched) {
-              const prefix = scanStage === 'DISPATCH' ? 'DN:' : 'GRN:';
-              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', prefix + data.grn.docNo, websocketScanId);
-            } else {
-              // Standalone scan (not matching GRN but autoLog is enabled)
-              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', '', websocketScanId);
-            }
-          }
-        } catch (e) { /* catalog lookup failure is non-fatal */ }
-
-        setScanning(false);
-        setScanInput('');
-        isScanningRef.current = false;
-        setTimeout(() => inputRef.current?.focus(), 300);
-        return;
-      }
-
-      // ── Work Order verify-scan mode ──────────────────────────────
-      if (isWoMode(scanStage)) {
-        const res = await imsFetch('/api/ims/workorders/verify-scan', {
-          method: 'POST',
-          body: JSON.stringify({ barcode: val })
-        });
-        const data = await res.json();
-        setScanMatch({ type: 'WO', ...data });
-        setScanResult(data.matched ? 'scan_match' : 'scan_nomatch');
-
-        // Also look up catalog item for right-panel product info
-        try {
-          const lookupRes = await imsFetch(`/api/ims/scanner/lookup/${encodeURIComponent(val)}`);
-          const lookupData = await lookupRes.json();
-          let itemToLog = null;
-          if (lookupData.success && lookupData.found) {
-            itemToLog = lookupData.item;
-            setFoundItem(lookupData.item);
-          } else if (data.matched) {
-            // Construct a temporary catalog item from WO info
-            itemToLog = {
-              name: data.wo.productName,
-              barcode: val,
-              category: 'General',
-              baseUnit: 'Unit',
-              trackingMode: 'FIFO',
-              stock: 0
-            };
-            setFoundItem(itemToLog);
-          } else {
-            // Not in catalog and not on Work Order -> trigger onboarding
-            setScanResult('unknown');
-            setNewItemBarcode(val);
-            setShowOnboard(true);
-            
-            setScanning(false);
-            setScanInput('');
-            isScanningRef.current = false;
-            setTimeout(() => inputRef.current?.focus(), 300);
-            return;
-          }
-
-          if (autoLogEnabled && itemToLog) {
-            if (data.matched) {
-              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', 'WO:' + data.wo.woNumber, websocketScanId);
-            } else {
-              // Standalone scan
-              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', '', websocketScanId);
-            }
-          }
-        } catch (e) { /* catalog lookup failure is non-fatal */ }
-
-        setScanning(false);
-        setScanInput('');
-        isScanningRef.current = false;
-        setTimeout(() => inputRef.current?.focus(), 300);
-        return;
-      }
-
-      // ── Regular catalog lookup mode ───────────────────────────────
+      // Look up catalog item
       const res = await imsFetch(`/api/ims/scanner/lookup/${encodeURIComponent(val)}`);
       const data = await res.json();
       setScanning(false);
 
       if (data.success && data.found) {
-        setFoundItem(data.item);
-        if (data.item?.trackingMode === 'FEFO') {
+        const item = data.item;
+        setFoundItem(item);
+
+        if (item?.trackingMode === 'FEFO') {
           try {
             const fr = await imsFetch(`/api/ims/fefo-recommendation?barcode=${encodeURIComponent(val)}`);
             const fd = await fr.json();
             if (fd.success) setFefoRec(fd.recommendation || []);
           } catch(e) { setFefoRec([]); }
-        } else { setFefoRec([]); }
-        setScanResult('known');
-        await recordScanEvent(data.item, scanStage, 1, '', '', '', '', websocketScanId);
-        setTimeout(() => inputRef.current?.focus(), 100);
+        } else {
+          setFefoRec([]);
+        }
+
+        if (scanStage === 'RECEIVE') {
+          setScanResult('known');
+          await recordScanEvent(item, 'RECEIVE', 1, '', '', '', '', websocketScanId);
+          showToast(`Received 1 unit of ${item.name}`, 'success');
+        } else if (scanStage === 'DISPATCH') {
+          if (item.stock <= 0) {
+            setScanResult('error');
+            showToast(`Cannot dispatch ${item.name}. Stock is already 0.`, 'error');
+          } else {
+            setScanResult('known');
+            await recordScanEvent(item, 'DISPATCH', 1, '', '', '', '', websocketScanId);
+            showToast(`Dispatched 1 unit of ${item.name}`, 'success');
+          }
+        } else if (scanStage === 'PUTAWAY') {
+          if (!selectedLocation) {
+            setScanResult('error');
+            showToast('Please select a target location for Putaway.', 'error');
+          } else {
+            setScanResult('confirmed');
+            await recordScanEvent(item, 'PUTAWAY', 0, '', '', '', '', websocketScanId, selectedLocation.name, selectedLocation.id);
+            showToast(`Moved ${item.name} to ${selectedLocation.name}`, 'success');
+          }
+        } else {
+          setScanResult('known');
+        }
       } else {
-        setScanResult('unknown');
-        setNewItemBarcode(val);
-        setShowOnboard(true);
+        // Item not found in catalog
+        if (scanStage === 'RECEIVE') {
+          setScanResult('unknown');
+          setNewItemBarcode(val);
+          setShowOnboard(true);
+        } else {
+          setScanResult('error');
+          showToast(`Item with barcode ${val} not found in catalog.`, 'error');
+        }
       }
     } catch (err) {
+      console.error(err);
       setScanning(false);
       setScanResult('error');
+      showToast('Scan processing failed.', 'error');
     }
     setScanInput('');
     isScanningRef.current = false;
@@ -351,25 +295,17 @@ const IMSScanner = () => {
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
-  const handleConfirmAction = async () => {
-    await recordScanEvent(foundItem, scanStage, 1, batchNo, serialNo);
-    setScanResult('confirmed');
-    setTimeout(() => {
-      setScanResult(null);
-      setFoundItem(null);
-      inputRef.current?.focus();
-    }, 1200);
-  };
+
 
   const filteredLog = scanLog.filter(entry => {
     const matchesSearch = 
-      entry.barcode.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entry.product.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entry.action.toLowerCase().includes(searchQuery.toLowerCase());
+      (entry.barcode || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (entry.product || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (entry.action || '').toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesAction = 
       actionFilter === 'All' || 
-      entry.action.toUpperCase() === actionFilter.toUpperCase();
+      (entry.action || '').toUpperCase() === actionFilter.toUpperCase();
     
     return matchesSearch && matchesAction;
   });
@@ -495,6 +431,47 @@ const IMSScanner = () => {
           )}
         </div>
       )}
+          {scanStage === 'PUTAWAY' && (
+            <div className="putaway-location-box" style={{
+              margin: '0 0 16px',
+              borderRadius: 12,
+              padding: '16px 20px',
+              background: '#fcfcfd',
+              border: '1px solid #dadce0',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8
+            }}>
+              <label style={{ fontSize: '14px', fontWeight: 600, color: '#3c4043', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>📍 Target Location for Putaway</span>
+              </label>
+              <select
+                className="form-select"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #dadce0',
+                  fontSize: '14px',
+                  color: '#3c4043',
+                  backgroundColor: '#ffffff'
+                }}
+                value={selectedLocation ? selectedLocation.id : ''}
+                onChange={(e) => {
+                  const loc = locations.find(l => l.id === Number(e.target.value));
+                  setSelectedLocation(loc || null);
+                }}
+              >
+                {locations.length === 0 ? (
+                  <option value="">No locations available</option>
+                ) : (
+                  locations.map(l => (
+                    <option key={l.id} value={l.id}>{l.name} ({l.type})</option>
+                  ))
+                )}
+              </select>
+            </div>
+          )}
 
       <div className={`scan-zone ${scanning ? 'scanning' : ''} ${scanResult === 'known' ? 'found' : ''} ${scanResult === 'unknown' ? 'notfound' : ''}`}>
             <div className="scan-icon-wrap">
@@ -612,7 +589,11 @@ const IMSScanner = () => {
                 )}
                 <div className="found-detail-item full-width">
                   <span className="fd-label">📍 Location</span>
-                  <span className="fd-value">{foundItem.location}</span>
+                  <span className="fd-value">
+                    {Array.isArray(foundItem.locations) && foundItem.locations.length > 0
+                      ? foundItem.locations.map(l => `${l.zone} (${l.qty})`).join(', ')
+                      : 'None'}
+                  </span>
                 </div>
               </div>
               {scanMatch === null ? (

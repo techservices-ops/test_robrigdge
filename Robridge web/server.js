@@ -351,6 +351,24 @@ const initDatabase = async () => {
         }
         await client.query(`ALTER TABLE ims_scan_events ADD COLUMN IF NOT EXISTS expiry_date TIMESTAMP`);
         await client.query(`ALTER TABLE ims_scan_events ADD COLUMN IF NOT EXISTS websocket_scan_id VARCHAR(255)`);
+        // Clean up duplicate websocket_scan_id rows before creating unique index
+        await client.query(`
+          DELETE FROM ims_scan_events 
+          WHERE id IN (
+            SELECT id FROM (
+              SELECT id, ROW_NUMBER() OVER (PARTITION BY websocket_scan_id ORDER BY id) as rn 
+              FROM ims_scan_events 
+              WHERE websocket_scan_id IS NOT NULL
+            ) t 
+            WHERE t.rn > 1
+          )
+        `);
+        // Create unique index on websocket_scan_id (partial, ignoring NULL) to prevent duplicate inserts
+        await client.query(`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_ims_scan_events_websocket_scan_id 
+          ON ims_scan_events(websocket_scan_id) 
+          WHERE websocket_scan_id IS NOT NULL
+        `);
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS alert_at NUMERIC DEFAULT 0`);
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS custom_fields JSONB DEFAULT '{}'`);
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS item_type VARCHAR(50) DEFAULT 'Raw Material'`);
@@ -5207,7 +5225,7 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
   try {
     const { barcode, itemId, itemName, workflow, quantity, unit, batchNo, serialNo, notes, websocketScanId } = req.body;
     if (!barcode || !workflow) return res.status(400).json({ success: false, error: 'barcode and workflow required' });
-    const qty = Number(quantity) || 1;
+    const qty = (quantity === 0 || quantity === '0') ? 0 : (Number(quantity) || 1);
 
     // --- ENFORCE IMS DYNAMIC SETTINGS ---
     const settings = await getWorkspaceSettings(req.workspace_id);
@@ -5287,8 +5305,7 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
     let updatedStock = 0;
     if (resolvedItemId) {
       const wf = workflow.toUpperCase();
-      // IN-type operations increase stock, OUT-type decrease
-      const inOps = ['RECEIVE', 'IN', 'RETURN', 'PUTAWAY', 'RESTOCK'];
+      const inOps = ['RECEIVE', 'IN', 'RETURN', 'RESTOCK'];
       const outOps = ['DISPATCH', 'OUT', 'PICK', 'ISSUE', 'SHIP'];
       if (inOps.some(op => wf.includes(op))) {
         const updateRes = await pool.query('UPDATE ims_items SET stock = stock + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND workspace_id = $3 RETURNING stock', [qty, resolvedItemId, req.workspace_id]);
@@ -5300,10 +5317,44 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
         const stockRes = await pool.query('SELECT stock FROM ims_items WHERE id = $1 AND workspace_id = $2', [resolvedItemId, req.workspace_id]);
         updatedStock = Number(stockRes.rows[0]?.stock || 0);
       }
+
+      // If PUTAWAY workflow and a location is provided, update item's location
+      if (wf === 'PUTAWAY' && req.body.location) {
+        const locationName = req.body.location;
+        const locationsArray = [{ zone: locationName, qty: updatedStock }];
+        await pool.query(
+          'UPDATE ims_items SET locations = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND workspace_id = $3',
+          [JSON.stringify(locationsArray), resolvedItemId, req.workspace_id]
+        );
+
+        if (req.body.locationId) {
+          // Zero out stock at other locations for this item in this workspace to prevent duplicate stock
+          await pool.query(
+            'UPDATE ims_location_stock SET qty = 0, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = $1 AND barcode = $2 AND location_id <> $3',
+            [req.workspace_id, barcode, req.body.locationId]
+          );
+          // Insert or update stock at the target location
+          await pool.query(
+            `INSERT INTO ims_location_stock (location_id, workspace_id, barcode, item_name, qty)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (location_id, barcode) DO UPDATE SET qty = $5, updated_at = CURRENT_TIMESTAMP`,
+            [req.body.locationId, req.workspace_id, barcode, itemName || null, updatedStock]
+          );
+        }
+      }
     }
 
     res.json({ success: true, message: 'Scan recorded', updatedStock });
   } catch (error) {
+    if (error.code === '23505') {
+      console.log(`🚫 Concurrent duplicate websocket_scan_id caught via DB index: ${websocketScanId}`);
+      const stockRes = await pool.query(
+        'SELECT stock FROM ims_items WHERE workspace_id = $1 AND barcode = $2 LIMIT 1',
+        [req.workspace_id, barcode]
+      );
+      const currentStock = Number(stockRes.rows[0]?.stock || 0);
+      return res.json({ success: true, message: 'Scan already recorded (duplicate ID)', updatedStock: currentStock });
+    }
     console.error('Scan error:', error);
     res.status(500).json({ success: false, error: 'Failed to record scan' });
   }
