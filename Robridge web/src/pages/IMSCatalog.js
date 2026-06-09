@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import JsBarcode from 'jsbarcode';
 import * as XLSX from 'xlsx';
 import {
-  FaSearch, FaPlus, FaEdit, FaTrash, FaUpload,
+  FaSearch, FaPlus, FaEdit,
   FaFilter, FaDownload, 
-  FaFileExcel, FaTimes, FaSave, FaLayerGroup,
+  FaFileExcel, FaTimes, FaSave,
   FaCubes, FaMagic, FaFolderPlus, FaArrowLeft, FaFolderOpen,
   FaClipboardList
 } from 'react-icons/fa';
@@ -12,6 +12,7 @@ import './IMSCatalog.css';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { useConfirm } from '../components/ConfirmModal';
 import ImportMapper from '../components/ImportMapper';
+import BOMAnalyzerDialog from '../components/BOMAnalyzerDialog';
 
 const trackingColors = { FEFO: '#e74c3c', FIFO: '#3498db', LIFO: '#27ae60' };
 
@@ -77,11 +78,8 @@ const IMSCatalog = () => {
   const [form, setForm] = useState(emptyForm);
   const [activeTab, setActiveTab] = useState('general');
   const [showImporter, setShowImporter] = useState(false);
-  const [bomDragOver, setBomDragOver] = useState(false);
   
   const [showBomAnalyzer, setShowBomAnalyzer] = useState(false);
-  const [bomAnalyzing, setBomAnalyzing] = useState(false);
-  const [bomReport, setBomReport] = useState(null);
 
   const [locations, setLocations] = useState([]);
 
@@ -177,25 +175,7 @@ const IMSCatalog = () => {
   };
 
 
-  const handleBomUpload = async (file) => {
-    if (!file) return;
-    setBomAnalyzing(true);
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const wb = XLSX.read(e.target.result, { type: 'binary' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws);
-      const items = rows.map(r => ({
-        sku: String(r.SKU || r.sku || r.Barcode || r.barcode || '').trim(),
-        needed: Number(r.Qty || r.qty || r.Needed || r.needed || r.Quantity || 1)
-      })).filter(r => r.sku);
-      const res = await imsFetch('/api/ims/bom/analyze', { method: 'POST', body: JSON.stringify({ items }) });
-      const data = await res.json();
-      if (data.success) setBomReport(data.report);
-      setBomAnalyzing(false);
-    };
-    reader.readAsBinaryString(file);
-  };
+  // BOM upload and analysis logic extracted to BOMAnalyzerDialog
 
 
   const handleSaveMaster = async () => {
@@ -365,101 +345,7 @@ const IMSCatalog = () => {
           </div>
         )}
 
-      {/* ── BOM ANALYZER MODAL ── */}
-      {showBomAnalyzer && (
-        <div className="ims-modal-overlay" onClick={() => { setShowBomAnalyzer(false); setBomReport(null); }}>
-          <div className="ims-modal bom-analyzer-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px' }}>
-            <div className="modal-header" style={{borderBottom: '1px solid #eee', paddingBottom: '15px'}}>
-              <FaClipboardList className="modal-icon" style={{ color: '#9b59b6', fontSize: '24px' }} />
-              <div style={{ flex: 1, paddingRight: '24px' }}>
-                 <h2 style={{margin: 0}}>BOM Inventory Feasibility Analyzer</h2>
-                 <p style={{margin: 0, color: '#7f8c8d', fontSize: '13px'}}>Upload a Customer BOM to cross-reference stock levels across ALL Masters.</p>
-              </div>
-              <button className="modal-close" onClick={() => { setShowBomAnalyzer(false); setBomReport(null); }}><FaTimes /></button>
-            </div>
-
-            <div className="modal-body" style={{padding: '20px'}}>
-              {!bomReport && !bomAnalyzing && (
-                 <div className={`upload-zone ${bomDragOver ? 'drag-over' : ''}`} onDragOver={e => { e.preventDefault(); setBomDragOver(true); }} onDragLeave={() => setBomDragOver(false)} onDrop={e => { e.preventDefault(); setBomDragOver(false); if (e.dataTransfer.files[0]) handleBomUpload(e.dataTransfer.files[0]); }} onClick={() => document.getElementById('bomUploadInput').click()}>
-                    <input type="file" id="bomUploadInput" style={{display: 'none'}} accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" onChange={e => e.target.files?.[0] && handleBomUpload(e.target.files[0])} />
-                    <FaUpload className="upload-icon" style={{color: '#9b59b6'}} />
-                    <div className="upload-text">Upload Customer BOM (Excel/CSV)</div>
-                    <div className="upload-sub">Click or drag & drop to analyze</div>
-                 </div>
-              )}
-
-              {bomAnalyzing && (
-                 <div style={{textAlign: 'center', padding: '60px 0'}}>
-                    <div className="spinner style-spinner" style={{width: '40px', height: '40px', borderColor: '#9b59b6', borderRightColor: 'transparent', borderRadius: '50%', borderStyle: 'solid', borderWidth: '3px', animation: 'spin 1s linear infinite', margin: '0 auto 20px'}}></div>
-                    <p style={{fontWeight: 600, color: '#34495e'}}>Cross-referencing Global Catalog...</p>
-                 </div>
-              )}
-
-              {bomReport && (
-                 <div className="bom-report-section">
-                    <div className="bom-report-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', marginBottom: '25px' }}>
-                       <div className="kpi-box" style={{ background: '#f8f9fa', padding: '15px', borderRadius: '8px', textAlign: 'center', border: '1px solid #ecf0f1' }}>
-                          <div style={{fontSize: '32px', fontWeight: 'bold', color: '#34495e'}}>{bomReport.total}</div>
-                          <div style={{fontSize: '12px', color: '#7f8c8d'}}>Total SKUs</div>
-                       </div>
-                       <div className="kpi-box" style={{ background: '#f0fff5', padding: '15px', borderRadius: '8px', textAlign: 'center', border: '1px solid #c3e6cb' }}>
-                          <div style={{fontSize: '32px', fontWeight: 'bold', color: '#27ae60'}}>{bomReport.ok}</div>
-                          <div style={{fontSize: '12px', color: '#27ae60'}}>Found & Available</div>
-                       </div>
-                       <div className="kpi-box" style={{ background: '#fff9e6', padding: '15px', borderRadius: '8px', textAlign: 'center', border: '1px solid #ffeeba' }}>
-                          <div style={{fontSize: '32px', fontWeight: 'bold', color: '#f39c12'}}>{bomReport.shortage}</div>
-                          <div style={{fontSize: '12px', color: '#f39c12'}}>Low Stock / Shortage</div>
-                       </div>
-                       <div className="kpi-box" style={{ background: '#fff0f0', padding: '15px', borderRadius: '8px', textAlign: 'center', border: '1px solid #f5c6cb' }}>
-                          <div style={{fontSize: '32px', fontWeight: 'bold', color: '#e74c3c'}}>{bomReport.missing}</div>
-                          <div style={{fontSize: '12px', color: '#e74c3c'}}>Missing from DB</div>
-                       </div>
-                    </div>
-
-                    <h3 style={{fontSize: '15px', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '15px'}}>Analysis Breakdown</h3>
-                    
-                    <div className="table-responsive">
-                       <table className="users-table" style={{width: '100%', borderCollapse: 'collapse'}}>
-                          <thead style={{background: '#f8f9fa', borderBottom: '2px solid #eee'}}>
-                             <tr>
-                                <th style={{padding: '10px', textAlign: 'left', fontSize: '13px'}}>SKU</th>
-                                <th style={{padding: '10px', textAlign: 'left', fontSize: '13px'}}>Item Name</th>
-                                <th style={{padding: '10px', textAlign: 'center', fontSize: '13px'}}>Required</th>
-                                <th style={{padding: '10px', textAlign: 'center', fontSize: '13px'}}>Available</th>
-                                <th style={{padding: '10px', textAlign: 'left', fontSize: '13px'}}>Status</th>
-                             </tr>
-                          </thead>
-                          <tbody>
-                             {bomReport.items.map((i, idx) => (
-                                <tr key={idx} style={{borderBottom: '1px solid #eee'}}>
-                                   <td style={{padding: '12px 10px', fontWeight: 600, fontFamily: 'monospace'}}>{i.sku}</td>
-                                   <td style={{padding: '12px 10px'}}>{i.name}</td>
-                                   <td style={{padding: '12px 10px', textAlign: 'center'}}>{i.needed}</td>
-                                   <td style={{padding: '12px 10px', textAlign: 'center', color: i.status==='ok' ? '#27ae60' : i.available===0 ? '#e74c3c' : '#f39c12'}}>{i.available}</td>
-                                   <td style={{padding: '12px 10px'}}>
-                                      {i.status === 'ok' && <span style={{background: '#d4edda', color: '#155724', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 600}}>Fully Available</span>}
-                                      {i.status === 'shortage' && <span style={{background: '#fff3cd', color: '#856404', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 600}}>Shortage ({i.diff})</span>}
-                                      {i.status === 'missing' && <span style={{background: '#f8d7da', color: '#721c24', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 600}}>Not in Catalog</span>}
-                                   </td>
-                                </tr>
-                             ))}
-                          </tbody>
-                       </table>
-                    </div>
-                 </div>
-              )}
-            </div>
-            
-            {bomReport && (
-               <div className="modal-footer" style={{padding: '15px 20px', display: 'flex', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid #eee'}}>
-                  <button className="btn btn-secondary" onClick={() => setBomReport(null)}>Reset</button>
-                  <button className="btn btn-primary" style={{background: '#9b59b6', borderColor: '#9b59b6'}}>Export Report</button>
-               </div>
-            )}
-          </div>
-        </div>
-      )}
-
+      <BOMAnalyzerDialog isOpen={showBomAnalyzer} onClose={() => setShowBomAnalyzer(false)} />
       </div>
     );
   }
@@ -478,6 +364,9 @@ const IMSCatalog = () => {
           <p>Product catalog, variants, and stock management for this master</p>
         </div>
         <div className="ims-header-right" style={{gap: '10px', display: 'flex'}}>
+          <button className="btn btn-secondary" onClick={() => setShowBomAnalyzer(true)} style={{borderColor: '#9b59b6', color: '#9b59b6'}}>
+             <FaClipboardList /> BOM Analyzer
+          </button>
           <button className="btn btn-secondary" onClick={() => setShowImporter(true)}>
              <FaFileExcel /> Import Excel
           </button>
@@ -674,7 +563,7 @@ const IMSCatalog = () => {
         />
       )}
 
-      {/* BOM Analyzer modal removed from here */}
+      <BOMAnalyzerDialog isOpen={showBomAnalyzer} onClose={() => setShowBomAnalyzer(false)} />
     </div>
   );
 };
