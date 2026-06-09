@@ -21,7 +21,7 @@ export default function IMSProduction() {
   const [summary, setSummary] = useState([]);
   const [selectedStage, setSelectedStage] = useState(null);
   const [, setLoading] = useState(false);
-  const [scan, setScan] = useState({ barcode: localStorage.getItem('ims_last_scanned_barcode') || '', itemName: '', outcome: 'FORWARD', qty: 1, batchNo: '', notes: '', woId: '' });
+  const [scan, setScan] = useState({ barcode: localStorage.getItem('ims_last_scanned_barcode') || '', itemName: '', outcome: 'FORWARD', qty: 0, batchNo: '', notes: '', woId: '' });
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
 
@@ -58,7 +58,7 @@ export default function IMSProduction() {
     if (!scan.barcode || !selectedStage) return;
     setSaving(true);
     try {
-      const payload = { ...scan, stageId: selectedStage.id, stageName: selectedStage.name, qty: Number(scan.qty) || 1 };
+      const payload = { ...scan, stageId: selectedStage.id, stageName: selectedStage.name, qty: Number(scan.qty) };
       const r = await imsFetch('/api/ims/production/scan', { method: 'POST', body: JSON.stringify(payload) });
       const d = await r.json();
       if (d.success) {

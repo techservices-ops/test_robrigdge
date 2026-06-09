@@ -543,48 +543,40 @@ const IMSCatalog = () => {
               <div style={{ flex: 1, paddingRight: '24px' }}><h2>{editProduct ? 'Edit Product' : 'Add New Product'}</h2><p>{editProduct ? `Editing ${editProduct.name}` : 'Fill in product details'}</p></div>
               <button className="modal-close" onClick={() => setShowModal(false)}><FaTimes /></button>
             </div>
-            <div className="modal-tabs">
-              <button className={`modal-tab ${activeTab === 'general' ? 'active' : ''}`} onClick={() => setActiveTab('general')}>General & SKU</button>
-            </div>
-
             <div className="modal-body">
-              {activeTab === 'general' && (
-                <>
-                  <div className="modal-row">
-                    <div className="form-group" style={{ flex: 1 }}>
-                      <label className="form-label">Barcode *</label>
-                      <div className="barcode-input-wrapper">
-                        <input className="form-input" placeholder="e.g. PACK001" value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} />
-                        <button type="button" className="btn btn-secondary" onClick={generateBarcode} title="Generate Autocode"><FaMagic /></button>
-                      </div>
-                    </div>
-                    <div className="form-group" style={{ flex: 1 }}>
-                      <label className="form-label">Product Name *</label>
-                      <input className="form-input" placeholder="e.g. Paracetamol 500mg" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-                    </div>
+              <div className="modal-row">
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label className="form-label">Barcode *</label>
+                  <div className="barcode-input-wrapper">
+                    <input className="form-input" placeholder="e.g. PACK001" value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} />
+                    <button type="button" className="btn btn-secondary" onClick={generateBarcode} title="Generate Autocode"><FaMagic /></button>
                   </div>
-                  <div className="modal-row">
-                    <div className="form-group">
-                      <label className="form-label">Category</label>
-                      <select className="form-select" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
-                        {categories.filter(c => c !== 'All').map(c => <option key={c}>{c}</option>)}
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Item Type</label>
-                      <select className="form-select" value={form.itemType || 'Raw Material'} onChange={e => setForm(f => ({ ...f, itemType: e.target.value }))}>
-                        {ITEM_TYPES.map(t => <option key={t}>{t}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="modal-row">
-                    <div className="form-group" style={{ flex: 1, maxWidth: 'calc(50% - 8px)' }}>
-                      <label className="form-label">Opening Stock</label>
-                      <input className="form-input" type="number" placeholder="0" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} />
-                    </div>
-                  </div>
-                </>
-              )}
+                </div>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label className="form-label">Product Name *</label>
+                  <input className="form-input" placeholder="e.g. Paracetamol 500mg" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                </div>
+              </div>
+              <div className="modal-row">
+                <div className="form-group">
+                  <label className="form-label">Category</label>
+                  <select className="form-select" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                    {categories.filter(c => c !== 'All').map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Item Type</label>
+                  <select className="form-select" value={form.itemType || 'Raw Material'} onChange={e => setForm(f => ({ ...f, itemType: e.target.value }))}>
+                    {ITEM_TYPES.map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="modal-row">
+                <div className="form-group" style={{ flex: 1, maxWidth: 'calc(50% - 8px)' }}>
+                  <label className="form-label">Opening Stock</label>
+                  <input className="form-input" type="number" placeholder="0" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} />
+                </div>
+              </div>
             </div>
             
             <div className="modal-footer">
