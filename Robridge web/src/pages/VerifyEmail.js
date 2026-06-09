@@ -1,14 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { FaCheckCircle, FaExclamationCircle, FaSpinner } from 'react-icons/fa';
-import { useAuth } from '../contexts/AuthContext';
-import { getServerURL } from '../config/api';
 import './LoginPage.css';
 
 const VerifyEmail = () => {
-    const { loginWithUser } = useAuth();
     const [searchParams] = useSearchParams();
-    const navigate = useNavigate();
     const token = searchParams.get('token');
 
     const [status, setStatus] = useState('verifying'); // verifying, success, error
@@ -21,40 +17,11 @@ const VerifyEmail = () => {
             return;
         }
 
-        // Call verification API
-        const verifyEmail = async () => {
-            try {
-                // Use the backend API URL
-                const apiUrl = getServerURL();
-                const response = await fetch(`${apiUrl}/api/auth/verify-email?token=${token}`);
-                const data = await response.json();
-
-                if (data.success) {
-                    setStatus('success');
-                    setMessage(data.message);
-                    
-                    // Automatically log user in
-                    if (data.user && data.token) {
-                        loginWithUser(data.user, data.token);
-                    }
-                    
-                    // Redirect to onboarding after 2 seconds
-                    setTimeout(() => {
-                        navigate('/onboarding');
-                    }, 2000);
-                } else {
-                    setStatus('error');
-                    setMessage(data.error || 'Verification failed');
-                }
-            } catch (err) {
-                console.error('Verification error:', err);
-                setStatus('error');
-                setMessage('An error occurred during verification. Please try again.');
-            }
-        };
-
-        verifyEmail();
-    }, [token, navigate]);
+        // Redirect the browser window directly to the backend verification endpoint.
+        // This implements the Bridge Redirection, avoiding any double-request issues due to React StrictMode or quick refreshes.
+        const apiUrl = process.env.REACT_APP_API_URL || 'https://test-robrigdge.onrender.com';
+        window.location.href = `${apiUrl}/api/auth/verify?token=${token}`;
+    }, [token]);
 
     return (
         <div className="login-content" style={{ width: '100%', maxWidth: '450px', padding: '20px', textAlign: 'center' }}>

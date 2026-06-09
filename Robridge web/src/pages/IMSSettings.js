@@ -253,7 +253,7 @@ const IMSSettings = () => {
           <h1>IMS Decision Control</h1>
           <p>Configure autonomous rules, thresholds, and dynamic parameters</p>
         </div>
-        <div className="ims-header-right">
+        <div className="ims-header-right ims-flex-gap-10">
           <button className="btn btn-primary btn-save-settings" onClick={handleSave}>
             {saved ? <><FaCheckCircle /> Saved!</> : <><FaSave /> Deploy Settings</>}
           </button>

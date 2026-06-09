@@ -247,15 +247,15 @@ export default function IMSLocations() {
       </div>
 
       {/* KPI Strip */}
-      <div className="ims-kpi-container">
+      <div className="ims-loc-kpi-container">
         {[
           { label: 'Total Zones',  value: locations.length,                                              color: '#3498db' },
           { label: 'Total SKUs',   value: locations.reduce((a, l) => a + (l.sku_count || 0), 0),         color: '#27ae60' },
           { label: 'Total Units',  value: locations.reduce((a, l) => a + (l.total_qty || 0), 0),         color: '#e67e22' },
         ].map((k, i) => (
-          <div key={i} className="ims-kpi-card" style={{ borderLeftColor: k.color }}>
-            <div className="ims-kpi-value" style={{ color: k.color }}>{k.value}</div>
-            <div className="ims-kpi-label">{k.label}</div>
+          <div key={i} className="ims-loc-kpi-card" style={{ borderLeftColor: k.color }}>
+            <div className="ims-loc-kpi-value" style={{ color: k.color }}>{k.value}</div>
+            <div className="ims-loc-kpi-label">{k.label}</div>
           </div>
         ))}
       </div>

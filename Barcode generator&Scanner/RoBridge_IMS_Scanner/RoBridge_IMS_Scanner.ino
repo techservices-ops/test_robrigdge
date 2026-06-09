@@ -240,7 +240,7 @@ bool parseWifiQR(String qr) {
 // String expressServerURL = "http://10.204.193.1:3001";  // Express backend -
 // LOCAL String aiServerURL = "http://10.204.193.1:8000";  // AI server - LOCAL
 // UPDATE THESE TO YOUR LOCAL IP ADDRESS
-String expressServerURL = "http://10.168.108.1:3001"; // Express backend
+String expressServerURL = "https://test-robrigdge.onrender.com"; // Express backend
 String aiServerURL = "http://10.168.108.1:8000"; // AI server
 String customServerIP = "";                  // Custom server IP from portal
 

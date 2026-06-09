@@ -249,7 +249,7 @@ const IMSCatalog = () => {
           ? p.locations.map(loc => `${loc.zone}:${loc.qty}`).join(', ')
           : 'Unassigned'
       };
-      
+
       if (p.customFields) {
         Object.entries(p.customFields).forEach(([key, val]) => {
           row[key] = val;
@@ -272,7 +272,7 @@ const IMSCatalog = () => {
             <h1>Master Catalogs</h1>
             <p>Select a master catalog to view and manage its products, or create a new one.</p>
           </div>
-          <div className="ims-header-right" style={{gap: '10px', display: 'flex'}}>
+          <div className="ims-header-right ims-flex-gap-10">
             <button className="btn btn-secondary" onClick={() => setShowBomAnalyzer(true)} style={{borderColor: '#9b59b6', color: '#9b59b6'}}>
                <FaClipboardList /> BOM Analyzer
             </button>
@@ -358,12 +358,12 @@ const IMSCatalog = () => {
         </button>
       </div>
 
-      <div className="page-header ims-page-header" style={{ marginTop: '12px' }}>
+      <div className="page-header ims-page-header">
         <div className="ims-header-left">
           <h1>{activeMaster.name}</h1>
           <p>Product catalog, variants, and stock management for this master</p>
         </div>
-        <div className="ims-header-right" style={{gap: '10px', display: 'flex'}}>
+        <div className="ims-header-right ims-flex-gap-10">
           <button className="btn btn-secondary" onClick={() => setShowBomAnalyzer(true)} style={{borderColor: '#9b59b6', color: '#9b59b6'}}>
              <FaClipboardList /> BOM Analyzer
           </button>
@@ -466,16 +466,21 @@ const IMSCatalog = () => {
       </div>
 
       {showModal && (
-         /* Edit Product Modal Logic (omitted for brevity, maintained from original) */
-         <div className="ims-modal-overlay" onClick={() => setShowModal(false)}>
+        <div className="ims-modal-overlay" onClick={() => setShowModal(false)}>
           <div className="ims-modal catalog-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <FaPlus className="modal-icon" />
-              <div style={{ flex: 1, paddingRight: '24px' }}><h2>{editProduct ? 'Edit Product' : 'Add New Product'}</h2><p>{editProduct ? `Editing ${editProduct.name}` : 'Fill in product details'}</p></div>
+              <div style={{ flex: 1, paddingRight: '24px' }}>
+                <h2>{editProduct ? 'Edit Product' : 'Add New Product'}</h2>
+                <p>{editProduct ? `Editing ${editProduct.name}` : 'Fill in product details'}</p>
+              </div>
               <button className="modal-close" onClick={() => setShowModal(false)}><FaTimes /></button>
             </div>
+            
             <div className="modal-tabs">
-              <button className={`modal-tab ${activeTab === 'general' ? 'active' : ''}`} onClick={() => setActiveTab('general')}>General & SKU</button>
+              <button className={`modal-tab ${activeTab === 'general' ? 'active' : ''}`} onClick={() => setActiveTab('general')}>
+                General & SKU
+              </button>
             </div>
 
             <div className="modal-body">
@@ -494,6 +499,7 @@ const IMSCatalog = () => {
                       <input className="form-input" placeholder="e.g. Paracetamol 500mg" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
                     </div>
                   </div>
+
                   <div className="modal-row">
                     <div className="form-group">
                       <label className="form-label">Category</label>
@@ -508,6 +514,7 @@ const IMSCatalog = () => {
                       </select>
                     </div>
                   </div>
+
                   <div className="modal-row">
                     <div className="form-group" style={{ flex: 1 }}>
                       <label className="form-label">Opening Stock</label>

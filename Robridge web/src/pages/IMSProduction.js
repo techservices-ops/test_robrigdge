@@ -24,7 +24,7 @@ export default function IMSProduction() {
   const [summary, setSummary] = useState([]);
   const [selectedStage, setSelectedStage] = useState(null);
   const [, setLoading] = useState(false);
-  const [scan, setScan] = useState({ barcode: localStorage.getItem('ims_last_scanned_barcode') || '', itemName: '', outcome: 'FORWARD', qty: 1, batchNo: '', notes: '', woId: '' });
+  const [scan, setScan] = useState({ barcode: localStorage.getItem('ims_last_scanned_barcode') || '', itemName: '', outcome: 'FORWARD', qty: 0, batchNo: '', notes: '', woId: '' });
   const [saving, setSaving] = useState(false);
 
   const lastSeenScanId = React.useRef(latestScan?.id);
@@ -58,7 +58,7 @@ export default function IMSProduction() {
     if (!scan.barcode || !selectedStage) return;
     setSaving(true);
     try {
-      const payload = { ...scan, stageId: selectedStage.id, stageName: selectedStage.name, qty: Number(scan.qty) || 1 };
+      const payload = { ...scan, stageId: selectedStage.id, stageName: selectedStage.name, qty: Number(scan.qty) };
       const r = await imsFetch('/api/ims/production/scan', { method: 'POST', body: JSON.stringify(payload) });
       const d = await r.json();
       if (d.success) {
@@ -89,7 +89,7 @@ export default function IMSProduction() {
           <h1>Production &amp; QC Tracking</h1>
           <p>Scan items at each production stage — classify as Forward, Rework, or Reject</p>
         </div>
-        <div className="ims-header-right">
+        <div className="ims-header-right ims-flex-gap-10">
           <button className="btn btn-secondary" onClick={load}><FaSync /> Refresh</button>
         </div>
       </div>
@@ -144,19 +144,21 @@ export default function IMSProduction() {
           <div className="form-group ims-form-group">
             <label className="form-label ims-form-label">Item Name</label>
             <input className="form-input ims-form-input" placeholder="Optional" value={scan.itemName} 
-              onChange={e => setScan(s => ({ ...s, itemName: e.target.value }))} />
+              onChange={e => setScan(s => ({ ...s, itemName: e.target.value }))} disabled={isReadOnly} />
           </div>
 
           <div className="ims-form-group">
             <label className="form-label ims-form-label">Outcome *</label>
             <div className="ims-outcome-buttons">
               {OUTCOMES.map(o => (
-                <button key={o.value} onClick={() => setScan(s => ({ ...s, outcome: o.value }))}
+                <button key={o.value} onClick={() => setScan(s => ({ ...s, outcome: o.value }))} disabled={isReadOnly}
                   className="ims-outcome-btn"
                   style={{
                     borderColor: scan.outcome === o.value ? o.color : '#e0e0e0',
                     background: scan.outcome === o.value ? o.bg : '#fff',
-                    color: o.color
+                    color: o.color,
+                    cursor: isReadOnly ? 'not-allowed' : 'pointer',
+                    opacity: isReadOnly ? 0.6 : 1
                   }}>
                   {o.label}
                 </button>
@@ -168,23 +170,23 @@ export default function IMSProduction() {
             <div className="form-group ims-flex-1">
               <label className="form-label ims-form-label">Qty</label>
               <input className="form-input ims-form-input" type="number" value={scan.qty} 
-                onChange={e => setScan(s => ({ ...s, qty: e.target.value }))} />
+                onChange={e => setScan(s => ({ ...s, qty: e.target.value }))} disabled={isReadOnly} />
             </div>
             <div className="form-group ims-flex-2">
               <label className="form-label ims-form-label">Batch No</label>
               <input className="form-input ims-form-input" placeholder="Optional" value={scan.batchNo} 
-                onChange={e => setScan(s => ({ ...s, batchNo: e.target.value }))} />
+                onChange={e => setScan(s => ({ ...s, batchNo: e.target.value }))} disabled={isReadOnly} />
             </div>
           </div>
 
           <div className="form-group ims-form-group-notes">
             <label className="form-label ims-form-label">Notes</label>
             <input className="form-input ims-form-input" placeholder="Reason for rework/reject..." value={scan.notes} 
-              onChange={e => setScan(s => ({ ...s, notes: e.target.value }))} />
+              onChange={e => setScan(s => ({ ...s, notes: e.target.value }))} disabled={isReadOnly} />
           </div>
 
-          <button className="btn btn-primary ims-full-width" onClick={recordScan} disabled={saving || !scan.barcode || !selectedStage}>
-            {saving ? <FaSpinner /> : <FaSave />} Record Scan
+          <button className="btn btn-primary ims-full-width" onClick={recordScan} disabled={saving || !scan.barcode || !selectedStage || isReadOnly}>
+            {saving ? <FaSpinner /> : <FaSave />} {isReadOnly ? "View Only" : "Record Scan"}
           </button>
           {isReadOnly && <p style={{ color: '#e74c3c', fontSize: 12, marginTop: 8, textAlign: 'center' }}>You have view-only access.</p>}
         </div>

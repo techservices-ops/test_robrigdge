@@ -78,7 +78,8 @@ const Profile = () => {
 
         if (data.success) {
           // Load profile pic from local storage
-          const savedProfilePic = localStorage.getItem(`profile_pic_${data.user.id}`);
+          const workspaceKey = activeWorkspace?.id || 'default';
+          const savedProfilePic = localStorage.getItem(`profile_pic_${data.user.id}_${workspaceKey}`);
 
           setUserDetails({
             name: data.user.name || '',
@@ -99,7 +100,7 @@ const Profile = () => {
     };
 
     fetchUserProfile();
-  }, []);
+  }, [activeWorkspace?.id]);
 
   const handleInputChange = (field, value) => {
     setUserDetails(prev => ({
@@ -122,22 +123,20 @@ const Profile = () => {
         const base64String = reader.result;
         setUserDetails(prev => ({ ...prev, profilePic: base64String }));
 
-        // Save to local storage
-        const numericId = parseInt(userDetails.id.replace('#USR', '')) || 0;
-        localStorage.setItem(`profile_pic_${numericId}`, base64String);
-
-        setMessage({ type: 'success', text: 'Profile picture updated!' });
+        setMessage({ type: 'success', text: 'Picture selected. Click "Save Changes" to apply.' });
         setTimeout(() => setMessage({ type: '', text: '' }), 3000);
       };
       reader.readAsDataURL(file);
+    }
+    // Reset file input value to allow selecting the same file again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
   const handleRemoveProfilePic = () => {
     setUserDetails(prev => ({ ...prev, profilePic: null }));
-    const numericId = parseInt(userDetails.id.replace('#USR', '')) || 0;
-    localStorage.removeItem(`profile_pic_${numericId}`);
-    setMessage({ type: 'success', text: 'Profile picture removed' });
+    setMessage({ type: 'success', text: 'Picture removed. Click "Save Changes" to apply.' });
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
@@ -190,6 +189,14 @@ const Profile = () => {
       const data = await response.json();
 
       if (data.success) {
+        const numericId = parseInt(userDetails.id.replace('#USR', '')) || 0;
+        const workspaceKey = activeWorkspace?.id || 'default';
+        if (userDetails.profilePic) {
+          localStorage.setItem(`profile_pic_${numericId}_${workspaceKey}`, userDetails.profilePic);
+        } else {
+          localStorage.removeItem(`profile_pic_${numericId}_${workspaceKey}`);
+        }
+
         setMessage({ type: 'success', text: 'Profile updated successfully!' });
         setEditMode({ name: false, email: false });
 
@@ -280,7 +287,7 @@ const Profile = () => {
           <h1>Workspace Profile</h1>
           <p>Manage your account and workspace capacity details</p>
         </div>
-        <div className="ims-header-right">
+        <div className="ims-header-right ims-flex-gap-10">
           {/* Security button hidden */}
         </div>
       </div>
@@ -341,24 +348,16 @@ const Profile = () => {
               )}
               <div className="user-info-section">
                 <h2>{userDetails.name}</h2>
-                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', margin: '8px 0'}}>
-                   <span className="user-id-badge">{userDetails.id}</span>
-                   <span className="user-id-badge" style={{ background: '#e3f2fd', color: '#1565c0' }}>{activeWorkspace?.role?.toUpperCase() || 'MEMBER'}</span>
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', margin: '8px 0' }}>
+                  <span className="user-id-badge">{userDetails.id}</span>
+                  <span className="user-id-badge" style={{ background: '#e3f2fd', color: '#1565c0' }}>{activeWorkspace?.role?.toUpperCase() || 'MEMBER'}</span>
                 </div>
                 <p className="member-date" style={{ color: '#666', fontSize: '13px' }}>{userDetails.memberSince}</p>
-                
+
                 <div className="workspace-card" style={{ marginTop: '20px', padding: '15px', background: '#F8F9FA', borderRadius: '12px', border: '1px solid #EAEAEA', textAlign: 'left' }}>
                   <h4 style={{ margin: '0 0 10px', fontSize: '14px', color: '#333' }}>Current Workspace</h4>
                   <div style={{ fontWeight: '600', fontSize: '16px', color: '#fa1804' }}>{activeWorkspace?.name || 'No Workspace'}</div>
-                  <div style={{ marginTop: '15px' }}>
-                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#666', marginBottom: '5px' }}>
-                        <span>SKU Limit</span>
-                        <span>{activeWorkspace?.max_skus ? `Max ${activeWorkspace.max_skus}` : 'Unlimited'}</span>
-                     </div>
-                     <div style={{ height: '6px', background: '#e0e0e0', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: '12.5%', background: '#4CAF50' }}></div>
-                     </div>
-                  </div>
+
                 </div>
               </div>
             </>

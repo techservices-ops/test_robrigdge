@@ -1,5 +1,5 @@
 /* ── Locations & Zone Tracking ── */
-.ims-loc-page { padding: var(--spacing-xl); max-width: 1400px; }
+.ims-locations-page { padding: 0; max-width: 1400px; }
 
 .loc-zone-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 28px; }
 .loc-zone-card { background: var(--bg-primary); border-radius: var(--radius-md); padding: 16px 20px; cursor: pointer; border: 1.5px solid var(--border-light); border-top: 4px solid; display: flex; align-items: center; gap: 14px; transition: all 0.2s; box-shadow: var(--shadow-sm); }
@@ -100,13 +100,13 @@
   color: #fff !important;
 }
 
-.ims-kpi-container {
+.ims-loc-kpi-container {
   display: flex;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
-.ims-kpi-card {
+.ims-loc-kpi-card {
   background: #fff;
   border-radius: 10px;
   padding: 14px 20px;
@@ -118,12 +118,12 @@
   flex: 1;
 }
 
-.ims-kpi-value {
+.ims-loc-kpi-value {
   font-size: 22px;
   font-weight: 700;
 }
 
-.ims-kpi-label {
+.ims-loc-kpi-label {
   font-size: 13px;
   color: #888;
 }
