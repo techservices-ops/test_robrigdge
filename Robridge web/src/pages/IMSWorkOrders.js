@@ -9,6 +9,7 @@ import './IMSWorkOrders.css';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useConfirm } from '../components/ConfirmModal';
+import { useToast } from '../components/Toast';
 
 const statusConfig = {
   PENDING:     { label: 'Pending',       color: '#7f8c8d', bg: '#ecf0f1', icon: FaClock },
@@ -25,6 +26,7 @@ export default function IMSWorkOrders() {
   const { imsFetch, activeWorkspaceId } = useWorkspace();
   const { socket } = useWebSocket();
   const confirm = useConfirm();
+  const showToast = useToast();
   const [workorders, setWorkorders] = useState([]);
   const [selected, setSelected] = useState(null);
   const [materials, setMaterials] = useState([]);
@@ -33,10 +35,7 @@ export default function IMSWorkOrders() {
   const [filter, setFilter] = useState('ALL');
   const [showCreate, setShowCreate] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState('');
   const [newWO, setNewWO] = useState({ productBarcode: '', productName: '', targetQty: '', dueDate: '', priority: 'NORMAL', notes: '' });
-
-  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
   const loadWOs = useCallback(async () => {
     if (!activeWorkspaceId) return;
@@ -65,7 +64,7 @@ export default function IMSWorkOrders() {
         return s;
       });
 
-      showToast(`⚙️ WO Updated: ${data.productName} (${data.builtQty}/${data.targetQty} built)`);
+      showToast(`WO Updated: ${data.productName} (${data.builtQty}/${data.targetQty} built)`, 'info');
     };
     socket.on('workorder_updated', handleWOUpdate);
     return () => socket.off('workorder_updated', handleWOUpdate);
@@ -88,7 +87,7 @@ export default function IMSWorkOrders() {
         setWorkorders(prev => [d.workorder, ...prev]);
         setShowCreate(false);
         setNewWO({ productBarcode: '', productName: '', targetQty: '', dueDate: '', priority: 'NORMAL', notes: '' });
-        showToast('✅ Work Order created');
+        showToast('Work Order created', 'success');
       }
     } finally { setSaving(false); }
   };
@@ -99,8 +98,8 @@ export default function IMSWorkOrders() {
     if (d.success) {
       setWorkorders(prev => prev.map(w => w.id === wo.id ? { ...w, status } : w));
       setSelected(s => s?.id === wo.id ? { ...s, status } : s);
-      showToast(`✅ Status updated to ${statusConfig[status].label}`);
-      if (status === 'COMPLETE') showToast('🎉 BOM executed — raw materials deducted from stock!');
+      showToast(`Status updated to ${statusConfig[status].label}`, 'success');
+      if (status === 'COMPLETE') showToast('BOM executed — raw materials deducted from stock!', 'success');
     }
   };
 
@@ -115,7 +114,7 @@ export default function IMSWorkOrders() {
     await imsFetch(`/api/ims/workorders/${wo.id}`, { method: 'DELETE' });
     setWorkorders(prev => prev.filter(w => w.id !== wo.id));
     if (selected?.id === wo.id) setSelected(null);
-    showToast('🗑️ Work Order deleted');
+    showToast('Work Order deleted', 'info');
   };
 
   const filtered = workorders.filter(w => {
@@ -125,14 +124,14 @@ export default function IMSWorkOrders() {
 
   return (
     <div className="ims-wo-page">
-      {toast && <div style={{ position: 'fixed', top: 20, right: 20, background: '#2c3e50', color: '#fff', padding: '12px 20px', borderRadius: 10, zIndex: 9999, fontSize: 14 }}>{toast}</div>}
+
 
       <div className="page-header ims-page-header">
         <div className="ims-header-left">
           <h1>Work Orders</h1>
           <p>Create production jobs — BOM materials are auto-deducted from stock when marked Complete</p>
         </div>
-        <div className="ims-header-right" style={{ gap: 10, display: 'flex' }}>
+        <div className="ims-header-right ims-flex-gap-10">
           <button className="btn btn-secondary" onClick={loadWOs}><FaSync /> Refresh</button>
           <button className="btn btn-primary" onClick={() => setShowCreate(true)}><FaPlus /> New Work Order</button>
         </div>
@@ -158,19 +157,19 @@ export default function IMSWorkOrders() {
         {/* Left List */}
         <div className="wo-list-panel">
           <div className="wo-controls">
-            <div className="wo-search-wrapper" style={{ flex: 1 }}>
+            <div className="wo-search-wrapper ims-flex-1">
               <FaSearch className="search-icon" />
               <input type="text" placeholder="Search work orders..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <select className="form-select" value={filter} onChange={e => setFilter(e.target.value)} style={{ width: 140 }}>
+            <select className="form-select ims-width-140" value={filter} onChange={e => setFilter(e.target.value)}>
               <option value="ALL">All Status</option>
               {Object.entries(statusConfig).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
           </div>
 
-          {loading ? <div style={{ padding: 30, textAlign: 'center', color: '#aaa' }}><FaSpinner /> Loading...</div> : (
+          {loading ? <div className="ims-loading-placeholder"><FaSpinner /> Loading...</div> : (
             <div className="wo-cards">
-              {filtered.length === 0 && <div style={{ padding: 30, textAlign: 'center', color: '#aaa' }}>No work orders found.</div>}
+              {filtered.length === 0 && <div className="ims-empty-placeholder">No work orders found.</div>}
               {filtered.map(wo => {
                 const sc = statusConfig[wo.status] || statusConfig.PENDING;
                 const pct = wo.target_qty > 0 ? Math.round((wo.built_qty / wo.target_qty) * 100) : 0;
@@ -184,7 +183,7 @@ export default function IMSWorkOrders() {
                     <div className="wo-meta">
                       <span><FaBoxes /> {wo.built_qty}/{wo.target_qty} units</span>
                       {wo.due_date && <span><FaClock /> Due: {wo.due_date?.split('T')[0]}</span>}
-                      <span style={{ color: wo.priority === 'CRITICAL' ? '#e74c3c' : '#999', fontSize: 12 }}>{wo.priority}</span>
+                      <span className="ims-priority-label" style={{ color: wo.priority === 'CRITICAL' ? '#e74c3c' : '#999' }}>{wo.priority}</span>
                     </div>
                     <div className="wo-progress-bar">
                       <div className="wo-progress-fill" style={{ width: `${pct}%`, background: sc.color }} />
@@ -206,7 +205,7 @@ export default function IMSWorkOrders() {
                   <h2>{selected.product_name}</h2>
                   <div className="wo-detail-id">{selected.wo_number}</div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div className="ims-flex-align-center-gap-8">
                   <span className="wo-status-badge large" style={{ background: statusConfig[selected.status]?.bg, color: statusConfig[selected.status]?.color }}>
                     {statusConfig[selected.status]?.label}
                   </span>
@@ -224,7 +223,7 @@ export default function IMSWorkOrders() {
               </div>
 
               <div className="wo-materials-section">
-                <h3><FaLayerGroup /> Bill of Materials {materials.length === 0 && <span style={{ color: '#aaa', fontWeight: 400, fontSize: 13 }}>(No BOM — add a BOM to the product in Catalog)</span>}</h3>
+                <h3><FaLayerGroup /> Bill of Materials {materials.length === 0 && <span className="ims-no-bom-help">(No BOM — add a BOM to the product in Catalog)</span>}</h3>
                 {materials.length > 0 && (
                   <table className="wo-bom-table">
                     <thead><tr><th>Component</th><th>Required</th><th>Available Now</th><th>Status</th></tr></thead>
@@ -233,9 +232,9 @@ export default function IMSWorkOrders() {
                         const ok = Number(m.available_qty) >= Number(m.required_qty);
                         return (
                           <tr key={i}>
-                            <td><code style={{ fontSize: 12 }}>{m.barcode}</code> {m.name}</td>
+                            <td><code className="ims-code-barcode">{m.barcode}</code> {m.name}</td>
                             <td>{m.required_qty} {m.unit}</td>
-                            <td style={{ color: ok ? '#27ae60' : '#e74c3c', fontWeight: 600 }}>{m.available_qty} {m.unit}</td>
+                            <td className="ims-bom-avail-qty" style={{ color: ok ? '#27ae60' : '#e74c3c' }}>{m.available_qty} {m.unit}</td>
                             <td><span className={`bom-status ${ok ? 'ok' : 'short'}`}>{ok ? '✓ OK' : `⚠ Short ${m.required_qty - m.available_qty}`}</span></td>
                           </tr>
                         );
@@ -245,7 +244,7 @@ export default function IMSWorkOrders() {
                 )}
               </div>
 
-              {selected.notes && <div style={{ background: '#f8f9fa', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#555', marginTop: 12 }}>📝 {selected.notes}</div>}
+              {selected.notes && <div className="ims-notes-box">📝 {selected.notes}</div>}
 
               <div className="wo-actions">
                 {NEXT_STATUS[selected.status] && (
@@ -255,7 +254,7 @@ export default function IMSWorkOrders() {
                   </button>
                 )}
                 {selected.status !== 'COMPLETE' && selected.status !== 'CANCELLED' && (
-                  <button className="btn btn-secondary" style={{ borderColor: '#e74c3c', color: '#e74c3c' }}
+                  <button className="btn btn-secondary btn-danger-outline"
                     onClick={() => changeStatus(selected, 'CANCELLED')}>
                     <FaTimes /> Cancel WO
                   </button>
@@ -311,7 +310,7 @@ export default function IMSWorkOrders() {
                 <label className="form-label">Notes</label>
                 <input className="form-input" placeholder="Any additional instructions..." value={newWO.notes} onChange={e => setNewWO(f => ({ ...f, notes: e.target.value }))} />
               </div>
-              <div style={{ background: '#eaf4fb', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#2980b9', marginTop: 8 }}>
+              <div className="ims-info-box-blue">
                 💡 If you enter a Product Barcode that has a BOM defined in the Catalog, the system will auto-populate the required raw materials.
               </div>
             </div>

@@ -47,3 +47,274 @@
   text-align: left !important;
   box-sizing: border-box !important;
 }
+
+/* Extracted Inline Styles */
+.ims-pipeline-container {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 30px;
+  overflow-x: auto;
+  align-items: center;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.ims-stage-card {
+  flex: 1;
+  background: #fff;
+  color: #333;
+  padding: 16px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  border: 1px solid #e0e0e0;
+  min-width: 120px;
+  text-align: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.ims-stage-card.active {
+  background: #E3821E;
+  color: #fff;
+  border-color: #E3821E;
+  box-shadow: 0 6px 16px rgba(227,130,30,0.3);
+  transform: translateY(-2px);
+}
+
+.ims-stage-name {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.ims-stage-metrics {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  font-size: 14px;
+  opacity: 0.8;
+  font-weight: 600;
+}
+
+.ims-stage-card.active .ims-stage-metrics {
+  opacity: 1;
+}
+
+.ims-stage-metric-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ims-metric-fwd {
+  color: #27ae60;
+}
+
+.ims-stage-card.active .ims-metric-fwd {
+  color: #9fffba;
+}
+
+.ims-stage-metric-label {
+  font-size: 10px;
+  opacity: 0.6;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.ims-stage-card.active .ims-stage-metric-label {
+  opacity: 0.9;
+}
+
+.ims-stage-metric-divider {
+  width: 1px;
+  background: #eee;
+}
+
+.ims-stage-card.active .ims-stage-metric-divider {
+  background: rgba(255,255,255,0.3);
+}
+
+.ims-metric-rwk {
+  color: #e67e22;
+}
+
+.ims-stage-card.active .ims-metric-rwk {
+  color: #ffe0a0;
+}
+
+.ims-metric-rej {
+  color: #e74c3c;
+}
+
+.ims-stage-card.active .ims-metric-rej {
+  color: #ffbaba;
+}
+
+.ims-pipeline-arrow {
+  color: #bbb;
+  display: flex;
+  align-items: center;
+  font-size: 22px;
+}
+
+.ims-prod-grid {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 20px;
+}
+
+.ims-panel {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+}
+
+.ims-scan-panel {
+  height: fit-content;
+}
+
+.ims-panel-title {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 16px;
+}
+
+.ims-highlight {
+  color: #E3821E;
+}
+
+.ims-form-group {
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.ims-form-label {
+  display: block;
+  text-align: left;
+  margin-bottom: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #444;
+}
+
+.ims-form-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.ims-outcome-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.ims-outcome-btn {
+  flex: 1;
+  padding: 10px 0;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+
+.ims-form-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.ims-flex-1 {
+  flex: 1;
+  text-align: left;
+}
+
+.ims-flex-2 {
+  flex: 2;
+  text-align: left;
+}
+
+.ims-form-group-notes {
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.ims-full-width {
+  width: 100%;
+}
+
+.ims-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.ims-panel-title-no-margin {
+  font-size: 16px;
+  margin: 0;
+}
+
+.ims-metrics-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.ims-metric-card {
+  flex: 1;
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 10px 14px;
+  border-left: 4px solid transparent;
+}
+
+.ims-metric-val {
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.ims-metric-lbl {
+  font-size: 12px;
+  color: #888;
+}
+
+.ims-table-container {
+  box-shadow: none;
+  border: 1px solid #eee;
+}
+
+.ims-empty-table-cell {
+  text-align: center;
+  color: #aaa;
+  padding: 20px;
+}
+
+.ims-code-barcode {
+  font-size: 12px;
+}
+
+.ims-outcome-badge {
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ims-text-muted-sm {
+  font-size: 12px;
+  color: #888;
+}
+
+.ims-text-sm {
+  font-size: 12px;
+}
+

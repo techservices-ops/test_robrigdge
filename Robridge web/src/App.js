@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { WorkspaceProvider, useWorkspace } from './contexts/WorkspaceContext';
@@ -6,43 +6,55 @@ import { WebSocketProvider } from './contexts/WebSocketContext';
 import { UIProvider } from './contexts/UIContext';
 import GlobalUIComponents from './components/GlobalUI/GlobalUIComponents';
 // ChatWidget disabled — replaced by IMSChatBot
-import LoginPage from './pages/LoginPage';
-import SignupPage from './pages/SignupPage';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
-import VerifyEmail from './pages/VerifyEmail';
 import AuthLayout from './components/AuthLayout';
 import Navigation from './components/Navigation';
-import BarcodeGenerator from './pages/BarcodeGenerator';
-import ImageProcessing from './pages/ImageProcessing';
-import RobotControl from './pages/RobotControl';
-import RackStatus from './pages/RackStatus';
-import RackManagement from './pages/RackManagement';
-import ProductManagement from './pages/ProductManagement';
-import DeviceConnected from './pages/DeviceConnected';
-import Profile from './pages/Profile';
-import Settings from './pages/Settings';
-import DevicesPage from './pages/DevicesPage';
-import DeviceManager from './pages/DeviceManager';
-import IMSDashboard from './pages/IMSDashboard';
-import IMSCatalog from './pages/IMSCatalog';
-import IMSScanner from './pages/IMSScanner';
-import IMSSettings from './pages/IMSSettings';
-import IMSUsers from './pages/IMSUsers';
-import IMSWorkOrders from './pages/IMSWorkOrders';
-import IMSProduction from './pages/IMSProduction';
-import IMSLocations from './pages/IMSLocations';
-import IMSGrn from './pages/IMSGrn';
-import IMSReports from './pages/IMSReports';
-import IMSErp from './pages/IMSErp';
-import IMSComponentReplacement from './pages/IMSComponentReplacement';
-import WorkspaceOnboarding from './pages/WorkspaceOnboarding';
 import IMSChatBot from './components/IMSChatBot';
 import ErrorBoundary from './components/ErrorBoundary';
 import ConfirmModal from './components/ConfirmModal';
 import ToastContainer from './components/Toast';
 import './styles/design-system.css';
 import './App.css';
+
+// ── Lazy-loaded pages (code-split into separate chunks) ──────────────────────
+const LoginPage = React.lazy(() => import('./pages/LoginPage'));
+const SignupPage = React.lazy(() => import('./pages/SignupPage'));
+const ForgotPassword = React.lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = React.lazy(() => import('./pages/ResetPassword'));
+const VerifyEmail = React.lazy(() => import('./pages/VerifyEmail'));
+const BarcodeGenerator = React.lazy(() => import('./pages/BarcodeGenerator'));
+const ImageProcessing = React.lazy(() => import('./pages/ImageProcessing'));
+const RobotControl = React.lazy(() => import('./pages/RobotControl'));
+const RackStatus = React.lazy(() => import('./pages/RackStatus'));
+const RackManagement = React.lazy(() => import('./pages/RackManagement'));
+const ProductManagement = React.lazy(() => import('./pages/ProductManagement'));
+const DeviceConnected = React.lazy(() => import('./pages/DeviceConnected'));
+const Profile = React.lazy(() => import('./pages/Profile'));
+const Settings = React.lazy(() => import('./pages/Settings'));
+const DevicesPage = React.lazy(() => import('./pages/DevicesPage'));
+const DeviceManager = React.lazy(() => import('./pages/DeviceManager'));
+const IMSDashboard = React.lazy(() => import('./pages/IMSDashboard'));
+const IMSCatalog = React.lazy(() => import('./pages/IMSCatalog'));
+const IMSScanner = React.lazy(() => import('./pages/IMSScanner'));
+const IMSSettings = React.lazy(() => import('./pages/IMSSettings'));
+const IMSUsers = React.lazy(() => import('./pages/IMSUsers'));
+const IMSWorkOrders = React.lazy(() => import('./pages/IMSWorkOrders'));
+const IMSProduction = React.lazy(() => import('./pages/IMSProduction'));
+const IMSLocations = React.lazy(() => import('./pages/IMSLocations'));
+const IMSGrn = React.lazy(() => import('./pages/IMSGrn'));
+const IMSReports = React.lazy(() => import('./pages/IMSReports'));
+const IMSErp = React.lazy(() => import('./pages/IMSErp'));
+const IMSComponentReplacement = React.lazy(() => import('./pages/IMSComponentReplacement'));
+const WorkspaceOnboarding = React.lazy(() => import('./pages/WorkspaceOnboarding'));
+
+// ── Page loading spinner (shown while lazy chunks load) ──────────────────────
+const PageLoadingSpinner = () => (
+  <div className="loading-container">
+    <div className="loading-spinner">
+      <div className="spinner"></div>
+      <p>Loading...</p>
+    </div>
+  </div>
+);
 
 // Protected Route Component with Role-based Access Control
 function ProtectedRoute({ children, requiredPath }) {
@@ -104,15 +116,17 @@ function AppContent() {
   // Show login/signup page if not authenticated
   if (!isAuthenticated()) {
     return (
-      <Routes>
-        <Route element={<AuthLayout />}>
-          <Route path="/signup" element={<SignupPage />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="*" element={<LoginPage />} />
-        </Route>
-      </Routes>
+      <Suspense fallback={<PageLoadingSpinner />}>
+        <Routes>
+          <Route element={<AuthLayout />}>
+            <Route path="/signup" element={<SignupPage />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="*" element={<LoginPage />} />
+          </Route>
+        </Routes>
+      </Suspense>
     );
   }
 
@@ -131,32 +145,34 @@ function AppContent() {
         <div className="App">
           <Navigation />
           <main className="app-main-content">
-            <Routes>
-              <Route path="/" element={<ProtectedRoute requiredPath="/"><IMSDashboard /></ProtectedRoute>} />
-              <Route path="/generator" element={<ProtectedRoute requiredPath="/generator"><BarcodeGenerator /></ProtectedRoute>} />
-              <Route path="/image-processing" element={<ProtectedRoute requiredPath="/image-processing"><ImageProcessing /></ProtectedRoute>} />
-              <Route path="/robot-control" element={<ProtectedRoute requiredPath="/robot-control"><RobotControl /></ProtectedRoute>} />
-              <Route path="/rack-status" element={<ProtectedRoute requiredPath="/rack-status"><RackStatus /></ProtectedRoute>} />
-              <Route path="/rack-management" element={<ProtectedRoute requiredPath="/rack-management"><RackManagement /></ProtectedRoute>} />
-              <Route path="/product-management" element={<ProtectedRoute requiredPath="/product-management"><ProductManagement /></ProtectedRoute>} />
-              <Route path="/device-connected" element={<ProtectedRoute requiredPath="/device-connected"><DeviceConnected /></ProtectedRoute>} />
-              <Route path="/profile" element={<ProtectedRoute requiredPath="/profile"><Profile /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute requiredPath="/settings"><Settings /></ProtectedRoute>} />
-              <Route path="/devices" element={<ProtectedRoute requiredPath="/devices"><DevicesPage /></ProtectedRoute>} />
-              <Route path="/device-manager" element={<ProtectedRoute requiredPath="/device-manager"><DeviceManager /></ProtectedRoute>} />
-              <Route path="/ims-catalog" element={<ProtectedRoute requiredPath="/ims-catalog"><IMSCatalog /></ProtectedRoute>} />
-              <Route path="/ims-scanner" element={<ProtectedRoute requiredPath="/ims-scanner"><IMSScanner /></ProtectedRoute>} />
-              <Route path="/ims-settings" element={<ProtectedRoute requiredPath="/ims-settings"><IMSSettings /></ProtectedRoute>} />
-              <Route path="/ims-users" element={<ProtectedRoute requiredPath="/ims-users"><IMSUsers /></ProtectedRoute>} />
-              <Route path="/ims-workorders" element={<ProtectedRoute requiredPath="/ims-workorders"><IMSWorkOrders /></ProtectedRoute>} />
-              <Route path="/ims-production" element={<ProtectedRoute requiredPath="/ims-production"><IMSProduction /></ProtectedRoute>} />
-              <Route path="/ims-locations" element={<ProtectedRoute requiredPath="/ims-locations"><IMSLocations /></ProtectedRoute>} />
-              <Route path="/ims-grn" element={<ProtectedRoute requiredPath="/ims-grn"><IMSGrn /></ProtectedRoute>} />
-              <Route path="/ims-reports" element={<ProtectedRoute requiredPath="/ims-reports"><IMSReports /></ProtectedRoute>} />
-              <Route path="/ims-erp" element={<ProtectedRoute requiredPath="/ims-erp"><IMSErp /></ProtectedRoute>} />
-              <Route path="/ims-components" element={<ProtectedRoute requiredPath="/ims-components"><IMSComponentReplacement /></ProtectedRoute>} />
-              <Route path="/login" element={<LoginPage />} />
-            </Routes>
+            <Suspense fallback={<PageLoadingSpinner />}>
+              <Routes>
+                <Route path="/" element={<ProtectedRoute requiredPath="/"><IMSDashboard /></ProtectedRoute>} />
+                <Route path="/generator" element={<ProtectedRoute requiredPath="/generator"><BarcodeGenerator /></ProtectedRoute>} />
+                <Route path="/image-processing" element={<ProtectedRoute requiredPath="/image-processing"><ImageProcessing /></ProtectedRoute>} />
+                <Route path="/robot-control" element={<ProtectedRoute requiredPath="/robot-control"><RobotControl /></ProtectedRoute>} />
+                <Route path="/rack-status" element={<ProtectedRoute requiredPath="/rack-status"><RackStatus /></ProtectedRoute>} />
+                <Route path="/rack-management" element={<ProtectedRoute requiredPath="/rack-management"><RackManagement /></ProtectedRoute>} />
+                <Route path="/product-management" element={<ProtectedRoute requiredPath="/product-management"><ProductManagement /></ProtectedRoute>} />
+                <Route path="/device-connected" element={<ProtectedRoute requiredPath="/device-connected"><DeviceConnected /></ProtectedRoute>} />
+                <Route path="/profile" element={<ProtectedRoute requiredPath="/profile"><Profile /></ProtectedRoute>} />
+                <Route path="/settings" element={<ProtectedRoute requiredPath="/settings"><Settings /></ProtectedRoute>} />
+                <Route path="/devices" element={<ProtectedRoute requiredPath="/devices"><DevicesPage /></ProtectedRoute>} />
+                <Route path="/device-manager" element={<ProtectedRoute requiredPath="/device-manager"><DeviceManager /></ProtectedRoute>} />
+                <Route path="/ims-catalog" element={<ProtectedRoute requiredPath="/ims-catalog"><IMSCatalog /></ProtectedRoute>} />
+                <Route path="/ims-scanner" element={<ProtectedRoute requiredPath="/ims-scanner"><IMSScanner /></ProtectedRoute>} />
+                <Route path="/ims-settings" element={<ProtectedRoute requiredPath="/ims-settings"><IMSSettings /></ProtectedRoute>} />
+                <Route path="/ims-users" element={<ProtectedRoute requiredPath="/ims-users"><IMSUsers /></ProtectedRoute>} />
+                <Route path="/ims-workorders" element={<ProtectedRoute requiredPath="/ims-workorders"><IMSWorkOrders /></ProtectedRoute>} />
+                <Route path="/ims-production" element={<ProtectedRoute requiredPath="/ims-production"><IMSProduction /></ProtectedRoute>} />
+                <Route path="/ims-locations" element={<ProtectedRoute requiredPath="/ims-locations"><IMSLocations /></ProtectedRoute>} />
+                <Route path="/ims-grn" element={<ProtectedRoute requiredPath="/ims-grn"><IMSGrn /></ProtectedRoute>} />
+                <Route path="/ims-reports" element={<ProtectedRoute requiredPath="/ims-reports"><IMSReports /></ProtectedRoute>} />
+                <Route path="/ims-erp" element={<ProtectedRoute requiredPath="/ims-erp"><IMSErp /></ProtectedRoute>} />
+                <Route path="/ims-components" element={<ProtectedRoute requiredPath="/ims-components"><IMSComponentReplacement /></ProtectedRoute>} />
+                <Route path="/login" element={<LoginPage />} />
+              </Routes>
+            </Suspense>
           </main>
           <IMSChatBot />
         </div>

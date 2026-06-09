@@ -9,6 +9,7 @@ import './IMSGrn.css';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { useConfirm } from '../components/ConfirmModal';
 import { useWebSocket } from '../contexts/WebSocketContext';
+import { useToast } from '../components/Toast';
 
 const statusStyle = {
   APPROVED: { color: '#27ae60', bg: '#eafaf1', label: '✓ Approved' },
@@ -23,6 +24,7 @@ export default function IMSGrn() {
   const { imsFetch, activeWorkspaceId } = useWorkspace();
   const { socket } = useWebSocket();
   const confirm = useConfirm();
+  const showToast = useToast();
   const [tab, setTab] = useState('INWARD');
   const [grns, setGrns] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -33,9 +35,6 @@ export default function IMSGrn() {
   const [form, setForm] = useState(emptyForm);
   const [lineItems, setLineItems] = useState([{ ...emptyItem }]);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState('');
-
-  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -64,7 +63,7 @@ export default function IMSGrn() {
       const ordIdx = headers.findIndex(h => h.includes('order') || h.includes('qty') || h.includes('quantity') || h.includes('expected'));
       const recIdx = headers.findIndex(h => h.includes('receiv'));
       
-      if (bcIdx === -1 || nmIdx === -1) return showToast('❌ CSV must have Barcode and Name columns');
+      if (bcIdx === -1 || nmIdx === -1) return showToast('CSV must have Barcode and Name columns', 'error');
       
       const parsedItems = [];
       for (let i = 1; i < rows.length; i++) {
@@ -81,7 +80,7 @@ export default function IMSGrn() {
         });
       }
       setLineItems(parsedItems.length > 0 ? parsedItems : [{ ...emptyItem }]);
-      showToast('✅ CSV uploaded successfully');
+      showToast('CSV uploaded successfully', 'success');
       e.target.value = ''; // Reset input
     };
     reader.readAsText(file);
@@ -104,7 +103,7 @@ export default function IMSGrn() {
     const handleUpdate = (data) => {
       if (selected && selected.id === data.grnId) {
         setSelectedItems(prev => prev.map(i => i.id === data.itemId ? { ...i, received_qty: data.receivedQty } : i));
-        showToast(`📦 Scanned: ${data.name} (${data.receivedQty}/${data.orderedQty})`);
+        showToast(`Scanned: ${data.name} (${data.receivedQty}/${data.orderedQty})`, 'info');
       }
     };
     socket.on('grn_item_updated', handleUpdate);
@@ -131,7 +130,7 @@ export default function IMSGrn() {
         setShowCreate(false);
         setForm(emptyForm);
         setLineItems([{ ...emptyItem }]);
-        showToast('✅ Document created successfully');
+        showToast('Document created successfully', 'success');
       }
     } finally { setSaving(false); }
   };
@@ -150,7 +149,7 @@ export default function IMSGrn() {
     if (d.success) {
       setGrns(prev => prev.map(g => g.id === selected.id ? { ...g, status: 'APPROVED' } : g));
       setSelected(s => ({ ...s, status: 'APPROVED' }));
-      showToast('✅ Approved! Stock has been updated.');
+      showToast('Approved! Stock has been updated.', 'success');
     }
   };
 
@@ -168,7 +167,7 @@ export default function IMSGrn() {
     if (d.success) {
       setGrns(prev => prev.map(g => g.id === selected.id ? { ...g, status: 'REJECTED' } : g));
       setSelected(s => ({ ...s, status: 'REJECTED' }));
-      showToast('🗑️ Document rejected');
+      showToast('Document rejected', 'info');
     }
   };
 
@@ -184,14 +183,14 @@ export default function IMSGrn() {
 
   return (
     <div className="ims-grn-page">
-      {toast && <div style={{ position: 'fixed', top: 20, right: 20, background: '#2c3e50', color: '#fff', padding: '12px 20px', borderRadius: 10, zIndex: 9999, fontSize: 14 }}>{toast}</div>}
+
 
       <div className="page-header ims-page-header">
         <div className="ims-header-left">
           <h1>Inward GRN &amp; Outward Dispatch</h1>
           <p>Manage Goods Receipt Notes for inbound stock and Dispatch Notes for outward shipments</p>
         </div>
-        <div className="ims-header-right" style={{ gap: 10, display: 'flex' }}>
+        <div className="ims-header-right ims-flex-gap-10">
           <button className="btn btn-secondary" onClick={loadGRNs}><FaSync /> Refresh</button>
           <button className="btn btn-primary" onClick={() => { setForm({ ...emptyForm, type: tab }); setShowCreate(true); }}>
             <FaPlus /> Create {tab === 'INWARD' ? 'GRN' : 'Dispatch Note'}
@@ -202,7 +201,7 @@ export default function IMSGrn() {
       <div className="grn-kpi-strip">
         {kpis.map((k, i) => (
           <div key={i} className="grn-kpi-card" style={{ borderLeftColor: k.color }}>
-            <k.icon style={{ color: k.color, fontSize: 22 }} />
+            <k.icon className="grn-kpi-icon" style={{ color: k.color }} />
             <div><div className="grn-kpi-val" style={{ color: k.color }}>{k.value}</div><div className="grn-kpi-lbl">{k.label}</div></div>
           </div>
         ))}
@@ -215,13 +214,13 @@ export default function IMSGrn() {
             <button className={`grn-tab ${tab === 'INWARD' ? 'active' : ''}`} onClick={() => setTab('INWARD')}><FaArrowDown /> Inward GRN</button>
             <button className={`grn-tab ${tab === 'OUTWARD' ? 'active' : ''}`} onClick={() => setTab('OUTWARD')}><FaArrowUp /> Outward Dispatch</button>
           </div>
-          <div className="search-input" style={{ margin: '12px 0' }}>
+          <div className="search-input ims-margin-y-12">
             <FaSearch className="search-icon" />
             <input type="text" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          {loading ? <div style={{ textAlign: 'center', padding: 30, color: '#aaa' }}><FaSpinner /></div> : (
+          {loading ? <div className="ims-loading-spinner-wrapper"><FaSpinner /></div> : (
             <div className="grn-cards">
-              {filtered.length === 0 && <div style={{ textAlign: 'center', padding: 30, color: '#aaa' }}>No documents found.</div>}
+              {filtered.length === 0 && <div className="ims-empty-placeholder">No documents found.</div>}
               {filtered.map(grn => {
                 const ss = statusStyle[grn.status] || statusStyle.PENDING;
                 return (
@@ -249,31 +248,31 @@ export default function IMSGrn() {
               <div className="grn-detail-header">
                 <div>
                   <h2>{selected.doc_no}</h2>
-                  <div style={{ color: '#888', fontSize: 14 }}>{selected.supplier} {selected.po_ref && `· ${selected.po_ref}`}</div>
+                  <div className="ims-grn-header-meta">{selected.supplier} {selected.po_ref && `· ${selected.po_ref}`}</div>
                 </div>
                 <span className="grn-status large" style={{ background: statusStyle[selected.status]?.bg, color: statusStyle[selected.status]?.color }}>{statusStyle[selected.status]?.label}</span>
               </div>
-              <div style={{ padding: '0 0 16px', borderBottom: '1px solid #eee', marginBottom: 16, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-                <div><div style={{ fontSize: 12, color: '#888' }}>Date</div><div style={{ fontWeight: 600 }}>{selected.created_at?.split('T')[0]}</div></div>
-                {selected.po_ref && <div><div style={{ fontSize: 12, color: '#888' }}>Reference</div><div style={{ fontWeight: 600 }}>{selected.po_ref}</div></div>}
-                {selected.vehicle_no && <div><div style={{ fontSize: 12, color: '#888' }}>Vehicle No</div><div style={{ fontWeight: 600 }}>{selected.vehicle_no}</div></div>}
-                <div><div style={{ fontSize: 12, color: '#888' }}>Type</div><div style={{ fontWeight: 600 }}>{selected.type}</div></div>
+              <div className="ims-grn-meta-strip">
+                <div><div className="ims-meta-label">Date</div><div className="ims-meta-val">{selected.created_at?.split('T')[0]}</div></div>
+                {selected.po_ref && <div><div className="ims-meta-label">Reference</div><div className="ims-meta-val">{selected.po_ref}</div></div>}
+                {selected.vehicle_no && <div><div className="ims-meta-label">Vehicle No</div><div className="ims-meta-val">{selected.vehicle_no}</div></div>}
+                <div><div className="ims-meta-label">Type</div><div className="ims-meta-val">{selected.type}</div></div>
               </div>
 
-              <h3 style={{ fontSize: 15, marginBottom: 12 }}>Item-wise Details</h3>
-              <div className="table-container" style={{ boxShadow: 'none', border: '1px solid #eee' }}>
+              <h3 className="ims-section-title">Item-wise Details</h3>
+              <div className="table-container ims-table-container">
                 <table className="table">
                   <thead><tr><th>Barcode</th><th>Item</th><th>Ordered</th><th>Received</th><th>Condition</th><th>Notes</th></tr></thead>
                   <tbody>
-                    {selectedItems.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: '#aaa', padding: 20 }}>No items recorded</td></tr>}
+                    {selectedItems.length === 0 && <tr><td colSpan={6} className="ims-empty-table-cell">No items recorded</td></tr>}
                     {selectedItems.map((item, i) => (
                       <tr key={i}>
                         <td><code>{item.barcode}</code></td>
                         <td><strong>{item.name}</strong></td>
                         <td>{item.ordered_qty} {item.unit}</td>
-                        <td style={{ color: Number(item.received_qty) >= Number(item.ordered_qty) ? '#27ae60' : '#e74c3c', fontWeight: 600 }}>{item.received_qty} {item.unit}</td>
-                        <td><span style={{ background: '#eafaf1', color: '#27ae60', padding: '3px 8px', borderRadius: 10, fontSize: 12 }}>{item.condition}</span></td>
-                        <td style={{ color: '#888', fontSize: 13 }}>{item.note || '—'}</td>
+                        <td className="ims-received-qty" style={{ color: Number(item.received_qty) >= Number(item.ordered_qty) ? '#27ae60' : '#e74c3c' }}>{item.received_qty} {item.unit}</td>
+                        <td><span className="ims-condition-badge">{item.condition}</span></td>
+                        <td className="ims-note-cell">{item.note || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -282,16 +281,16 @@ export default function IMSGrn() {
 
               {selected.status === 'PENDING' && (
                 <div className="grn-approval-strip">
-                  <button className="btn btn-primary" style={{ background: '#27ae60' }} onClick={approve}><FaCheckCircle /> Approve &amp; Update Stock</button>
-                  <button className="btn btn-secondary" style={{ borderColor: '#e74c3c', color: '#e74c3c' }} onClick={reject}><FaTimes /> Reject</button>
+                  <button className="btn btn-primary btn-success-green" onClick={approve}><FaCheckCircle /> Approve &amp; Update Stock</button>
+                  <button className="btn btn-secondary btn-danger-outline" onClick={reject}><FaTimes /> Reject</button>
                 </div>
               )}
             </>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#aaa', gap: 12 }}>
-              <FaFileInvoice style={{ fontSize: 48 }} />
+            <div className="ims-empty-detail">
+              <FaFileInvoice className="ims-empty-icon" />
               <h3>Select a GRN or Dispatch Note</h3>
-              <p style={{ fontSize: 14 }}>Click on a record to view item-level details and take action.</p>
+              <p className="ims-empty-detail-desc">Click on a record to view item-level details and take action.</p>
             </div>
           )}
         </div>
@@ -307,7 +306,7 @@ export default function IMSGrn() {
             </div>
             <div className="modal-body">
               <div className="modal-row">
-                <div className="form-group" style={{ flex: 2 }}>
+                <div className="form-group ims-flex-2">
                   <label className="form-label">{tab === 'INWARD' ? 'Supplier Name' : 'Recipient Name'} *</label>
                   <input className="form-input" placeholder="Company / Person" value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} />
                 </div>
@@ -321,52 +320,52 @@ export default function IMSGrn() {
                   <label className="form-label">Vehicle / Courier No</label>
                   <input className="form-input" placeholder="TN-01-AB-1234" value={form.vehicleNo} onChange={e => setForm(f => ({ ...f, vehicleNo: e.target.value }))} />
                 </div>
-                <div className="form-group" style={{ flex: 2 }}>
+                <div className="form-group ims-flex-2">
                   <label className="form-label">Notes</label>
                   <input className="form-input" placeholder="Any special instructions..." value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
                 </div>
               </div>
 
-              <div style={{ marginTop: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div className="ims-margin-top-16">
+                <div className="ims-flex-between-align-center-margin-bottom-8">
                   <strong>Line Items</strong>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <label className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12, cursor: 'pointer', margin: 0 }}>
+                  <div className="ims-flex-gap-8">
+                    <label className="btn btn-secondary ims-row-action-btn">
                       <FaUpload /> Upload CSV
-                      <input type="file" accept=".csv" style={{ display: 'none' }} onChange={handleFileUpload} />
+                      <input type="file" accept=".csv" className="ims-hidden-input" onChange={handleFileUpload} />
                     </label>
-                    <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setLineItems(p => [...p, { ...emptyItem }])}><FaPlus /> Add Row</button>
+                    <button className="btn btn-secondary ims-row-action-btn-no-margin" onClick={() => setLineItems(p => [...p, { ...emptyItem }])}><FaPlus /> Add Row</button>
                   </div>
                 </div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead><tr style={{ background: '#f8f9fa' }}>
-                    <th style={{ padding: '6px 8px', textAlign: 'left' }}>Barcode</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'left' }}>Name</th>
-                    <th style={{ padding: '6px 8px', width: 70 }}>Ordered</th>
-                    <th style={{ padding: '6px 8px', width: 70 }}>Received</th>
-                    <th style={{ padding: '6px 8px', width: 60 }}>Unit</th>
-                    <th style={{ padding: '6px 8px', width: 30 }}></th>
+                <table className="ims-modal-table">
+                  <thead><tr className="ims-modal-table-header-row">
+                    <th className="ims-modal-table-th-left">Barcode</th>
+                    <th className="ims-modal-table-th-left">Name</th>
+                    <th className="ims-modal-table-th-width-70">Ordered</th>
+                    <th className="ims-modal-table-th-width-70">Received</th>
+                    <th className="ims-modal-table-th-width-60">Unit</th>
+                    <th className="ims-modal-table-th-width-30"></th>
                   </tr></thead>
                   <tbody>
                     {lineItems.map((it, i) => {
                       const o = Number(it.orderedQty) || 0;
                       const r = Number(it.receivedQty) || 0;
-                      let rStyle = { padding: '4px 8px', fontSize: 13, fontWeight: 'bold' };
+                      let rStyleColor = undefined;
                       if (it.barcode && r > 0) {
-                        if (r === o) rStyle.color = '#27ae60'; // Green - Match
-                        else if (r > o && o > 0) rStyle.color = '#e67e22'; // Orange - Overage
-                        else if (r < o) rStyle.color = '#e74c3c'; // Red - Short
-                        else if (o === 0) rStyle.color = '#3498db'; // Blue - Unexpected
+                        if (r === o) rStyleColor = '#27ae60'; // Green - Match
+                        else if (r > o && o > 0) rStyleColor = '#e67e22'; // Orange - Overage
+                        else if (r < o) rStyleColor = '#e74c3c'; // Red - Short
+                        else if (o === 0) rStyleColor = '#3498db'; // Blue - Unexpected
                       }
                       
                       return (
                       <tr key={i}>
-                        <td style={{ padding: '4px' }}><input className="form-input" style={{ padding: '4px 8px', fontSize: 12 }} value={it.barcode} onChange={e => { const n = [...lineItems]; n[i].barcode = e.target.value; setLineItems(n); }} placeholder="Barcode" /></td>
-                        <td style={{ padding: '4px' }}><input className="form-input" style={{ padding: '4px 8px', fontSize: 12 }} value={it.name} onChange={e => { const n = [...lineItems]; n[i].name = e.target.value; setLineItems(n); }} placeholder="Name" /></td>
-                        <td style={{ padding: '4px' }}><input className="form-input" type="number" style={{ padding: '4px 8px', fontSize: 12 }} value={it.orderedQty} onChange={e => { const n = [...lineItems]; n[i].orderedQty = e.target.value; setLineItems(n); }} placeholder="0" /></td>
-                        <td style={{ padding: '4px' }}><input className="form-input" type="number" style={{...rStyle}} value={it.receivedQty} onChange={e => { const n = [...lineItems]; n[i].receivedQty = e.target.value; setLineItems(n); }} placeholder="0" /></td>
-                        <td style={{ padding: '4px' }}><input className="form-input" style={{ padding: '4px 8px', fontSize: 12, background: '#f5f6fa', color: '#7f8c8d' }} value="pcs" readOnly title="Fixed Unit" /></td>
-                        <td style={{ padding: '4px', textAlign: 'center' }}><button style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer' }} onClick={() => setLineItems(p => p.filter((_, j) => j !== i))}><FaTrash /></button></td>
+                        <td className="ims-modal-table-td"><input className="form-input ims-modal-table-input" value={it.barcode} onChange={e => { const n = [...lineItems]; n[i].barcode = e.target.value; setLineItems(n); }} placeholder="Barcode" /></td>
+                        <td className="ims-modal-table-td"><input className="form-input ims-modal-table-input" value={it.name} onChange={e => { const n = [...lineItems]; n[i].name = e.target.value; setLineItems(n); }} placeholder="Name" /></td>
+                        <td className="ims-modal-table-td"><input className="form-input ims-modal-table-input" type="number" value={it.orderedQty} onChange={e => { const n = [...lineItems]; n[i].orderedQty = e.target.value; setLineItems(n); }} placeholder="0" /></td>
+                        <td className="ims-modal-table-td"><input className="form-input ims-qty-input-r" type="number" style={{ color: rStyleColor }} value={it.receivedQty} onChange={e => { const n = [...lineItems]; n[i].receivedQty = e.target.value; setLineItems(n); }} placeholder="0" /></td>
+                        <td className="ims-modal-table-td"><input className="form-input ims-modal-table-input-readonly" value="pcs" readOnly title="Fixed Unit" /></td>
+                        <td className="ims-modal-table-td-center"><button className="ims-delete-row-btn" onClick={() => setLineItems(p => p.filter((_, j) => j !== i))}><FaTrash /></button></td>
                       </tr>
                     )})}
                   </tbody>
