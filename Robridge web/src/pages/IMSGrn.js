@@ -37,8 +37,6 @@ export default function IMSGrn() {
   const [saving, setSaving] = useState(false);
   const isReadOnly = ['user', 'member', 'viewer'].includes(activeWorkspace?.currentUserRole);
 
-  const showToast = useToast();
-
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;

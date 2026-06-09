@@ -466,22 +466,40 @@ const IMSCatalog = () => {
       </div>
 
       {showModal && (
-         /* Edit Product Modal Logic (omitted for brevity, maintained from original) */
-         <div className="ims-modal-overlay" onClick={() => setShowModal(false)}>
+        <div className="ims-modal-overlay" onClick={() => setShowModal(false)}>
           <div className="ims-modal catalog-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <FaPlus className="modal-icon" />
-              <div style={{ flex: 1, paddingRight: '24px' }}><h2>{editProduct ? 'Edit Product' : 'Add New Product'}</h2><p>{editProduct ? `Editing ${editProduct.name}` : 'Fill in product details'}</p></div>
+              <div style={{ flex: 1, paddingRight: '24px' }}>
+                <h2>{editProduct ? 'Edit Product' : 'Add New Product'}</h2>
+                <p>{editProduct ? `Editing ${editProduct.name}` : 'Fill in product details'}</p>
+              </div>
               <button className="modal-close" onClick={() => setShowModal(false)}><FaTimes /></button>
             </div>
+            
+            <div className="modal-tabs">
+              <button className={`modal-tab ${activeTab === 'general' ? 'active' : ''}`} onClick={() => setActiveTab('general')}>
+                General & SKU
+              </button>
+            </div>
+
             <div className="modal-body">
-              <div className="modal-row">
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label className="form-label">Barcode *</label>
-                  <div className="barcode-input-wrapper">
-                    <input className="form-input" placeholder="e.g. PACK001" value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} />
-                    <button type="button" className="btn btn-secondary" onClick={generateBarcode} title="Generate Autocode"><FaMagic /></button>
+              {activeTab === 'general' && (
+                <>
+                  <div className="modal-row">
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label className="form-label">Barcode *</label>
+                      <div className="barcode-input-wrapper">
+                        <input className="form-input" placeholder="e.g. PACK001" value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} />
+                        <button type="button" className="btn btn-secondary" onClick={generateBarcode} title="Generate Autocode"><FaMagic /></button>
+                      </div>
+                    </div>
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label className="form-label">Product Name *</label>
+                      <input className="form-input" placeholder="e.g. Paracetamol 500mg" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                    </div>
                   </div>
+
                   <div className="modal-row">
                     <div className="form-group">
                       <label className="form-label">Category</label>
@@ -496,6 +514,7 @@ const IMSCatalog = () => {
                       </select>
                     </div>
                   </div>
+
                   <div className="modal-row">
                     <div className="form-group" style={{ flex: 1 }}>
                       <label className="form-label">Opening Stock</label>

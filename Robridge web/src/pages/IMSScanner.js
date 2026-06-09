@@ -182,6 +182,9 @@ const IMSScanner = () => {
     } catch (e) { console.error('Error recording scan'); }
   };
 
+  const isGrnMode = (stage) => stage === 'RECEIVE' || stage === 'DISPATCH';
+  const isWoMode = (stage) => stage === 'PUTAWAY';
+
   const doScan = async (code, websocketScanId = null) => {
     const val = code || scanInput.trim();
     if (!val) return;

@@ -106,7 +106,8 @@ const globalLimiter = rateLimit({
   max: 500,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, error: 'Too many requests, please try again later.' }
+  message: { success: false, error: 'Too many requests, please try again later.' },
+  skip: (req, res) => NODE_ENV !== 'production'
 });
 app.use(globalLimiter);
 
@@ -116,7 +117,8 @@ const authLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, error: 'Too many authentication attempts. Please wait 15 minutes.' }
+  message: { success: false, error: 'Too many authentication attempts. Please wait 15 minutes.' },
+  skip: (req, res) => NODE_ENV !== 'production'
 });
 app.use(['/api/login', '/api/register', '/api/forgot-password', '/api/reset-password'], authLimiter);
 
@@ -124,7 +126,8 @@ app.use(['/api/login', '/api/register', '/api/forgot-password', '/api/reset-pass
 const scanLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
   max: 120,
-  message: { success: false, error: 'Scan rate limit exceeded.' }
+  message: { success: false, error: 'Scan rate limit exceeded.' },
+  skip: (req, res) => NODE_ENV !== 'production'
 });
 app.use(['/api/ims/scanner', '/api/esp32/scan'], scanLimiter);
 
