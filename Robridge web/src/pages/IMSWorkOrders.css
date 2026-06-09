@@ -10,7 +10,35 @@
 .wo-layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; }
 
 .wo-list-panel { display: flex; flex-direction: column; gap: 12px; }
-.wo-controls { display: flex; gap: 10px; }
+.wo-controls { display: flex; gap: 10px; align-items: center; }
+
+.wo-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.wo-search-wrapper .search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+.wo-search-wrapper input {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-sm) 36px;
+  border: 2px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  transition: border-color var(--transition-base);
+  background: var(--bg-primary);
+}
+
+.wo-search-wrapper input:focus {
+  outline: none;
+  border-color: var(--primary-orange);
+}
 .wo-cards { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: calc(100vh - 320px); }
 
 .wo-card { background: var(--bg-primary); border-radius: var(--radius-md); padding: 16px; cursor: pointer; border: 1.5px solid var(--border-light); transition: all 0.2s ease; }
@@ -46,3 +74,14 @@
 .bom-status.ok { background: #eafaf1; color: #27ae60; }
 .bom-status.short { background: #fdf0ed; color: #e74c3c; }
 .wo-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* Align text cursor and input content to the left in Create Work Order modal */
+.ims-modal-overlay .form-input,
+.ims-modal-overlay .form-select,
+.ims-modal-overlay input,
+.ims-modal-overlay select,
+.ims-modal-overlay textarea {
+  text-align: left !important;
+  padding: 12px 16px !important; /* Reset padding to standard to override LoginPage.css global leak */
+}
+

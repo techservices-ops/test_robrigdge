@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getServerURL } from '../config/api';
 import {
   FaBox,
   FaArrowRight,
@@ -19,6 +20,7 @@ import './ProductManagement.css';
 
 import { showToast } from '../components/Toast';
 const ProductManagement = () => {
+  const serverURL = getServerURL();
   const [showMovementForm, setShowMovementForm] = useState(false);
   const [movementType, setMovementType] = useState('outbound');
   const [movements, setMovements] = useState([]);
@@ -45,7 +47,7 @@ const ProductManagement = () => {
 
   const loadAvailableRacks = async () => {
     try {
-      const response = await fetch('https://robridge-express-zl9j.onrender.com/api/racks');
+      const response = await fetch(`${serverURL}/api/racks`);
       const data = await response.json();
 
       if (data.success) {
@@ -139,7 +141,7 @@ const ProductManagement = () => {
       // Update rack quantity if rack ID is provided
       if (formData.rackId) {
         try {
-          const rackUpdateResponse = await fetch(`https://robridge-express-zl9j.onrender.com/api/racks/${formData.rackId}/update-quantity`, {
+          const rackUpdateResponse = await fetch(`${serverURL}/api/racks/${formData.rackId}/update-quantity`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

@@ -136,6 +136,19 @@ app.get('/bvs/*', (req, res) => {
   res.sendFile(path.join(__dirname, 'build', 'index.html'));
 });
 
+// Fallback redirect for root-level routes directly hitting the backend in production / dev
+app.get('/verify-email', (req, res) => {
+  const token = req.query.token;
+  const target = NODE_ENV === 'production' ? '/bvs/verify-email' : 'http://localhost:3000/verify-email';
+  res.redirect(token ? `${target}?token=${token}` : target);
+});
+
+app.get('/reset-password', (req, res) => {
+  const token = req.query.token;
+  const target = NODE_ENV === 'production' ? '/bvs/reset-password' : 'http://localhost:3000/reset-password';
+  res.redirect(token ? `${target}?token=${token}` : target);
+});
+
 // Store the Python process
 let pythonProcess = null;
 
@@ -304,6 +317,7 @@ const initDatabase = async () => {
           bom JSONB DEFAULT '[]',
           weight NUMERIC,
           cost NUMERIC,
+          image_url TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (master_id) REFERENCES ims_masters(id) ON DELETE CASCADE,
@@ -336,9 +350,11 @@ const initDatabase = async () => {
           await client.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS workspace_id INTEGER`);
         }
         await client.query(`ALTER TABLE ims_scan_events ADD COLUMN IF NOT EXISTS expiry_date TIMESTAMP`);
+        await client.query(`ALTER TABLE ims_scan_events ADD COLUMN IF NOT EXISTS websocket_scan_id VARCHAR(255)`);
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS alert_at NUMERIC DEFAULT 0`);
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS custom_fields JSONB DEFAULT '{}'`);
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS item_type VARCHAR(50) DEFAULT 'Raw Material'`);
+        await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS image_url TEXT`);
       } catch (alterErr) { console.log('Notice: Could not alter tables (might be fresh DB)'); }
       console.log('Starting user migration (batch mode)...');
       // BATCH: Create default workspaces for ALL users that don't have one — in one query
@@ -724,9 +740,17 @@ app.post('/api/auth/register', async (req, res) => {
     const user = result.rows[0];
 
     // Send verification email
-    const clientUrl = process.env.NODE_ENV === 'production'
+    const origin = req.headers.origin;
+    let clientUrl = origin || process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
       ? 'https://robridgelabs.com/bvs'
-      : 'http://localhost:3000';
+      : 'http://localhost:3000');
+    
+    // Normalize clientUrl: ensure it has /bvs subdirectory prefix if in production and not localhost/127.0.0.1
+    const isLocalhost = clientUrl.includes('localhost') || clientUrl.includes('127.0.0.1');
+    if (process.env.NODE_ENV === 'production' && !isLocalhost && !clientUrl.endsWith('/bvs') && !clientUrl.includes('/bvs/')) {
+      clientUrl = clientUrl.replace(/\/$/, '') + '/bvs';
+    }
+    
     const verificationLink = `${clientUrl}/verify-email?token=${verificationToken}`;
     const mailOptions = {
       from: `"RoBridge Support" <${process.env.EMAIL_USER}>`,
@@ -745,8 +769,13 @@ app.post('/api/auth/register', async (req, res) => {
       `
     };
     if (nodemailer && transporter && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-      await transporter.sendMail(mailOptions);
-      console.log(`📧 Verification email sent to ${user.email}`);
+      try {
+        await transporter.sendMail(mailOptions);
+        console.log(`📧 Verification email sent to ${user.email}`);
+      } catch (emailError) {
+        console.error('⚠️ Failed to send verification email, but user was created:', emailError.message);
+        console.log(`⚠️ Fallback Verification link: ${verificationLink}`);
+      }
     } else {
       console.log(`⚠️ Email service unavailable. Verification link: ${verificationLink}`);
     }
@@ -1521,9 +1550,17 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     );
     // Create reset link
     // Changes domain based on environment
-    const clientUrl = process.env.NODE_ENV === 'production'
+    const origin = req.headers.origin;
+    let clientUrl = origin || process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
       ? 'https://robridgelabs.com/bvs' // Adjust if your base path is strictly /bvs
-      : 'http://localhost:3000'; // Development
+      : 'http://localhost:3000'); // Development
+
+    // Normalize clientUrl: ensure it has /bvs subdirectory prefix if in production and not localhost/127.0.0.1
+    const isLocalhost = clientUrl.includes('localhost') || clientUrl.includes('127.0.0.1');
+    if (process.env.NODE_ENV === 'production' && !isLocalhost && !clientUrl.endsWith('/bvs') && !clientUrl.includes('/bvs/')) {
+      clientUrl = clientUrl.replace(/\/$/, '') + '/bvs';
+    }
+
     // IMPORTANT: Frontend route will be /reset-password/:token or /reset-password?token=...
     // We'll use query parameter for simplicity in React Router
     const resetLink = `${clientUrl}/reset-password?token=${token}`;
@@ -1858,16 +1895,13 @@ app.post('/api/esp32/scan/:deviceId', async (req, res) => {
         let itemId = null;
         if (imsItemResult.rows.length > 0) {
           itemId = imsItemResult.rows[0].id;
-          // Just increment stock by 1 for generic scans if it exists
-          await pool.query(
-            'UPDATE ims_items SET stock = stock + 1, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-            [itemId]
-          );
+          // DO NOT increment stock here anymore to avoid double addition!
+          // We just log that we processed the scan.
         } else {
-          // Create new item in catalog
+          // Create new item in catalog with stock = 0
           const newItemResult = await pool.query(
             `INSERT INTO ims_items (workspace_id, master_id, user_id, barcode, name, category, stock) 
-             VALUES ($1, NULL, NULL, $2, $3, 'Uncategorized', 1) RETURNING id`,
+             VALUES ($1, NULL, NULL, $2, $3, 'Uncategorized', 0) RETURNING id`,
              [wsId, barcodeData, `Scanned Item (${barcodeData})`]
           );
           itemId = newItemResult.rows[0].id;
@@ -2227,32 +2261,7 @@ app.put('/api/user/password', authenticateToken, async (req, res) => {
     });
   }
 });
-// API endpoint to save barcode scan data
-app.post('/api/barcodes/save', async (req, res) => {
-  try {
-    const scanData = req.body;
-    // Validate required fields
-    if (!scanData.barcodeData) {
-      return res.status(400).json({
-        success: false,
-        error: 'barcodeData is required'
-      });
-    }
-    // Save to database using existing function
-    const result = await saveBarcodeScan(scanData);
-    res.json({
-      success: true,
-      message: 'Barcode scan saved successfully',
-      data: result
-    });
-  } catch (error) {
-    console.error('Error saving barcode scan:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to save barcode scan'
-    });
-  }
-});
+// Old endpoint removed to prevent conflict with authenticated Route B
 // Get ESP32 devices list - USER SPECIFIC
 app.get('/api/esp32/devices', authenticateToken, async (req, res) => {
   try {
@@ -3345,6 +3354,7 @@ const initTemporaryScansTable = async () => {
         ai_analyzed BOOLEAN DEFAULT false,
         title TEXT,
         country TEXT,
+        is_saved BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `;
@@ -3406,6 +3416,10 @@ const initUserDataIsolation = async () => {
     `;
     await pool.query(addDeviceIdToSavedScansQuery);
     console.log('✅ Added device_id to saved_scans table');
+
+    // ALTER temporary_scans table to add missing is_saved column if not exists
+    await pool.query('ALTER TABLE temporary_scans ADD COLUMN IF NOT EXISTS is_saved BOOLEAN DEFAULT FALSE;');
+    console.log('✅ Added is_saved to temporary_scans table');
 
   } catch (error) {
     console.error('❌ Error setting up user data isolation:', error);
@@ -4021,42 +4035,7 @@ app.delete('/api/saved-scans/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Get scanned barcodes endpoint (with user filtering)
-// Get scanned barcodes from TEMPORARY storage (rolling buffer) - USER SPECIFIC
-app.get('/api/barcodes/scanned', authenticateToken, async (req, res) => {
-  try {
-    const { limit = 75 } = req.query;
-    const userId = req.user.id;
-
-    console.log(`📊 Fetching temporary scans for user ${userId}`);
-
-    // Fetch from temporary_scans table (max 75 scans)
-    const sql = `
-      SELECT
-        id, barcode_data, barcode_type, source,
-        product_name, category, price, description, metadata,
-        created_at, device_id, device_name
-      FROM temporary_scans
-      WHERE user_id = $1
-      ORDER BY created_at DESC
-      LIMIT $2
-    `;
-
-    const result = await pool.query(sql, [userId, limit]);
-    console.log(`✅ Found ${result.rows.length} temporary scans for user ${userId}`);
-
-    res.json({
-      success: true,
-      barcodes: result.rows
-    });
-  } catch (error) {
-    console.error('Error getting temporary scans:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get scanned barcodes'
-    });
-  }
-});
+// Old duplicate endpoint removed to prevent conflict with authenticated Route A
 
 // ============================================
 // DEVICE MANAGEMENT ENDPOINTS
@@ -4990,7 +4969,8 @@ app.get('/api/ims/masters/:masterId/items', authenticateToken, requireWorkspace,
       multiplier: r.multiplier ? Number(r.multiplier) : null,
       supplier: r.supplier || '', locations: r.locations || [],
       bom: r.bom || [], weight: r.weight, cost: r.cost,
-      alertAt: r.alert_at, customFields: r.custom_fields || {}
+      alertAt: r.alert_at, customFields: r.custom_fields || {},
+      imageUrl: r.image_url
     }));
     res.json({ success: true, items });
   } catch (error) {
@@ -5000,18 +4980,18 @@ app.get('/api/ims/masters/:masterId/items', authenticateToken, requireWorkspace,
 
 app.post('/api/ims/masters/:masterId/items', authenticateToken, requireWorkspace, async (req, res) => {
   try {
-    const { barcode, name, category, baseUnit, stock, trackingMode, parentBarcode, multiplier, supplier, locations, bom, weight, cost } = req.body;
+    const { barcode, name, category, baseUnit, stock, trackingMode, parentBarcode, multiplier, supplier, locations, bom, weight, cost, imageUrl } = req.body;
     if (!barcode || !name) return res.status(400).json({ success: false, error: 'Barcode and name are required' });
     const result = await pool.query(
       `INSERT INTO ims_items 
-        (master_id, user_id, workspace_id, barcode, name, category, base_unit, stock, tracking_mode, parent_barcode, multiplier, supplier, locations, bom, weight, cost)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        (master_id, user_id, workspace_id, barcode, name, category, base_unit, stock, tracking_mode, parent_barcode, multiplier, supplier, locations, bom, weight, cost, image_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        ON CONFLICT (master_id, barcode)
-       DO UPDATE SET name=$5, category=$6, base_unit=$7, stock=$8, tracking_mode=$9, parent_barcode=$10, multiplier=$11, supplier=$12, locations=$13, bom=$14, weight=$15, cost=$16, updated_at=CURRENT_TIMESTAMP
+       DO UPDATE SET name=$5, category=$6, base_unit=$7, stock=$8, tracking_mode=$9, parent_barcode=$10, multiplier=$11, supplier=$12, locations=$13, bom=$14, weight=$15, cost=$16, image_url=$17, updated_at=CURRENT_TIMESTAMP
        RETURNING *`,
       [req.params.masterId, req.user.id, req.workspace_id, barcode, name, category||'General', baseUnit||'Unit',
        Number(stock)||0, trackingMode||'FIFO', parentBarcode||null, multiplier?Number(multiplier):null,
-       supplier||null, JSON.stringify(locations||[]), JSON.stringify(bom||[]), weight?Number(weight):null, cost?Number(cost):null]
+       supplier||null, JSON.stringify(locations||[]), JSON.stringify(bom||[]), weight?Number(weight):null, cost?Number(cost):null, imageUrl||null]
     );
     const r = result.rows[0];
     res.json({ success: true, item: {
@@ -5019,7 +4999,8 @@ app.post('/api/ims/masters/:masterId/items', authenticateToken, requireWorkspace
       category: r.category, baseUnit: r.base_unit, stock: Number(r.stock),
       trackingMode: r.tracking_mode, parentBarcode: r.parent_barcode || '',
       multiplier: r.multiplier ? Number(r.multiplier) : null,
-      supplier: r.supplier || '', locations: r.locations || [], bom: r.bom || []
+      supplier: r.supplier || '', locations: r.locations || [], bom: r.bom || [],
+      imageUrl: r.image_url
     }});
   } catch (error) {
     console.error('Error saving item:', error);
@@ -5029,14 +5010,14 @@ app.post('/api/ims/masters/:masterId/items', authenticateToken, requireWorkspace
 
 app.put('/api/ims/masters/:masterId/items/:itemId', authenticateToken, requireWorkspace, async (req, res) => {
   try {
-    const { barcode, name, category, baseUnit, stock, trackingMode, parentBarcode, multiplier, supplier, locations, bom, weight, cost } = req.body;
+    const { barcode, name, category, baseUnit, stock, trackingMode, parentBarcode, multiplier, supplier, locations, bom, weight, cost, imageUrl } = req.body;
     const result = await pool.query(
       `UPDATE ims_items SET barcode=$1, name=$2, category=$3, base_unit=$4, stock=$5, tracking_mode=$6,
-       parent_barcode=$7, multiplier=$8, supplier=$9, locations=$10, bom=$11, weight=$12, cost=$13, updated_at=CURRENT_TIMESTAMP
-       WHERE id=$14 AND master_id=$15 AND workspace_id=$16 RETURNING *`,
+       parent_barcode=$7, multiplier=$8, supplier=$9, locations=$10, bom=$11, weight=$12, cost=$13, image_url=$14, updated_at=CURRENT_TIMESTAMP
+       WHERE id=$15 AND master_id=$16 AND workspace_id=$17 RETURNING *`,
       [barcode, name, category||'General', baseUnit||'Unit', Number(stock)||0, trackingMode||'FIFO',
        parentBarcode||null, multiplier?Number(multiplier):null, supplier||null,
-       JSON.stringify(locations||[]), JSON.stringify(bom||[]), weight?Number(weight):null, cost?Number(cost):null,
+       JSON.stringify(locations||[]), JSON.stringify(bom||[]), weight?Number(weight):null, cost?Number(cost):null, imageUrl||null,
        req.params.itemId, req.params.masterId, req.workspace_id]
     );
     if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Item not found' });
@@ -5214,7 +5195,7 @@ app.get('/api/ims/scanner/lookup/:barcode', authenticateToken, requireWorkspace,
 // Record a scan event and update stock
 app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (req, res) => {
   try {
-    const { barcode, itemId, itemName, workflow, quantity, unit, batchNo, serialNo, notes } = req.body;
+    const { barcode, itemId, itemName, workflow, quantity, unit, batchNo, serialNo, notes, websocketScanId } = req.body;
     if (!barcode || !workflow) return res.status(400).json({ success: false, error: 'barcode and workflow required' });
     const qty = Number(quantity) || 1;
 
@@ -5224,27 +5205,94 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
       return res.status(403).json({ success: false, error: 'Strict Traceability is enabled. Batch No or Serial No is required for this operation.' });
     }
 
+    // ── DEDUPLICATION CHECK ──
+    // 1. Check if this websocketScanId has already been recorded
+    if (websocketScanId) {
+      const dupIdResult = await pool.query(
+        'SELECT id FROM ims_scan_events WHERE workspace_id = $1 AND websocket_scan_id = $2 LIMIT 1',
+        [req.workspace_id, websocketScanId]
+      );
+      if (dupIdResult.rows.length > 0) {
+        console.log(`🚫 Duplicate websocket_scan_id detected on backend: ${websocketScanId}`);
+        const stockRes = await pool.query(
+          'SELECT stock FROM ims_items WHERE workspace_id = $1 AND barcode = $2 LIMIT 1',
+          [req.workspace_id, barcode]
+        );
+        const currentStock = Number(stockRes.rows[0]?.stock || 0);
+        return res.json({ success: true, message: 'Scan already recorded (duplicate ID)', updatedStock: currentStock });
+      }
+    }
+
+    // 2. Check for duplicate scans within 2 seconds window
+    const timeDupResult = await pool.query(
+      `SELECT id FROM ims_scan_events 
+       WHERE workspace_id = $1 AND barcode = $2 AND workflow = $3 
+         AND scanned_at > NOW() - INTERVAL '2 seconds'
+       ORDER BY scanned_at DESC LIMIT 1`,
+      [req.workspace_id, barcode, workflow]
+    );
+    if (timeDupResult.rows.length > 0) {
+      console.log(`🚫 Duplicate timestamp scan detected on backend for barcode: ${barcode}`);
+      const stockRes = await pool.query(
+        'SELECT stock FROM ims_items WHERE workspace_id = $1 AND barcode = $2 LIMIT 1',
+        [req.workspace_id, barcode]
+      );
+      const currentStock = Number(stockRes.rows[0]?.stock || 0);
+      return res.json({ success: true, message: 'Scan already recorded (duplicate timestamp)', updatedStock: currentStock });
+    }
+
+    let resolvedItemId = itemId;
+    if (!resolvedItemId) {
+      // Check if it already exists by barcode
+      const existing = await pool.query(
+        'SELECT id FROM ims_items WHERE workspace_id = $1 AND barcode = $2 LIMIT 1',
+        [req.workspace_id, barcode]
+      );
+      if (existing.rows.length > 0) {
+        resolvedItemId = existing.rows[0].id;
+      } else {
+        // Create new item in catalog
+        const categoryVal = req.body.category || 'General';
+        const trackingModeVal = req.body.trackingMode || 'FIFO';
+        const baseUnitVal = unit || 'Unit';
+        const nameVal = itemName || `Scanned Item (${barcode})`;
+        
+        const insertResult = await pool.query(
+          `INSERT INTO ims_items (workspace_id, master_id, user_id, barcode, name, category, base_unit, tracking_mode, stock) 
+           VALUES ($1, NULL, $2, $3, $4, $5, $6, $7, 0) RETURNING id`,
+          [req.workspace_id, req.user.id, barcode, nameVal, categoryVal, baseUnitVal, trackingModeVal]
+        );
+        resolvedItemId = insertResult.rows[0].id;
+      }
+    }
+
     // Insert scan event
     await pool.query(
-      `INSERT INTO ims_scan_events (user_id, workspace_id, barcode, item_id, item_name, workflow, quantity, unit, batch_no, serial_no, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [req.user.id, req.workspace_id, barcode, itemId||null, itemName||null, workflow, qty, unit||null, batchNo||null, serialNo||null, notes||null]
+      `INSERT INTO ims_scan_events (user_id, workspace_id, barcode, item_id, item_name, workflow, quantity, unit, batch_no, serial_no, notes, websocket_scan_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [req.user.id, req.workspace_id, barcode, resolvedItemId||null, itemName||null, workflow, qty, unit||null, batchNo||null, serialNo||null, notes||null, websocketScanId||null]
     );
 
     // Adjust stock if item exists in catalog
-    if (itemId) {
+    let updatedStock = 0;
+    if (resolvedItemId) {
       const wf = workflow.toUpperCase();
       // IN-type operations increase stock, OUT-type decrease
       const inOps = ['RECEIVE', 'IN', 'RETURN', 'PUTAWAY', 'RESTOCK'];
       const outOps = ['DISPATCH', 'OUT', 'PICK', 'ISSUE', 'SHIP'];
       if (inOps.some(op => wf.includes(op))) {
-        await pool.query('UPDATE ims_items SET stock = stock + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND workspace_id = $3', [qty, itemId, req.workspace_id]);
+        const updateRes = await pool.query('UPDATE ims_items SET stock = stock + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND workspace_id = $3 RETURNING stock', [qty, resolvedItemId, req.workspace_id]);
+        updatedStock = Number(updateRes.rows[0]?.stock || 0);
       } else if (outOps.some(op => wf.includes(op))) {
-        await pool.query('UPDATE ims_items SET stock = GREATEST(stock - $1, 0), updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND workspace_id = $3', [qty, itemId, req.workspace_id]);
+        const updateRes = await pool.query('UPDATE ims_items SET stock = GREATEST(stock - $1, 0), updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND workspace_id = $3 RETURNING stock', [qty, resolvedItemId, req.workspace_id]);
+        updatedStock = Number(updateRes.rows[0]?.stock || 0);
+      } else {
+        const stockRes = await pool.query('SELECT stock FROM ims_items WHERE id = $1 AND workspace_id = $2', [resolvedItemId, req.workspace_id]);
+        updatedStock = Number(stockRes.rows[0]?.stock || 0);
       }
     }
 
-    res.json({ success: true, message: 'Scan recorded' });
+    res.json({ success: true, message: 'Scan recorded', updatedStock });
   } catch (error) {
     console.error('Scan error:', error);
     res.status(500).json({ success: false, error: 'Failed to record scan' });
@@ -5341,6 +5389,21 @@ app.get('/api/ims/dashboard', authenticateToken, requireWorkspace, async (req, r
   try {
     const wsId = req.workspace_id;
 
+    // Helper to format Date objects as YYYY-MM-DD timezone-safely
+    const getLocalDateString = (dateObj) => {
+      if (typeof dateObj === 'string') {
+        if (/^\d{4}-\d{2}-\d{2}/.test(dateObj)) {
+          return dateObj.substring(0, 10);
+        }
+      }
+      const d = new Date(dateObj);
+      if (isNaN(d.getTime())) return '';
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
     // Total items + stock
     const itemStats = await pool.query(
       `SELECT COUNT(*)::int as total_skus, COALESCE(SUM(stock),0)::int as total_stock FROM ims_items WHERE workspace_id = $1`,
@@ -5386,6 +5449,138 @@ app.get('/api/ims/dashboard', authenticateToken, requireWorkspace, async (req, r
       [wsId]
     );
 
+    // 1. Live Production WIP Workflows
+    const activeWorkorders = await pool.query(
+      `SELECT id, wo_number, product_name, target_qty, built_qty, status, due_date
+       FROM ims_workorders
+       WHERE workspace_id = $1 AND status IN ('PENDING', 'IN_PROGRESS', 'QC')
+       ORDER BY created_at DESC LIMIT 5`,
+      [wsId]
+    );
+
+    const formattedWip = activeWorkorders.rows.map(w => {
+      const progress = w.target_qty > 0 ? Math.round((w.built_qty / w.target_qty) * 100) : 0;
+      let statusLabel = w.status;
+      if (w.status === 'IN_PROGRESS') statusLabel = 'In Progress';
+      else if (w.status === 'PENDING') statusLabel = 'Pending';
+      else if (w.status === 'QC') statusLabel = 'QC Check';
+
+      let dueLabel = 'No Date';
+      if (w.due_date) {
+        const d = new Date(w.due_date);
+        const today = new Date();
+        const tomorrow = new Date();
+        tomorrow.setDate(today.getDate() + 1);
+
+        const dStr = d.toDateString();
+        if (dStr === today.toDateString()) {
+          dueLabel = 'Today';
+        } else if (dStr === tomorrow.toDateString()) {
+          dueLabel = 'Tomorrow';
+        } else {
+          dueLabel = getLocalDateString(d);
+        }
+      }
+
+      return {
+        order: w.wo_number,
+        product: w.product_name,
+        progress,
+        status: statusLabel,
+        due: dueLabel
+      };
+    });
+
+    const activeWipCountRes = await pool.query(
+      `SELECT COUNT(*)::int as count FROM ims_workorders
+       WHERE workspace_id = $1 AND status IN ('PENDING', 'IN_PROGRESS', 'QC')`,
+      [wsId]
+    );
+    const activeWorkordersCount = activeWipCountRes.rows[0]?.count || 0;
+
+    // 2. Dynamic Expiry Risk Timeline (Items expiring in the next 30 days)
+    const expiryResult = await pool.query(
+      `WITH batch_stock AS (
+         SELECT 
+           se.barcode,
+           i.name as product_name,
+           se.batch_no,
+           se.expiry_date,
+           COALESCE(SUM(CASE WHEN se.workflow IN ('INWARD', 'ADD', 'RECEIVE', 'PUTAWAY', 'RESTOCK', 'RETURN') THEN se.quantity ELSE 0 END), 0) -
+           COALESCE(SUM(CASE WHEN se.workflow IN ('OUTWARD', 'REMOVE', 'BOM_CONSUMPTION', 'DISPATCH', 'ISSUE', 'PICK', 'SHIP') THEN se.quantity ELSE 0 END), 0) as current_qty
+         FROM ims_scan_events se
+         JOIN ims_items i ON i.barcode = se.barcode AND i.workspace_id = se.workspace_id
+         WHERE se.workspace_id = $1 AND se.expiry_date IS NOT NULL
+         GROUP BY se.barcode, i.name, se.batch_no, se.expiry_date
+       )
+       SELECT barcode, product_name, batch_no, expiry_date, current_qty
+       FROM batch_stock
+       WHERE current_qty > 0
+       ORDER BY expiry_date ASC`,
+      [wsId]
+    );
+
+    const expiryItems = expiryResult.rows.map(row => {
+      const expiryDate = new Date(row.expiry_date);
+      const now = new Date();
+      // Zero out hours to calculate exact day differences
+      now.setHours(0, 0, 0, 0);
+      const tempExp = new Date(expiryDate);
+      tempExp.setHours(0, 0, 0, 0);
+      const diffTime = tempExp - now;
+      const daysUntil = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      let zone = 'month';
+      if (daysUntil <= 7) zone = 'week';
+      else if (daysUntil <= 14) zone = 'two_weeks';
+
+      return {
+        barcode: row.barcode,
+        product: row.product_name,
+        batchNo: row.batch_no,
+        expiry: getLocalDateString(row.expiry_date),
+        daysUntil,
+        stock: Number(row.current_qty),
+        zone
+      };
+    }).filter(item => item.daysUntil <= 30); // Risk timeline limit to 30 days
+
+    // 3. Weekly Movement Trends (IN vs OUT for last 7 days)
+    const dates = [];
+    const trendLabels = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      dates.push(getLocalDateString(d));
+      trendLabels.push(d.toLocaleDateString('en-US', { weekday: 'short' }));
+    }
+
+    const trendResult = await pool.query(
+      `SELECT 
+         TO_CHAR(scanned_at, 'YYYY-MM-DD') as event_date,
+         SUM(CASE WHEN workflow IN ('INWARD', 'ADD', 'RECEIVE', 'PUTAWAY', 'RESTOCK', 'RETURN') THEN quantity ELSE 0 END)::int as in_qty,
+         SUM(CASE WHEN workflow IN ('OUTWARD', 'REMOVE', 'BOM_CONSUMPTION', 'DISPATCH', 'ISSUE', 'PICK', 'SHIP') THEN quantity ELSE 0 END)::int as out_qty
+       FROM ims_scan_events
+       WHERE workspace_id = $1 AND scanned_at >= CURRENT_DATE - INTERVAL '6 days'
+       GROUP BY TO_CHAR(scanned_at, 'YYYY-MM-DD')
+       ORDER BY TO_CHAR(scanned_at, 'YYYY-MM-DD') ASC`,
+      [wsId]
+    );
+
+    const inData = dates.map(date => {
+      const row = trendResult.rows.find(r => r.event_date === date);
+      return row ? row.in_qty : 0;
+    });
+
+    const outData = dates.map(date => {
+      const row = trendResult.rows.find(r => r.event_date === date);
+      return row ? row.out_qty : 0;
+    });
+
+    const trends = [
+      { name: 'Stock IN', color: '#27ae60', data: inData },
+      { name: 'Stock OUT', color: '#e74c3c', data: outData }
+    ];
+
     res.json({
       success: true,
       dashboard: {
@@ -5395,7 +5590,12 @@ app.get('/api/ims/dashboard', authenticateToken, requireWorkspace, async (req, r
         lowStockCount: lowStock.rows.length,
         lowStockItems: lowStock.rows,
         recentActivity: recentActivity.rows,
-        categoryBreakdown: categoryBreakdown.rows
+        categoryBreakdown: categoryBreakdown.rows,
+        wip: formattedWip,
+        activeWorkordersCount,
+        expiry: expiryItems,
+        trends,
+        trendLabels
       }
     });
   } catch (error) {
@@ -5537,10 +5737,21 @@ app.put('/api/ims/workorders/:id/status', authenticateToken, requireWorkspace, a
       }
       // Add finished product to stock
       if (w.product_barcode) {
-        await client.query(
-          `UPDATE ims_items SET stock = stock + $1, updated_at=CURRENT_TIMESTAMP WHERE barcode=$2 AND workspace_id=$3`,
-          [w.target_qty, w.product_barcode, req.workspace_id]
+        const scannedRes = await client.query(
+          `SELECT COALESCE(SUM(quantity), 0) as scanned_qty 
+           FROM ims_scan_events 
+           WHERE workspace_id = $1 AND barcode = $2 AND notes = $3`,
+          [req.workspace_id, w.product_barcode, 'WO:' + w.wo_number]
         );
+        const scannedQty = Number(scannedRes.rows[0].scanned_qty || 0);
+        const remainingQty = Math.max(0, Number(w.target_qty) - scannedQty);
+
+        if (remainingQty > 0) {
+          await client.query(
+            `UPDATE ims_items SET stock = stock + $1, updated_at=CURRENT_TIMESTAMP WHERE barcode=$2 AND workspace_id=$3`,
+            [remainingQty, w.product_barcode, req.workspace_id]
+          );
+        }
       }
     }
     await client.query(
@@ -5650,12 +5861,24 @@ app.post('/api/ims/grn/:id/approve', authenticateToken, requireWorkspace, requir
     const items = await client.query('SELECT * FROM ims_grn_items WHERE grn_id=$1', [req.params.id]);
     for (const it of items.rows) {
       const qty = Number(it.received_qty);
-      if (g.type === 'INWARD') {
-        await client.query(`UPDATE ims_items SET stock=stock+$1,updated_at=CURRENT_TIMESTAMP WHERE barcode=$2 AND workspace_id=$3`, [qty, it.barcode, req.workspace_id]);
-        await client.query(`INSERT INTO ims_scan_events (user_id,workspace_id,barcode,item_name,workflow,quantity,notes) VALUES ($1,$2,$3,$4,'RECEIVE',$5,'GRN:'||$6)`, [req.user.id, req.workspace_id, it.barcode, it.name, qty, g.doc_no]);
-      } else {
-        await client.query(`UPDATE ims_items SET stock=GREATEST(stock-$1,0),updated_at=CURRENT_TIMESTAMP WHERE barcode=$2 AND workspace_id=$3`, [qty, it.barcode, req.workspace_id]);
-        await client.query(`INSERT INTO ims_scan_events (user_id,workspace_id,barcode,item_name,workflow,quantity,notes) VALUES ($1,$2,$3,$4,'DISPATCH',$5,'DN:'||$6)`, [req.user.id, req.workspace_id, it.barcode, it.name, qty, g.doc_no]);
+      const notesVal = g.type === 'INWARD' ? 'GRN:' + g.doc_no : 'DN:' + g.doc_no;
+      const scannedRes = await client.query(
+        `SELECT COALESCE(SUM(quantity), 0) as scanned_qty 
+         FROM ims_scan_events 
+         WHERE workspace_id = $1 AND barcode = $2 AND notes = $3`,
+        [req.workspace_id, it.barcode, notesVal]
+      );
+      const scannedQty = Number(scannedRes.rows[0].scanned_qty || 0);
+      const remainingQty = Math.max(0, qty - scannedQty);
+
+      if (remainingQty > 0) {
+        if (g.type === 'INWARD') {
+          await client.query(`UPDATE ims_items SET stock=stock+$1,updated_at=CURRENT_TIMESTAMP WHERE barcode=$2 AND workspace_id=$3`, [remainingQty, it.barcode, req.workspace_id]);
+          await client.query(`INSERT INTO ims_scan_events (user_id,workspace_id,barcode,item_name,workflow,quantity,notes) VALUES ($1,$2,$3,$4,'RECEIVE',$5,$6)`, [req.user.id, req.workspace_id, it.barcode, it.name, remainingQty, notesVal]);
+        } else {
+          await client.query(`UPDATE ims_items SET stock=GREATEST(stock-$1,0),updated_at=CURRENT_TIMESTAMP WHERE barcode=$2 AND workspace_id=$3`, [remainingQty, it.barcode, req.workspace_id]);
+          await client.query(`INSERT INTO ims_scan_events (user_id,workspace_id,barcode,item_name,workflow,quantity,notes) VALUES ($1,$2,$3,$4,'DISPATCH',$5,$6)`, [req.user.id, req.workspace_id, it.barcode, it.name, remainingQty, notesVal]);
+        }
       }
     }
     await client.query(`UPDATE ims_grn SET status='APPROVED',approved_by=$1,approved_at=CURRENT_TIMESTAMP WHERE id=$2`, [req.user.id, req.params.id]);

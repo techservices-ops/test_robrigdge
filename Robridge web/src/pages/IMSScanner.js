@@ -3,7 +3,7 @@ import {
   FaBarcode, FaSearch, FaCheckCircle, FaExclamationCircle,
   FaPlus, FaTimes, FaClock,
   FaCubes, FaLayerGroup, FaTag, FaBoxOpen, FaSave,
-  FaCogs, FaFileInvoice, FaTruck, FaArrowDown, FaArrowUp
+  FaCogs, FaFileInvoice, FaTruck, FaArrowDown, FaArrowUp, FaChevronDown, FaFilter
 } from 'react-icons/fa';
 import './IMSScanner.css';
 import { useWorkspace } from '../contexts/WorkspaceContext';
@@ -34,8 +34,26 @@ const IMSScanner = () => {
   const [fefoRec, setFefoRec] = useState([]);
   const [dynamicCategories, setDynamicCategories] = useState(['General', 'Pharmacy', 'PPE', 'Hygiene', 'Electronics', 'Food & Beverage']);
   const inputRef = useRef(null);
+  const isScanningRef = useRef(false); // guard against concurrent doScan() calls
+  const lastScanTimeRef = useRef(0);
+  const lastScanBarcodeRef = useRef('');
   // GRN/Dispatch/WO verify-scan result state
   const [scanMatch, setScanMatch] = useState(null); // { matched, type, data, message }
+  const [searchQuery, setSearchQuery] = useState('');
+  const [actionFilter, setActionFilter] = useState('All');
+  const [showActionDropdown, setShowActionDropdown] = useState(false);
+  const actionDropdownRef = useRef(null);
+
+  // Close action dropdown when clicking outside
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (actionDropdownRef.current && !actionDropdownRef.current.contains(e.target)) {
+        setShowActionDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   // Fetch recent scan events
   const fetchEvents = async () => {
@@ -68,7 +86,7 @@ const IMSScanner = () => {
       if (lastProcessedScanRef.current === latestScan.timestamp) return;
       lastProcessedScanRef.current = latestScan.timestamp;
       
-      doScan(latestScan.barcodeData);
+      doScan(latestScan.barcodeData, latestScan.id);
     }
   }, [latestScan]);
 
@@ -104,9 +122,9 @@ const IMSScanner = () => {
     loadData();
   }, [activeWorkspaceId]);
 
-  const recordScanEvent = async (item, workflow, qty = 1, batch = '', serial = '', nameFallback = '') => {
+  const recordScanEvent = async (item, workflow, qty = 1, batch = '', serial = '', nameFallback = '', notes = '', websocketScanId = '') => {
     try {
-      await imsFetch('/api/ims/scanner/scan', {
+      const res = await imsFetch('/api/ims/scanner/scan', {
         method: 'POST',
         body: JSON.stringify({
           barcode: item ? item.barcode : newItemBarcode,
@@ -115,10 +133,20 @@ const IMSScanner = () => {
           workflow,
           quantity: qty,
           unit: item ? item.baseUnit : onboardForm.unit,
+          category: item ? item.category : onboardForm.category,
+          trackingMode: item ? item.trackingMode : onboardForm.tracking,
           batchNo: batch,
-          serialNo: serial
+          serialNo: serial,
+          notes: notes,
+          websocketScanId: websocketScanId
         })
       });
+      const data = await res.json();
+      if (data.success && data.updatedStock !== undefined) {
+        if (item) {
+          setFoundItem({ ...item, stock: data.updatedStock });
+        }
+      }
       fetchEvents();
     } catch (e) { console.error('Error recording scan'); }
   };
@@ -126,9 +154,22 @@ const IMSScanner = () => {
   const isGrnMode = (stage) => stage === 'RECEIVE' || stage === 'DISPATCH';
   const isWoMode = (stage) => stage === 'PUTAWAY';
 
-  const doScan = async (code) => {
+  const doScan = async (code, websocketScanId = null) => {
     const val = code || scanInput.trim();
     if (!val) return;
+
+    // Debounce: ignore scans of the exact same barcode within 2500ms
+    const now = Date.now();
+    if (val === lastScanBarcodeRef.current && now - lastScanTimeRef.current < 2500) {
+      console.log('🚫 Ignoring duplicate scan (debounce):', val);
+      return;
+    }
+    lastScanBarcodeRef.current = val;
+    lastScanTimeRef.current = now;
+
+    // Prevent double-firing from concurrent event sources (WebSocket + keyboard/button)
+    if (isScanningRef.current) return;
+    isScanningRef.current = true;
     localStorage.setItem('ims_last_scanned_barcode', val);
     setScanning(true);
     setScanResult(null);
@@ -152,16 +193,48 @@ const IMSScanner = () => {
         try {
           const lookupRes = await imsFetch(`/api/ims/scanner/lookup/${encodeURIComponent(val)}`);
           const lookupData = await lookupRes.json();
+          let itemToLog = null;
           if (lookupData.success && lookupData.found) {
+            itemToLog = lookupData.item;
             setFoundItem(lookupData.item);
-            if (autoLogEnabled) {
-              await recordScanEvent(lookupData.item, scanStage, 1);
+          } else if (data.matched) {
+            // Construct a temporary catalog item from GRN item info
+            itemToLog = {
+              name: data.item.name,
+              barcode: val,
+              category: 'General',
+              baseUnit: data.item.unit || 'Unit',
+              trackingMode: 'FIFO',
+              stock: 0
+            };
+            setFoundItem(itemToLog);
+          } else {
+            // Not in catalog and not on GRN/WO -> trigger onboarding
+            setScanResult('unknown');
+            setNewItemBarcode(val);
+            setShowOnboard(true);
+            
+            setScanning(false);
+            setScanInput('');
+            isScanningRef.current = false;
+            setTimeout(() => inputRef.current?.focus(), 300);
+            return;
+          }
+
+          if (autoLogEnabled && itemToLog) {
+            if (data.matched) {
+              const prefix = scanStage === 'DISPATCH' ? 'DN:' : 'GRN:';
+              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', prefix + data.grn.docNo, websocketScanId);
+            } else {
+              // Standalone scan (not matching GRN but autoLog is enabled)
+              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', '', websocketScanId);
             }
           }
         } catch (e) { /* catalog lookup failure is non-fatal */ }
 
         setScanning(false);
         setScanInput('');
+        isScanningRef.current = false;
         setTimeout(() => inputRef.current?.focus(), 300);
         return;
       }
@@ -180,16 +253,47 @@ const IMSScanner = () => {
         try {
           const lookupRes = await imsFetch(`/api/ims/scanner/lookup/${encodeURIComponent(val)}`);
           const lookupData = await lookupRes.json();
+          let itemToLog = null;
           if (lookupData.success && lookupData.found) {
+            itemToLog = lookupData.item;
             setFoundItem(lookupData.item);
-            if (autoLogEnabled) {
-              await recordScanEvent(lookupData.item, scanStage, 1);
+          } else if (data.matched) {
+            // Construct a temporary catalog item from WO info
+            itemToLog = {
+              name: data.wo.productName,
+              barcode: val,
+              category: 'General',
+              baseUnit: 'Unit',
+              trackingMode: 'FIFO',
+              stock: 0
+            };
+            setFoundItem(itemToLog);
+          } else {
+            // Not in catalog and not on Work Order -> trigger onboarding
+            setScanResult('unknown');
+            setNewItemBarcode(val);
+            setShowOnboard(true);
+            
+            setScanning(false);
+            setScanInput('');
+            isScanningRef.current = false;
+            setTimeout(() => inputRef.current?.focus(), 300);
+            return;
+          }
+
+          if (autoLogEnabled && itemToLog) {
+            if (data.matched) {
+              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', 'WO:' + data.wo.woNumber, websocketScanId);
+            } else {
+              // Standalone scan
+              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', '', websocketScanId);
             }
           }
         } catch (e) { /* catalog lookup failure is non-fatal */ }
 
         setScanning(false);
         setScanInput('');
+        isScanningRef.current = false;
         setTimeout(() => inputRef.current?.focus(), 300);
         return;
       }
@@ -208,13 +312,9 @@ const IMSScanner = () => {
             if (fd.success) setFefoRec(fd.recommendation || []);
           } catch(e) { setFefoRec([]); }
         } else { setFefoRec([]); }
-        if (autoLogEnabled) {
-          setScanResult('known');
-          await recordScanEvent(data.item, scanStage, 1);
-          setTimeout(() => inputRef.current?.focus(), 100);
-        } else {
-          setScanResult('pending_confirm');
-        }
+        setScanResult('known');
+        await recordScanEvent(data.item, scanStage, 1, '', '', '', '', websocketScanId);
+        setTimeout(() => inputRef.current?.focus(), 100);
       } else {
         setScanResult('unknown');
         setNewItemBarcode(val);
@@ -225,18 +325,28 @@ const IMSScanner = () => {
       setScanResult('error');
     }
     setScanInput('');
+    isScanningRef.current = false;
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter') doScan();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      doScan();
+    }
   };
 
 
   const handleOnboardSave = async () => {
-    // For unknown items, we don't insert into catalog automatically yet, just record the scan event
-    await recordScanEvent(null, scanStage, onboardForm.qty || 1, '', '', onboardForm.name || 'New Item');
+    const tempItem = {
+      name: onboardForm.name || 'New Item',
+      barcode: newItemBarcode,
+      category: onboardForm.category,
+      baseUnit: onboardForm.unit,
+      trackingMode: onboardForm.tracking,
+      stock: 0
+    };
+    await recordScanEvent(tempItem, scanStage, onboardForm.qty || 1, '', '', tempItem.name);
     setShowOnboard(false);
-    setScanResult('onboarded');
     setOnboardForm({ name: '', category: 'General', unit: 'Unit', qty: '', tracking: 'FIFO' });
     setTimeout(() => inputRef.current?.focus(), 100);
   };
@@ -249,6 +359,45 @@ const IMSScanner = () => {
       setFoundItem(null);
       inputRef.current?.focus();
     }, 1200);
+  };
+
+  const filteredLog = scanLog.filter(entry => {
+    const matchesSearch = 
+      entry.barcode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      entry.product.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      entry.action.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesAction = 
+      actionFilter === 'All' || 
+      entry.action.toUpperCase() === actionFilter.toUpperCase();
+    
+    return matchesSearch && matchesAction;
+  });
+
+  const exportToCSV = () => {
+    if (filteredLog.length === 0) return;
+    const headers = ['Time', 'Action', 'Barcode', 'Product', 'Quantity', 'Traceability'];
+    const rows = filteredLog.map(entry => [
+      entry.time,
+      entry.action,
+      entry.barcode,
+      entry.product,
+      entry.qty,
+      entry.trace || '-'
+    ]);
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `scan_history_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
 
@@ -391,7 +540,7 @@ const IMSScanner = () => {
 
         {/* Right — Product Info */}
         <div className="scanner-right">
-          {(scanResult === 'known' || scanResult === 'pending_confirm' || scanResult === 'scan_match' || scanResult === 'scan_nomatch') && foundItem ? (
+          {foundItem ? (
             <div className="found-item-card">
               <div className="found-header">
                 <div className="found-name">{foundItem.name}</div>
@@ -466,22 +615,22 @@ const IMSScanner = () => {
                   <span className="fd-value">{foundItem.location}</span>
                 </div>
               </div>
-              {scanResult === 'known' ? (
-                 <div className="found-actions" style={{ justifyContent: 'center', background: '#f0fff5', borderTop: '1px solid #c3e6cb', color: '#155724', padding: '12px', fontWeight: 'bold' }}>
-                   <FaCheckCircle style={{ marginRight: '8px' }} /> Successfully Auto-Logged
-                 </div>
+              {scanMatch === null ? (
+                <div className="found-actions" style={{ justifyContent: 'center', background: '#f0fff5', borderTop: '1px solid #c3e6cb', color: '#155724', padding: '12px', fontWeight: 'bold', width: '100%' }}>
+                  <FaCheckCircle style={{ marginRight: '8px' }} /> Successfully Auto-Logged
+                </div>
+              ) : scanMatch.matched ? (
+                <div className="found-actions" style={{ justifyContent: 'center', background: '#f0fff5', borderTop: '1px solid #c3e6cb', color: '#155724', padding: '12px', fontWeight: 'bold', width: '100%' }}>
+                  <FaCheckCircle style={{ marginRight: '8px' }} /> Verification Successful — Logged
+                </div>
+              ) : autoLogEnabled ? (
+                <div className="found-actions" style={{ justifyContent: 'center', background: '#fff9e6', borderTop: '1px solid #ffeeba', color: '#856404', padding: '12px', fontWeight: 'bold', width: '100%' }}>
+                  <FaExclamationCircle style={{ marginRight: '8px' }} /> Verification Failed — Logged as Standalone
+                </div>
               ) : (
-                 <>
-                    <div className="traceability-inputs" style={{ padding: '0 20px 15px', display: 'flex', gap: '10px' }}>
-                      <input className="form-input" placeholder="Batch No (Opt)" value={batchNo} onChange={e=>setBatchNo(e.target.value)} style={{ flex: 1 }} />
-                      <input className="form-input" placeholder="Serial No (Opt)" value={serialNo} onChange={e=>setSerialNo(e.target.value)} style={{ flex: 1 }} />
-                    </div>
-                    <div className="found-actions">
-                      <button className="btn btn-primary" onClick={handleConfirmAction} style={{ width: '100%' }}>
-                        <FaCheckCircle /> Confirm {scanStage} (1 {foundItem.baseUnit})
-                      </button>
-                    </div>
-                 </>
+                <div className="found-actions" style={{ justifyContent: 'center', background: '#fff0f0', borderTop: '1px solid #f5c6cb', color: '#721c24', padding: '12px', fontWeight: 'bold', width: '100%' }}>
+                  <FaExclamationCircle style={{ marginRight: '8px' }} /> Verification Failed — Not Logged
+                </div>
               )}
             </div>
           ) : (
@@ -502,18 +651,40 @@ const IMSScanner = () => {
                <FaClock style={{ color: '#e3821e', fontSize: '20px' }} />
                <h2 style={{ margin: 0, fontSize: '18px' }}>Scan History Explorer</h2>
             </div>
-            <div style={{ display: 'flex', gap: '12px' }}>
-                <div className="search-input" style={{ width: '250px' }}>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <div className="logs-search-wrapper" style={{ width: '220px' }}>
                   <FaSearch className="search-icon" />
-                  <input type="text" placeholder="Search logs..." />
+                  <input
+                    type="text"
+                    placeholder="Search logs..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                  />
                 </div>
-                 <div className="filter-dropdown">
-                   <select>
-                     <option>All Actions</option>
-                     {dynamicStages.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                   </select>
-                 </div>
-                <button className="btn btn-secondary">Export CSV</button>
+                <div className="action-dropdown-wrapper" ref={actionDropdownRef}>
+                  <button
+                    className="action-dropdown-trigger"
+                    onClick={() => setShowActionDropdown(v => !v)}
+                  >
+                    <FaFilter className="action-dd-icon" />
+                    <span>{actionFilter === 'All' ? 'All Actions' : actionFilter}</span>
+                    <FaChevronDown className={`action-dd-chevron${showActionDropdown ? ' open' : ''}`} />
+                  </button>
+                  {showActionDropdown && (
+                    <div className="action-dropdown-menu">
+                      {['All', ...dynamicStages.map(s => s.name)].map(opt => (
+                        <button
+                          key={opt}
+                          className={`action-dd-option${actionFilter === opt ? ' selected' : ''}`}
+                          onClick={() => { setActionFilter(opt); setShowActionDropdown(false); }}
+                        >
+                          {opt === 'All' ? 'All Actions' : opt}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button className="btn btn-secondary export-csv-btn" onClick={exportToCSV}>Export CSV</button>
             </div>
           </div>
           <div className="card-body" style={{ padding: 0 }}>
@@ -532,7 +703,7 @@ const IMSScanner = () => {
                       </tr>
                    </thead>
                    <tbody>
-                      {scanLog.map((entry, i) => (
+                      {filteredLog.map((entry, i) => (
                          <tr key={`log-${i}`}>
                             <td style={{ color: '#5f6368', fontSize: '13px' }}>{entry.time}</td>
                             <td><span className={`log-action-badge action-${entry.action.toLowerCase()}`}>{entry.action}</span></td>
@@ -548,10 +719,10 @@ const IMSScanner = () => {
                             </td>
                          </tr>
                       ))}
-                      {scanLog.length === 0 && (
+                      {filteredLog.length === 0 && (
                          <tr>
                             <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: '#95a5a6' }}>
-                               No scans logged in this session yet.
+                               No matching scans found.
                             </td>
                          </tr>
                       )}

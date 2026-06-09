@@ -351,7 +351,7 @@ export default function IMSGrn() {
                     {lineItems.map((it, i) => {
                       const o = Number(it.orderedQty) || 0;
                       const r = Number(it.receivedQty) || 0;
-                      let rStyle = { padding: '4px 8px', fontSize: 13, fontWeight: 'bold' };
+                      let rStyle = { padding: '4px 8px', fontSize: 12, minWidth: '70px' };
                       if (it.barcode && r > 0) {
                         if (r === o) rStyle.color = '#27ae60'; // Green - Match
                         else if (r > o && o > 0) rStyle.color = '#e67e22'; // Orange - Overage
@@ -361,12 +361,12 @@ export default function IMSGrn() {
                       
                       return (
                       <tr key={i}>
-                        <td><input className="form-input" style={{ padding: '4px 8px', fontSize: 12, background: '#f5f6fa' }} value={it.barcode} readOnly /></td>
-                        <td><input className="form-input" style={{ padding: '4px 8px', fontSize: 12, background: '#f5f6fa' }} value={it.name} readOnly /></td>
-                        <td><input className="form-input" type="number" style={{ padding: '4px 8px', fontSize: 12, background: '#f5f6fa' }} value={it.orderedQty} readOnly /></td>
-                        <td><input className="form-input" type="number" style={{...rStyle, background: '#f5f6fa'}} value={it.receivedQty} readOnly /></td>
-                        <td><input className="form-input" style={{ padding: '4px 8px', fontSize: 12, background: '#f5f6fa' }} value={it.unit} readOnly /></td>
-                        <td><button style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer' }} onClick={() => setLineItems(p => p.filter((_, j) => j !== i))}><FaTrash /></button></td>
+                        <td style={{ padding: '4px' }}><input className="form-input" style={{ padding: '4px 8px', fontSize: 12 }} value={it.barcode} onChange={e => { const n = [...lineItems]; n[i].barcode = e.target.value; setLineItems(n); }} placeholder="Barcode" /></td>
+                        <td style={{ padding: '4px' }}><input className="form-input" style={{ padding: '4px 8px', fontSize: 12 }} value={it.name} onChange={e => { const n = [...lineItems]; n[i].name = e.target.value; setLineItems(n); }} placeholder="Name" /></td>
+                        <td style={{ padding: '4px' }}><input className="form-input" type="number" style={{ padding: '4px 8px', fontSize: 12, minWidth: '70px' }} value={it.orderedQty} onChange={e => { const n = [...lineItems]; n[i].orderedQty = e.target.value; setLineItems(n); }} placeholder="0" /></td>
+                        <td style={{ padding: '4px' }}><input className="form-input" type="number" style={{...rStyle}} value={it.receivedQty} onChange={e => { const n = [...lineItems]; n[i].receivedQty = e.target.value; setLineItems(n); }} placeholder="0" /></td>
+                        <td style={{ padding: '4px' }}><input className="form-input" style={{ padding: '4px 8px', fontSize: 12, background: '#f5f6fa', color: '#7f8c8d' }} value="pcs" readOnly title="Fixed Unit" /></td>
+                        <td style={{ padding: '4px', textAlign: 'center' }}><button style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer' }} onClick={() => setLineItems(p => p.filter((_, j) => j !== i))}><FaTrash /></button></td>
                       </tr>
                     )})}
                   </tbody>

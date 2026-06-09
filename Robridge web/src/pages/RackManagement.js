@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getServerURL } from '../config/api';
 import {
   FaWarehouse,
   FaPlus,
@@ -16,6 +17,7 @@ import './RackManagement.css';
 
 import { showToast } from '../components/Toast';
 const RackManagement = () => {
+  const serverURL = getServerURL();
   const [racks, setRacks] = useState([]);
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -53,7 +55,7 @@ const RackManagement = () => {
 
   const checkConnection = async () => {
     try {
-      const response = await fetch('https://robridge-express-zl9j.onrender.com/api/health');
+      const response = await fetch(`${serverURL}/api/health`);
       if (response.ok) {
         setConnectionStatus('connected');
       } else {
@@ -78,7 +80,6 @@ const RackManagement = () => {
       if (filterStatus !== 'all') params.append('status', filterStatus);
 
       console.log('Loading racks with params:', params.toString());
-      const serverURL = 'https://robridge-express-zl9j.onrender.com';
       const response = await fetch(`${serverURL}/api/racks?${params.toString()}`);
       console.log('Racks response status:', response.status);
 
@@ -131,7 +132,7 @@ const RackManagement = () => {
   const loadStats = async () => {
     try {
       console.log('Loading stats...');
-      const response = await fetch('https://robridge-express-zl9j.onrender.com/api/racks/stats');
+      const response = await fetch(`${serverURL}/api/racks/stats`);
       console.log('Stats response status:', response.status);
 
       if (!response.ok) {
@@ -185,7 +186,7 @@ const RackManagement = () => {
     setIsSaving(true);
 
     try {
-      const response = await fetch('https://robridge-express-zl9j.onrender.com/api/racks', {
+      const response = await fetch(`${serverURL}/api/racks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -231,7 +232,7 @@ const RackManagement = () => {
     setIsSaving(true);
 
     try {
-      const response = await fetch(`https://robridge-express-zl9j.onrender.com/api/racks/${editingRack.id}`, {
+      const response = await fetch(`${serverURL}/api/racks/${editingRack.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -261,7 +262,7 @@ const RackManagement = () => {
   const handleDeleteRack = async (rackId) => {
     if (window.confirm('Are you sure you want to delete this rack?')) {
       try {
-        const response = await fetch(`https://robridge-express-zl9j.onrender.com/api/racks/${rackId}`, {
+        const response = await fetch(`${serverURL}/api/racks/${rackId}`, {
           method: 'DELETE'
         });
 
@@ -296,7 +297,7 @@ const RackManagement = () => {
 
     setIsSearching(true);
     try {
-      const response = await fetch(`https://robridge-express-zl9j.onrender.com/api/racks/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      const response = await fetch(`${serverURL}/api/racks/search?q=${encodeURIComponent(searchQuery.trim())}`);
       const data = await response.json();
 
       if (data.success) {
@@ -326,7 +327,7 @@ const RackManagement = () => {
     setIsInitializingDB(true);
     try {
       console.log('Initializing database...');
-      const response = await fetch('https://robridge-express-zl9j.onrender.com/api/init-db', {
+      const response = await fetch(`${serverURL}/api/init-db`, {
         method: 'POST'
       });
 

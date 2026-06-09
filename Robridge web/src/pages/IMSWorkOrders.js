@@ -158,7 +158,7 @@ export default function IMSWorkOrders() {
         {/* Left List */}
         <div className="wo-list-panel">
           <div className="wo-controls">
-            <div className="search-input" style={{ flex: 1 }}>
+            <div className="wo-search-wrapper" style={{ flex: 1 }}>
               <FaSearch className="search-icon" />
               <input type="text" placeholder="Search work orders..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
@@ -282,7 +282,7 @@ export default function IMSWorkOrders() {
             </div>
             <div className="modal-body">
               <div className="modal-row">
-                <div className="form-group" style={{ flex: 2 }}>
+                <div className="form-group">
                   <label className="form-label">Finished Product Name *</label>
                   <input className="form-input" placeholder="e.g. LED Tube Light 40W" value={newWO.productName} onChange={e => setNewWO(f => ({ ...f, productName: e.target.value }))} />
                 </div>

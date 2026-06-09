@@ -454,7 +454,7 @@ export default function IMSLocations() {
               </div>
               <button className="modal-close" onClick={() => setShowCreate(false)}><FaTimes /></button>
             </div>
-            <div className="modal-body">
+            <div className="modal-body" style={{ paddingTop: 0 }}>
               <div className="form-group">
                 <label className="form-label">Zone Name *</label>
                 <input
@@ -509,7 +509,7 @@ export default function IMSLocations() {
               </div>
               <button className="modal-close" onClick={() => setShowTransfer(false)}><FaTimes /></button>
             </div>
-            <div className="modal-body">
+            <div className="modal-body" style={{ paddingTop: 0 }}>
 
               {/* Step 1 — Pick item from catalog */}
               <div style={{
@@ -637,7 +637,7 @@ export default function IMSLocations() {
               </div>
               <button className="modal-close" onClick={() => setShowBulkAssign(false)}><FaTimes /></button>
             </div>
-            <div className="modal-body">
+            <div className="modal-body" style={{ paddingTop: 0 }}>
 
               {/* Master selector */}
               <div className="form-group" style={{ marginBottom: 16 }}>

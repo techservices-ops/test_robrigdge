@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { FaCheckCircle, FaExclamationCircle, FaSpinner } from 'react-icons/fa';
 import { useAuth } from '../contexts/AuthContext';
+import { getServerURL } from '../config/api';
 import './LoginPage.css';
 
 const VerifyEmail = () => {
@@ -24,7 +25,7 @@ const VerifyEmail = () => {
         const verifyEmail = async () => {
             try {
                 // Use the backend API URL
-                const apiUrl = process.env.REACT_APP_API_URL || 'https://robridge-express-zl9j.onrender.com';
+                const apiUrl = getServerURL();
                 const response = await fetch(`${apiUrl}/api/auth/verify-email?token=${token}`);
                 const data = await response.json();
 

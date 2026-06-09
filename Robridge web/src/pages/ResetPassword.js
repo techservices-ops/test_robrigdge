@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FaLock, FaExclamationCircle } from 'react-icons/fa';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { getServerURL } from '../config/api';
 import './LoginPage.css';
 
 const ResetPassword = () => {
@@ -33,7 +34,7 @@ const ResetPassword = () => {
 
         try {
             // Use the backend API URL
-            const apiUrl = process.env.REACT_APP_API_URL || 'https://robridge-express-zl9j.onrender.com';
+            const apiUrl = getServerURL();
 
             const response = await fetch(`${apiUrl}/api/auth/reset-password`, {
                 method: 'POST',

@@ -49,7 +49,8 @@
   "scripts": {
     "start": "cross-env PORT=3000 react-scripts start",
     "server": "node server.js",
-    "dev": "concurrently \"npm run server\" \"npm run start\"",
+    "dev": "cross-env REACT_APP_API_URL=http://localhost:3001 concurrently \"npm run server\" \"npm run start\"",
+    "dev:render": "cross-env REACT_APP_API_URL=https://test-robrigdge.onrender.com npm run start",
     "setup": "npm install && cd \"../Barcode generator&Scanner\" && pip install -r requirements.txt && cd \"../Robridge web\" && echo \"âœ… Setup complete! Run 'npm run dev' to start the system.\"",
     "build": "cross-env PUBLIC_URL=/bvs react-scripts build && node -e \"const fs=require('fs'); const path=require('path'); if(fs.existsSync('public/robridge-logo.png')) { fs.mkdirSync('build/static/media', {recursive: true}); fs.copyFileSync('public/robridge-logo.png', 'build/static/media/robridge-logo.png'); console.log('Logo copied to static/media'); } if(fs.existsSync('public/assets/scanner.png')) { fs.mkdirSync('build/static/media', {recursive: true}); fs.copyFileSync('public/assets/scanner.png', 'build/static/media/scanner.png'); console.log('Scanner copied to static/media'); } console.log('Build complete!')\"",
     "build-standalone": "react-scripts build && node -e \"const fs=require('fs'); if(fs.existsSync('public/robridge-logo.png')) { fs.mkdirSync('build/static/media', {recursive: true}); fs.copyFileSync('public/robridge-logo.png', 'build/static/media/robridge-logo.png'); console.log('Logo copied successfully'); } else { console.log('Logo file not found, skipping copy'); }\"",

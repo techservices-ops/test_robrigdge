@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   FaSync, 
-  FaSave, FaSpinner, FaBarcode, FaClipboardList
+  FaSave, FaSpinner, FaBarcode, FaClipboardList, FaArrowRight
 } from 'react-icons/fa';
 import './IMSProduction.css';
 import { useWorkspace } from '../contexts/WorkspaceContext';
@@ -21,7 +21,7 @@ export default function IMSProduction() {
   const [summary, setSummary] = useState([]);
   const [selectedStage, setSelectedStage] = useState(null);
   const [, setLoading] = useState(false);
-  const [scan, setScan] = useState({ barcode: localStorage.getItem('ims_last_scanned_barcode') || '', itemName: '', outcome: 'FORWARD', qty: 1, batchNo: '', notes: '', woId: '' });
+  const [scan, setScan] = useState({ barcode: localStorage.getItem('ims_last_scanned_barcode') || '', itemName: '', outcome: 'FORWARD', qty: 0, batchNo: '', notes: '', woId: '' });
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
 
@@ -58,7 +58,7 @@ export default function IMSProduction() {
     if (!scan.barcode || !selectedStage) return;
     setSaving(true);
     try {
-      const payload = { ...scan, stageId: selectedStage.id, stageName: selectedStage.name, qty: Number(scan.qty) || 1 };
+      const payload = { ...scan, stageId: selectedStage.id, stageName: selectedStage.name, qty: Number(scan.qty) };
       const r = await imsFetch('/api/ims/production/scan', { method: 'POST', body: JSON.stringify(payload) });
       const d = await r.json();
       if (d.success) {
@@ -96,28 +96,44 @@ export default function IMSProduction() {
       </div>
 
       {/* Stage Pipeline */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 24, overflowX: 'auto' }}>
+      <div style={{ display: 'flex', gap: '16px', marginBottom: 30, overflowX: 'auto', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
         {stages.map((st, i) => {
           const s = getStageSummary(st.name);
           const active = selectedStage?.id === st.id;
           return (
             <React.Fragment key={st.id}>
               <div onClick={() => setSelectedStage(st)} style={{
+                flex: 1,
                 background: active ? '#E3821E' : '#fff', color: active ? '#fff' : '#333',
-                padding: '14px 20px', borderRadius: i === 0 ? '10px 0 0 10px' : i === stages.length - 1 ? '0 10px 10px 0' : 0,
-                cursor: 'pointer', border: '1px solid #e0e0e0', borderLeft: i > 0 ? 'none' : '1px solid #e0e0e0',
-                minWidth: 140, textAlign: 'center', transition: 'all 0.2s', boxShadow: active ? '0 4px 12px rgba(227,130,30,0.25)' : 'none'
+                padding: '16px 12px', borderRadius: '12px',
+                cursor: 'pointer', border: active ? '1px solid #E3821E' : '1px solid #e0e0e0',
+                minWidth: 120, textAlign: 'center', transition: 'all 0.3s ease', 
+                boxShadow: active ? '0 6px 16px rgba(227,130,30,0.3)' : '0 2px 8px rgba(0,0,0,0.04)',
+                transform: active ? 'translateY(-2px)' : 'none'
               }}>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>{st.name}</div>
-                <div style={{ fontSize: 12, marginTop: 4, opacity: active ? 1 : 0.6 }}>
-                  <span style={{ color: active ? '#9fffba' : '#27ae60' }}>✓{s.forward}</span>
-                  {' · '}
-                  <span style={{ color: active ? '#ffe0a0' : '#e67e22' }}>↩{s.rework}</span>
-                  {' · '}
-                  <span style={{ color: active ? '#ffbaba' : '#e74c3c' }}>✗{s.reject}</span>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{st.name}</div>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', fontSize: 14, opacity: active ? 1 : 0.8, fontWeight: 600 }}>
+                  <div style={{ color: active ? '#9fffba' : '#27ae60', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <span style={{ fontSize: 10, opacity: active ? 0.9 : 0.6, fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>FWD</span>
+                    {s.forward}
+                  </div>
+                  <div style={{ width: 1, background: active ? 'rgba(255,255,255,0.3)' : '#eee' }} />
+                  <div style={{ color: active ? '#ffe0a0' : '#e67e22', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <span style={{ fontSize: 10, opacity: active ? 0.9 : 0.6, fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>RWK</span>
+                    {s.rework}
+                  </div>
+                  <div style={{ width: 1, background: active ? 'rgba(255,255,255,0.3)' : '#eee' }} />
+                  <div style={{ color: active ? '#ffbaba' : '#e74c3c', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <span style={{ fontSize: 10, opacity: active ? 0.9 : 0.6, fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>REJ</span>
+                    {s.reject}
+                  </div>
                 </div>
               </div>
-              {i < stages.length - 1 && <div style={{ width: 0, height: 0, borderTop: '31px solid transparent', borderBottom: '31px solid transparent', borderLeft: `18px solid ${active ? '#E3821E' : '#e0e0e0'}`, zIndex: 1 }} />}
+              {i < stages.length - 1 && (
+                <div style={{ color: '#bbb', display: 'flex', alignItems: 'center', fontSize: 22 }}>
+                  <FaArrowRight />
+                </div>
+              )}
             </React.Fragment>
           );
         })}
@@ -128,43 +144,52 @@ export default function IMSProduction() {
         <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', height: 'fit-content' }}>
           <h3 style={{ marginBottom: 16, fontSize: 16 }}><FaBarcode /> Scan at: <span style={{ color: '#E3821E' }}>{selectedStage?.name || 'Select a stage'}</span></h3>
 
-          <div className="form-group" style={{ marginBottom: 12 }}>
-            <label className="form-label">Barcode *</label>
+          <div className="form-group" style={{ marginBottom: 16, textAlign: 'left' }}>
+            <label className="form-label" style={{ display: 'block', textAlign: 'left', marginBottom: 6, fontWeight: 600, fontSize: 13, color: '#444' }}>Barcode *</label>
             <input className="form-input" placeholder="Scan or type barcode..." value={scan.barcode}
+              style={{ width: '100%', padding: '10px 12px', border: '1px solid #ccc', borderRadius: 6, textAlign: 'left', boxSizing: 'border-box' }}
               onChange={e => setScan(s => ({ ...s, barcode: e.target.value }))}
               onKeyDown={e => e.key === 'Enter' && recordScan()} autoFocus />
           </div>
-          <div className="form-group" style={{ marginBottom: 12 }}>
-            <label className="form-label">Item Name</label>
-            <input className="form-input" placeholder="Optional" value={scan.itemName} onChange={e => setScan(s => ({ ...s, itemName: e.target.value }))} />
+          <div className="form-group" style={{ marginBottom: 16, textAlign: 'left' }}>
+            <label className="form-label" style={{ display: 'block', textAlign: 'left', marginBottom: 6, fontWeight: 600, fontSize: 13, color: '#444' }}>Item Name</label>
+            <input className="form-input" placeholder="Optional" value={scan.itemName} 
+              style={{ width: '100%', padding: '10px 12px', border: '1px solid #ccc', borderRadius: 6, textAlign: 'left', boxSizing: 'border-box' }}
+              onChange={e => setScan(s => ({ ...s, itemName: e.target.value }))} />
           </div>
 
-          <div style={{ marginBottom: 12 }}>
-            <label className="form-label">Outcome *</label>
+          <div style={{ marginBottom: 16, textAlign: 'left' }}>
+            <label className="form-label" style={{ display: 'block', textAlign: 'left', marginBottom: 6, fontWeight: 600, fontSize: 13, color: '#444' }}>Outcome *</label>
             <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
               {OUTCOMES.map(o => (
                 <button key={o.value} onClick={() => setScan(s => ({ ...s, outcome: o.value }))}
-                  style={{ flex: 1, padding: '8px 0', border: `2px solid ${scan.outcome === o.value ? o.color : '#e0e0e0'}`, borderRadius: 8, background: scan.outcome === o.value ? o.bg : '#fff', color: o.color, fontWeight: 700, cursor: 'pointer', fontSize: 13, transition: 'all 0.15s' }}>
+                  style={{ flex: 1, padding: '10px 0', border: `2px solid ${scan.outcome === o.value ? o.color : '#e0e0e0'}`, borderRadius: 8, background: scan.outcome === o.value ? o.bg : '#fff', color: o.color, fontWeight: 700, cursor: 'pointer', fontSize: 13, transition: 'all 0.15s' }}>
                   {o.label}
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="modal-row" style={{ marginBottom: 12 }}>
-            <div className="form-group">
-              <label className="form-label">Qty</label>
-              <input className="form-input" type="number" value={scan.qty} onChange={e => setScan(s => ({ ...s, qty: e.target.value }))} />
+          <div className="modal-row" style={{ display: 'flex', gap: 12, marginBottom: 16, textAlign: 'left' }}>
+            <div className="form-group" style={{ flex: 1, textAlign: 'left' }}>
+              <label className="form-label" style={{ display: 'block', textAlign: 'left', marginBottom: 6, fontWeight: 600, fontSize: 13, color: '#444' }}>Qty</label>
+              <input className="form-input" type="number" value={scan.qty} 
+                style={{ width: '100%', padding: '10px 12px', border: '1px solid #ccc', borderRadius: 6, textAlign: 'left', boxSizing: 'border-box' }}
+                onChange={e => setScan(s => ({ ...s, qty: e.target.value }))} />
             </div>
-            <div className="form-group" style={{ flex: 2 }}>
-              <label className="form-label">Batch No</label>
-              <input className="form-input" placeholder="Optional" value={scan.batchNo} onChange={e => setScan(s => ({ ...s, batchNo: e.target.value }))} />
+            <div className="form-group" style={{ flex: 2, textAlign: 'left' }}>
+              <label className="form-label" style={{ display: 'block', textAlign: 'left', marginBottom: 6, fontWeight: 600, fontSize: 13, color: '#444' }}>Batch No</label>
+              <input className="form-input" placeholder="Optional" value={scan.batchNo} 
+                style={{ width: '100%', padding: '10px 12px', border: '1px solid #ccc', borderRadius: 6, textAlign: 'left', boxSizing: 'border-box' }}
+                onChange={e => setScan(s => ({ ...s, batchNo: e.target.value }))} />
             </div>
           </div>
 
-          <div className="form-group" style={{ marginBottom: 16 }}>
-            <label className="form-label">Notes</label>
-            <input className="form-input" placeholder="Reason for rework/reject..." value={scan.notes} onChange={e => setScan(s => ({ ...s, notes: e.target.value }))} />
+          <div className="form-group" style={{ marginBottom: 20, textAlign: 'left' }}>
+            <label className="form-label" style={{ display: 'block', textAlign: 'left', marginBottom: 6, fontWeight: 600, fontSize: 13, color: '#444' }}>Notes</label>
+            <input className="form-input" placeholder="Reason for rework/reject..." value={scan.notes} 
+              style={{ width: '100%', padding: '10px 12px', border: '1px solid #ccc', borderRadius: 6, textAlign: 'left', boxSizing: 'border-box' }}
+              onChange={e => setScan(s => ({ ...s, notes: e.target.value }))} />
           </div>
 
           <button className="btn btn-primary" style={{ width: '100%' }} onClick={recordScan} disabled={saving || !scan.barcode || !selectedStage}>

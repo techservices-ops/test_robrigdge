@@ -10,7 +10,6 @@ import './IMSDashboard.css';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 
 // ─── Dynamic Mock Generators (Moved inside component) ────────────────────────
-const weekLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 // ─── Circular Ring ──────────────────────────────────────────────────────────
 const CircularRing = ({ daysLeft, maxDays, animated }) => {
@@ -37,18 +36,26 @@ const CircularRing = ({ daysLeft, maxDays, animated }) => {
 };
 
 // ─── Weekly Line Chart ────────────────────────────────────────────────────────
-const WeeklyLineChart = ({ animated, trends }) => {
+const WeeklyLineChart = ({ animated, trends, weekLabels }) => {
   const w = 800, h = 200, pad = 20;
   const toX = i => pad + i * ((w - pad * 2) / 6);
-  const toY = v => h - pad - (v / 80) * (h - pad * 2);
+  
+  // Find the max value in all trend data points to scale the Y axis dynamically!
+  const allValues = trends.flatMap(t => t.data || []);
+  const maxVal = Math.max(10, ...allValues);
+  // Round maxVal up to the nearest multiple of 10 for clean grid lines
+  const yMax = Math.ceil(maxVal / 10) * 10;
+  
+  const toY = v => h - pad - (v / yMax) * (h - pad * 2);
+  const gridValues = [0, yMax * 0.25, yMax * 0.5, yMax * 0.75, yMax];
 
   return (
     <svg className={`line-chart-svg ${animated ? 'animate' : ''}`} viewBox={`0 0 ${w} ${h}`}>
       {/* Grid */}
-      {[0, 20, 40, 60, 80].map(v => (
-        <g key={`grid-${v}`}>
+      {gridValues.map((v, idx) => (
+        <g key={`grid-${idx}`}>
           <line x1={pad} y1={toY(v)} x2={w - pad} y2={toY(v)} stroke="#ecf0f1" strokeWidth="1" />
-          <text x={pad - 5} y={toY(v) + 4} fontSize="10" fill="#bdc3c7" textAnchor="end">{v}</text>
+          <text x={pad - 5} y={toY(v) + 4} fontSize="10" fill="#bdc3c7" textAnchor="end">{Math.round(v)}</text>
         </g>
       ))}
       {/* X axis labels */}
@@ -57,7 +64,7 @@ const WeeklyLineChart = ({ animated, trends }) => {
       ))}
       {/* Lines & dots */}
       {trends.map((trend) => {
-        const pts = trend.data.map((v, i) => `${toX(i)},${toY(v)}`).join(' ');
+        const pts = (trend.data || []).map((v, i) => `${toX(i)},${toY(v)}`).join(' ');
         return (
           <g key={`line-${trend.name}`}>
             <polyline points={pts} fill="none" stroke={trend.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -105,7 +112,7 @@ const IMSDashboard = () => {
     if (!data || data.totalSKUs === 0) return 100;
     const critical = data.lowStockItems.filter(a => a.stock <= a.alert_at / 2).length;
     const warning = data.lowStockItems.filter(a => a.stock > a.alert_at / 2).length;
-    const expiry = 0; // Not tracked yet
+    const expiry = data.expiry ? data.expiry.filter(e => e.zone === 'week').length : 0;
     return Math.max(0, Math.round(100 - critical * 14 - warning * 5 - expiry * 6));
   };
 
@@ -125,39 +132,28 @@ const IMSDashboard = () => {
   
   if (!data) return null;
 
-  // Generate dynamic mock data based on actual database items so demo is perfectly contextual
-  const sampleItems = data.lowStockItems && data.lowStockItems.length > 0 ? data.lowStockItems : [{name: 'Sample Item A', stock: 10}, {name: 'Sample Item B', stock: 25}, {name: 'Sample Item C', stock: 45}];
-  
-  const mockWIP = [
-    { order: 'PRD-1049', product: `${sampleItems[0]?.name || 'Product A'} (Batch A)`, progress: 75, status: 'In Progress', due: 'Today' },
-    { order: 'PRD-1050', product: `${sampleItems[1]?.name || 'Product B'} (Batch B)`, progress: 30, status: 'Blending', due: 'Tomorrow' },
-    { order: 'PRD-1051', product: `${sampleItems[2]?.name || 'Product C'}`, progress: 95, status: 'Packaging', due: 'Today' },
+  const expiryItems = data.expiry || [];
+  const wipList = data.wip || [];
+  const weekLabels = data.trendLabels || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dynamicTrends = data.trends || [
+    { name: 'Stock IN', color: '#27ae60', data: [0, 0, 0, 0, 0, 0, 0] },
+    { name: 'Stock OUT', color: '#e74c3c', data: [0, 0, 0, 0, 0, 0, 0] }
   ];
 
-  const expiryItems = [
-    { product: `${sampleItems[0]?.name || 'Product A'}`, expiry: '2026-04-20', daysUntil: 0, stock: sampleItems[0]?.stock || 3, zone: 'week' },
-    { product: `${sampleItems[1]?.name || 'Product B'}`, expiry: '2026-04-18', daysUntil: -2, stock: sampleItems[1]?.stock || 45, zone: 'week' },
-    { product: `${sampleItems[2]?.name || 'Product C'}`, expiry: '2026-05-01', daysUntil: 11, stock: sampleItems[2]?.stock || 8, zone: 'two_weeks' },
-    { product: `${sampleItems[0]?.name || 'Product A'} (New)`, expiry: '2026-05-10', daysUntil: 20, stock: 200, zone: 'month' },
-  ];
-
-  const dynamicTrends = [
-    { name: sampleItems[0]?.name || 'Item 1', color: '#E3821E', data: [42, 58, 51, 69, 55, 72, 55] },
-    { name: sampleItems[1]?.name || 'Item 2', color: '#3498db', data: [35, 40, 38, 50, 44, 48, 43] },
-  ];
 
   // Build dynamic KPIs with navigation links
   const liveKPIs = [
     { label: 'Total SKUs', value: data.totalSKUs, icon: FaBoxes, color: '#E3821E', change: 'Total catalog items', up: true, link: '/ims-catalog' },
     { label: 'Total Stock Units', value: data.totalStock, icon: FaDatabase, color: '#27ae60', change: 'All active items', up: true, link: '/ims-catalog' },
     { label: "Today's Scans", value: data.todayMovements, icon: FaExchangeAlt, color: '#3498db', change: 'Movements today', up: true, link: '/ims-scanner' },
-    { label: 'Low Stock Alerts', value: data.lowStockCount, icon: FaExclamationTriangle, color: '#e74c3c', change: 'Needs reorder', up: false, link: '/ims-settings' },
-    { label: 'Items in WIP', value: 0, icon: FaCogs, color: '#9b59b6', change: 'Active BOMs', up: true, link: '/ims-catalog' },
+    { label: 'Low Stock Alerts', value: data.lowStockCount, icon: FaExclamationTriangle, color: '#e74c3c', change: 'Needs reorder', up: false, link: '/ims-catalog' },
+    { label: 'Items in WIP', value: data.activeWorkordersCount || 0, icon: FaCogs, color: '#9b59b6', change: 'Active work orders', up: true, link: '/ims-workorders' },
     { label: 'Reserved Stock', value: 0, icon: FaClipboardList, color: '#f39c12', change: 'Awaiting Pick', up: false, link: '/ims-scanner' },
   ];
 
-  // Storage quota — mock for now, wire to subscription tier later
-  const quotaPct = Math.min(100, Math.round((data.totalSKUs / 500) * 100));
+  // Storage quota — dynamically updated based on SKUs (1 MB/SKU) and stock units (0.1 MB/unit)
+  const usedMB = parseFloat(((data.totalSKUs * 1.0) + (data.totalStock * 0.1)).toFixed(1));
+  const quotaPct = Math.min(100, Math.round((usedMB / 1000) * 100));
 
   return (
     <div className="ims-dashboard-page">
@@ -195,7 +191,7 @@ const IMSDashboard = () => {
           {[
             { label: 'Critical', count: data.lowStockItems.filter(a => a.stock <= a.alert_at / 2).length, cls: 'critical' }, 
             { label: 'Warning', count: data.lowStockItems.filter(a => a.stock > a.alert_at / 2).length, cls: 'warning' },
-            { label: 'Expiry Risk', count: 0, cls: 'expiry' }, 
+            { label: 'Expiry Risk', count: expiryItems.length, cls: 'expiry' }, 
             { label: 'Overstocked', count: 0, cls: 'overstock' }
           ].map(b => (
             <div key={b.cls} className={`hb-item ${b.cls}`}>
@@ -241,13 +237,24 @@ const IMSDashboard = () => {
 
       {/* Storage Quota */}
       <div className="ims-quota-banner">
-        <div className="quota-label"><FaDatabase /> Workspace Storage Quota</div>
-        <div className="quota-bar-wrap">
-          <div className="quota-bar">
-            <div className={`quota-fill ${quotaPct > 80 ? 'danger' : quotaPct > 60 ? 'warning' : 'ok'}`}
-              style={{ width: animated ? `${quotaPct}%` : '0%' }}></div>
+        <div className="quota-main">
+          <div className="quota-label"><FaDatabase /> Workspace Storage Quota</div>
+          <div className="quota-bar-wrap">
+            <div className="quota-bar">
+              <div className={`quota-fill ${quotaPct > 80 ? 'danger' : quotaPct > 60 ? 'warning' : 'ok'}`}
+                style={{ width: animated ? `${quotaPct}%` : '0%' }}></div>
+            </div>
+            <span className="quota-pct">{quotaPct}% used — {usedMB} MB of 1 GB</span>
           </div>
-          <span className="quota-pct">{quotaPct}% used — 412 MB of 1 GB</span>
+        </div>
+        <div className="quota-suggestion">
+          {quotaPct >= 85 ? (
+            <span className="quota-suggestion-danger">⚠️ Storage almost full! We highly recommend increasing your workspace storage before adding new products to prevent catalog limit errors.</span>
+          ) : quotaPct >= 60 ? (
+            <span className="quota-suggestion-warning">⚠️ Storage is at {quotaPct}%. Consider upgrading storage soon if you plan to add more products or bulk stock.</span>
+          ) : (
+            <span className="quota-suggestion-ok">✅ Sufficient storage available. You can safely add new products and stock to this catalog without upgrading.</span>
+          )}
         </div>
       </div>
 
@@ -395,11 +402,22 @@ const IMSDashboard = () => {
           <div className="ims-panel-header">
             <FaCogs className="panel-icon" style={{ color: '#E3821E' }} />
             <h2>Production WIP Workflow</h2>
+            {wipList.length > 0 && (
+              <button 
+                onClick={() => navigate('/ims-workorders')} 
+                style={{marginLeft: 'auto', background: 'none', border: '1px solid #E3821E', color: '#E3821E', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px'}}
+              >
+                View WIP →
+              </button>
+            )}
           </div>
           <div className="ims-wip-list">
-            {data.totalSKUs === 0 ? (
-              <p style={{color: '#7f8c8d', padding: '20px', textAlign: 'center'}}>No active production workflows.</p>
-            ) : mockWIP.map((wip, i) => (
+            {wipList.length === 0 ? (
+              <div style={{padding: '30px 20px', textAlign: 'center', color: '#7f8c8d'}}>
+                <FaCogs style={{fontSize: '30px', color: '#bdc3c7', marginBottom: '10px', display: 'block', marginLeft: 'auto', marginRight: 'auto'}} />
+                <span>No active production workflows.</span>
+              </div>
+            ) : wipList.map((wip, i) => (
               <div key={i} className="wip-row">
                 <div className="wip-header">
                   <span className="wip-order">{wip.order}</span>
@@ -429,29 +447,45 @@ const IMSDashboard = () => {
         </div>
         <p className="panel-sub">Grouped by urgency window. FEFO rotation is recommended for all items below.</p>
         <div className="expiry-timeline">
-          {data.totalSKUs === 0 ? (
-            <p style={{color: '#7f8c8d', padding: '20px', width: '100%', textAlign: 'center'}}>No expiry data available. Start tracking products with expiry dates to see analytics.</p>
+          {expiryItems.length === 0 ? (
+            <div style={{color: '#7f8c8d', padding: '30px 20px', width: '100%', textAlign: 'center', gridColumn: '1 / -1'}}>
+              <FaCalendarAlt style={{fontSize: '36px', color: '#bdc3c7', marginBottom: '10px'}} />
+              <p style={{margin: 0}}>No active expiry risk records found. Log batch scan events with expiry dates to visualize risk timelines.</p>
+            </div>
           ) : [
             { zone: 'week', label: 'This Week', icon: FaFire, cls: 'zone-critical', cardCls: 'exp-critical' },
             { zone: 'two_weeks', label: 'Next 2 Weeks', icon: FaExclamationTriangle, cls: 'zone-warning', cardCls: 'exp-warning' },
             { zone: 'month', label: 'This Month', icon: FaShieldAlt, cls: 'zone-ok', cardCls: 'exp-ok' },
-          ].map(({ zone, label, icon: Icon, cls, cardCls }) => (
-            <div key={zone} className={`timeline-zone ${cls}`}>
-              <div className="zone-header"><Icon /> {label}</div>
-              <div className="zone-items">
-                {expiryItems.filter(e => e.zone === zone).map((e, i) => (
-                  <div key={i} className={`expiry-card ${cardCls}`}>
-                    <div className="exp-product">{e.product}</div>
-                    <div className="exp-meta">
-                      <span className="exp-date">📅 {e.expiry}</span>
-                      <span className="exp-stock">{e.stock} units</span>
+          ].map(({ zone, label, icon: Icon, cls, cardCls }) => {
+            const itemsInZone = expiryItems.filter(e => e.zone === zone);
+            return (
+              <div key={zone} className={`timeline-zone ${cls}`}>
+                <div className="zone-header">
+                  <Icon /> {label} ({itemsInZone.length})
+                </div>
+                <div className="zone-items">
+                  {itemsInZone.length === 0 ? (
+                    <div className="expiry-card-empty" style={{fontSize: '12px', color: '#95a5a6', textAlign: 'center', padding: '20px', background: '#fafafa', borderRadius: '8px', border: '1px dashed #e0e0e0'}}>
+                      No items in this window
                     </div>
-                    <div className="exp-action">{zone === 'week' ? 'FEFO Priority Active' : `${e.daysUntil} days remaining`}</div>
-                  </div>
-                ))}
+                  ) : itemsInZone.map((e, i) => (
+                    <div key={i} className={`expiry-card ${cardCls}`}>
+                      <div className="exp-product">{e.product}</div>
+                      <div className="exp-meta">
+                        <span className="exp-date">📅 {e.expiry}</span>
+                        <span className="exp-stock">{e.stock} units</span>
+                      </div>
+                      <div className="exp-action">
+                        {zone === 'week' 
+                          ? (e.daysUntil <= 0 ? '⚠️ Expired! FEFO Priority Active' : '🔥 FEFO Priority Active') 
+                          : `${e.daysUntil} days remaining`}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -464,7 +498,7 @@ const IMSDashboard = () => {
         </div>
         <p className="panel-sub">Volume of stock movements IN and OUT over the last 7 days.</p>
         
-        {data.totalSKUs === 0 ? (
+        {data.totalSKUs === 0 || dynamicTrends.length === 0 ? (
           <div style={{padding: '50px 20px', textAlign: 'center', color: '#7f8c8d'}}>
             No movement data to graph. Add items and perform scans to generate trend analytics.
           </div>
@@ -477,7 +511,7 @@ const IMSDashboard = () => {
                 </span>
               ))}
             </div>
-            <WeeklyLineChart animated={animated} trends={dynamicTrends} />
+            <WeeklyLineChart animated={animated} trends={dynamicTrends} weekLabels={weekLabels} />
           </>
         )}
       </div>
