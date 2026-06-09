@@ -89,7 +89,7 @@ export default function IMSProduction() {
           <h1>Production &amp; QC Tracking</h1>
           <p>Scan items at each production stage — classify as Forward, Rework, or Reject</p>
         </div>
-        <div className="ims-header-right">
+        <div className="ims-header-right ims-flex-gap-10">
           <button className="btn btn-secondary" onClick={load}><FaSync /> Refresh</button>
         </div>
       </div>

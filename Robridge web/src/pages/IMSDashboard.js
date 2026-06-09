@@ -219,7 +219,9 @@ const IMSDashboard = () => {
           <h1>IMS Command Center</h1>
           <p>Real-time inventory intelligence — track, manage and optimise your stock</p>
         </div>
-        <span className="ims-live-badge"><span className="live-dot"></span> LIVE</span>
+        <div className="ims-header-right ims-flex-gap-10">
+          <span className="ims-live-badge"><span className="live-dot"></span> LIVE</span>
+        </div>
       </div>
 
       {/* Health Score Banner */}

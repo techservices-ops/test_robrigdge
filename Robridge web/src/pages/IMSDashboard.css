@@ -3,22 +3,11 @@
    =========================== */
 
 .ims-dashboard-page {
-  padding: var(--spacing-xl);
+  padding: 0;
   max-width: 1400px;
 }
 
-/* ─── Header ─────────────────────────────────────────────────────────────── */
-.ims-page-header {
-  display: flex; align-items: center; justify-content: space-between;
-  flex-wrap: wrap; gap: var(--spacing-md);
-}
-
-.ims-header-left h1 { margin: 0 0 4px 0; color: white !important; }
-.ims-header-left p  { margin: 0; color: rgba(255,255,255,0.9) !important; }
-
-.ims-header-right {
-  display: flex; align-items: center; gap: var(--spacing-sm); flex-wrap: wrap;
-}
+/* Header styles promoted globally to design-system.css */
 
 .ims-live-badge {
   display: inline-flex; align-items: center; gap: 6px;

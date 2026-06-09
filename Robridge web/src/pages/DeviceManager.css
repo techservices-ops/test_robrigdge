@@ -1,5 +1,5 @@
 .device-manager {
-    padding: 24px;
+    padding: 0;
     max-width: 1800px;
     margin: 0 auto;
     background: #F8F9FA;
@@ -11,7 +11,7 @@
     background: linear-gradient(135deg, #E3821E 0%, #FF9800 100%);
     padding: 32px;
     border-radius: 12px;
-    margin-bottom: 24px;
+    margin-bottom: 16px;
     box-shadow: 0 4px 12px rgba(227, 130, 30, 0.2);
 }
 

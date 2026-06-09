@@ -30,7 +30,7 @@
     background: linear-gradient(135deg, var(--primary-orange) 0%, var(--secondary-orange) 100%);
     padding: 32px;
     border-radius: 12px;
-    margin-bottom: 24px;
+    margin-bottom: 16px;
     box-shadow: 0 4px 12px rgba(227, 130, 30, 0.2);
 }
 

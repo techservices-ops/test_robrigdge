@@ -287,7 +287,7 @@ const Profile = () => {
           <h1>Workspace Profile</h1>
           <p>Manage your account and workspace capacity details</p>
         </div>
-        <div className="ims-header-right">
+        <div className="ims-header-right ims-flex-gap-10">
           {/* Security button hidden */}
         </div>
       </div>

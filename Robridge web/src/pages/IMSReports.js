@@ -85,7 +85,7 @@ export default function IMSReports() {
           <h1>Reports &amp; Analytics</h1>
           <p>Export scan history, stock summaries, movement reports, and low stock alerts</p>
         </div>
-        <div className="ims-header-right" style={{ gap: 10, display: 'flex' }}>
+        <div className="ims-header-right ims-flex-gap-10">
           <button className="btn btn-secondary" onClick={() => load()}>
             <FaSync /> Refresh
           </button>
