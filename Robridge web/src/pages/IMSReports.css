@@ -1,5 +1,4 @@
-/* ── Reports & Analytics Page ── */
-.ims-reports-page { padding: var(--spacing-xl); max-width: 1400px; }
+.ims-reports-page { padding: 0; max-width: 1400px; }
 
 .reports-layout { display: grid; grid-template-columns: 240px 1fr; gap: 20px; }
 

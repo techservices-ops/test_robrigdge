@@ -106,11 +106,19 @@ body {
    =================================== */
 
 .page-header {
-    margin-bottom: var(--spacing-xl);
+    margin-bottom: var(--spacing-md);
     padding: var(--spacing-xl);
     background: linear-gradient(135deg, #E3821E 0%, #FF9800 100%);
     border-radius: var(--radius-lg);
     box-shadow: 0 4px 12px rgba(227, 130, 30, 0.2);
+}
+
+.ims-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
 }
 
 .page-header h1, .ims-header-left h1 {
@@ -121,11 +129,26 @@ body {
     line-height: 1.2;
 }
 
+.ims-header-left h1 {
+    color: white !important;
+}
+
 .page-header p, .ims-header-left p {
     font-size: var(--text-base);
     color: rgba(255, 255, 255, 0.9);
     margin: 0;
     line-height: 1.5;
+}
+
+.ims-header-left p {
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.ims-header-right {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
 }
 
 /* ===================================
@@ -793,4 +816,226 @@ body {
         padding: var(--spacing-sm) var(--spacing-sm);
         font-size: var(--text-xs);
     }
+}
+
+/* ==========================================================================
+   Shared GRN Layout & Cards (Used by GRN and Location/Zone Tracking Pages)
+   ========================================================================== */
+.grn-layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 20px;
+}
+
+.grn-list-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+.grn-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+    max-height: calc(100vh - 380px);
+}
+
+.grn-card {
+    background: var(--bg-primary);
+    border-radius: var(--radius-md);
+    padding: 14px;
+    cursor: pointer;
+    border: 1.5px solid var(--border-light);
+    transition: all 0.2s;
+}
+
+.grn-card:hover {
+    border-color: var(--primary-orange);
+}
+
+.grn-card.active {
+    border-color: var(--primary-orange);
+    background: #fff9f0;
+}
+
+.grn-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.grn-id {
+    font-size: 12px;
+    font-weight: 700;
+    font-family: monospace;
+    color: var(--text-tertiary);
+}
+
+.grn-status {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+}
+
+.grn-status.large {
+    font-size: 13px;
+    padding: 5px 14px;
+}
+
+.grn-supplier {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.grn-meta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.grn-meta svg {
+    margin-right: 3px;
+}
+
+.grn-detail-panel {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border-light);
+}
+
+.grn-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+}
+
+.grn-detail-header h2 {
+    margin: 0 0 4px 0;
+    font-size: 22px;
+}
+
+.grn-approval-strip {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-light);
+}
+
+/* ==========================================================================
+   Global Modal & Dialog Styles (Shared across IMS modules)
+   ========================================================================== */
+.ims-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: var(--spacing-lg);
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.ims-modal {
+    background: var(--bg-primary);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+    width: 100%;
+    max-width: 680px;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideUp { from { opacity: 0; transform: translateY(32px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+    border-bottom: 1px solid var(--border-light);
+    position: sticky;
+    top: 0;
+    background: var(--bg-primary);
+    z-index: 1;
+}
+
+.modal-icon { font-size: 24px; color: var(--primary-orange); margin: 0; flex-shrink: 0; }
+.modal-header h2 { font-size: var(--text-xl); font-weight: var(--font-bold); margin: 0 0 2px 0; }
+.modal-header p { font-size: var(--text-sm); color: var(--text-secondary); margin: 0; }
+
+.modal-tabs {
+    display: flex;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-medium);
+    padding: 0 var(--spacing-lg);
+}
+
+.modal-tab {
+    background: none;
+    border: none;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.modal-tab:hover { color: var(--primary-orange); }
+.modal-tab.active {
+    color: var(--primary-orange);
+    border-bottom-color: var(--primary-orange);
+}
+
+.modal-close {
+    margin-left: auto;
+    background: var(--bg-secondary);
+    border: none;
+    width: 32px; height: 32px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text-secondary);
+    display: flex; align-items: center; justify-content: center;
+    transition: all var(--transition-fast);
+}
+
+.modal-close:hover { background: #fde8e8; color: #e74c3c; }
+.modal-body { padding: var(--spacing-lg); }
+
+.modal-row {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-bottom: 0;
+    align-items: flex-start;
+}
+
+.modal-row .form-group { flex: 1; }
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-top: 1px solid var(--border-light);
+    background: var(--bg-secondary);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
 }

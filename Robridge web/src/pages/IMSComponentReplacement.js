@@ -41,8 +41,8 @@ export default function IMSComponentReplacement() {
   };
 
   return (
-    <div style={{ padding: 24, maxWidth: 800, margin: '0 auto' }}>
-      <div className="page-header ims-page-header" style={{ marginBottom: 24 }}>
+    <div style={{ padding: 0, maxWidth: 800, margin: '0 auto' }}>
+      <div className="page-header ims-page-header" style={{ marginBottom: 16 }}>
         <div className="ims-header-left">
           <h1>Component Replacement</h1>
           <p>Log maintenance and component swaps for full traceability</p>

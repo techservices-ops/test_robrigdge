@@ -437,7 +437,7 @@ const DeviceManager = () => {
                     <h1>Device Manager</h1>
                     <p>Manage, monitor, and pair your barcode scanners</p>
                 </div>
-                <div className="ims-header-right">
+                <div className="ims-header-right ims-flex-gap-10">
                     <button
                         className="btn btn-secondary wifi-config-btn"
                         onClick={openWifiConfig}

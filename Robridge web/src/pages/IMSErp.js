@@ -64,9 +64,9 @@ export default function IMSErp() {
   };
 
   return (
-    <div style={{ padding: 24, maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ padding: 0, maxWidth: 1100, margin: '0 auto' }}>
       {/* Header */}
-      <div className="page-header ims-page-header" style={{ marginBottom: 24 }}>
+      <div className="page-header ims-page-header" style={{ marginBottom: 16 }}>
         <div className="ims-header-left">
           <h1>ERP Integration</h1>
           <p>Sync stock data and import Purchase Orders from SAP, Tally, or any external system</p>

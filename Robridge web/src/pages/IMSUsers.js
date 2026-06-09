@@ -179,7 +179,7 @@ const IMSUsers = () => {
           <h1>Team & Access Control</h1>
           <p>Manage workspace members, send invite links, and configure role-based access.</p>
         </div>
-        <div className="ims-header-right">
+        <div className="ims-header-right ims-flex-gap-10">
           <button className="btn btn-secondary" onClick={() => setShowRoleModal(true)}>
             <FaShieldAlt /> Role Guide
           </button>

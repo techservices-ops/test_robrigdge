@@ -272,7 +272,7 @@ const IMSCatalog = () => {
             <h1>Master Catalogs</h1>
             <p>Select a master catalog to view and manage its products, or create a new one.</p>
           </div>
-          <div className="ims-header-right" style={{gap: '10px', display: 'flex'}}>
+          <div className="ims-header-right ims-flex-gap-10">
             <button className="btn btn-secondary" onClick={() => setShowBomAnalyzer(true)} style={{borderColor: '#9b59b6', color: '#9b59b6'}}>
                <FaClipboardList /> BOM Analyzer
             </button>
@@ -358,12 +358,12 @@ const IMSCatalog = () => {
         </button>
       </div>
 
-      <div className="page-header ims-page-header" style={{ marginTop: '12px' }}>
+      <div className="page-header ims-page-header">
         <div className="ims-header-left">
           <h1>{activeMaster.name}</h1>
           <p>Product catalog, variants, and stock management for this master</p>
         </div>
-        <div className="ims-header-right" style={{gap: '10px', display: 'flex'}}>
+        <div className="ims-header-right ims-flex-gap-10">
           <button className="btn btn-secondary" onClick={() => setShowBomAnalyzer(true)} style={{borderColor: '#9b59b6', color: '#9b59b6'}}>
              <FaClipboardList /> BOM Analyzer
           </button>

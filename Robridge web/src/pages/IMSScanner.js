@@ -406,7 +406,7 @@ const IMSScanner = () => {
           <h1>Smart Scanner</h1>
           <p>Scan barcodes to instantly look up, add or move stock items</p>
         </div>
-        <div className="ims-header-right">
+        <div className="ims-header-right ims-flex-gap-10">
           <div className="scan-stage-toggle">
             {dynamicStages.map(s => (
               <button 
