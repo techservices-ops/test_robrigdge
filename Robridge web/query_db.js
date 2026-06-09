@@ -4,13 +4,19 @@ require('dotenv').config();
 const dbUrl = process.env.DATABASE_URL;
 const pool = new Pool({
   connectionString: dbUrl,
-  ssl: (dbUrl && dbUrl.includes('render.com')) ? true : { rejectUnauthorized: false }
+  ssl: false
 });
 
 async function run() {
   try {
-    const counts = await pool.query('SELECT workspace_id, master_id, COUNT(*) FROM ims_items GROUP BY workspace_id, master_id ORDER BY workspace_id');
-    console.log(counts.rows);
+    const workspaces = await pool.query('SELECT * FROM ims_workspaces');
+    console.log('Workspaces:', workspaces.rows);
+    const members = await pool.query('SELECT * FROM ims_workspace_members');
+    console.log('Members:', members.rows);
+    const users = await pool.query('SELECT id, name, email FROM users');
+    console.log('Users:', users.rows);
+    const items = await pool.query('SELECT * FROM ims_items');
+    console.log('Items:', items.rows);
   } catch (e) {
     console.error(e);
   } finally {

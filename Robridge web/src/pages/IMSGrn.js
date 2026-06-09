@@ -20,7 +20,7 @@ const emptyForm = { type: 'INWARD', supplier: '', poRef: '', vehicleNo: '', note
 const emptyItem = { barcode: '', name: '', orderedQty: '', receivedQty: '', unit: 'pcs', condition: 'Good', note: '' };
 
 export default function IMSGrn() {
-  const { imsFetch, activeWorkspaceId } = useWorkspace();
+  const { imsFetch, activeWorkspaceId, activeWorkspace } = useWorkspace();
   const { socket } = useWebSocket();
   const confirm = useConfirm();
   const [tab, setTab] = useState('INWARD');
@@ -34,6 +34,8 @@ export default function IMSGrn() {
   const [lineItems, setLineItems] = useState([{ ...emptyItem }]);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
+
+  const isReadOnly = ['user', 'member', 'viewer'].includes(activeWorkspace?.currentUserRole);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
@@ -193,9 +195,11 @@ export default function IMSGrn() {
         </div>
         <div className="ims-header-right" style={{ gap: 10, display: 'flex' }}>
           <button className="btn btn-secondary" onClick={loadGRNs}><FaSync /> Refresh</button>
-          <button className="btn btn-primary" onClick={() => { setForm({ ...emptyForm, type: tab }); setShowCreate(true); }}>
-            <FaPlus /> Create {tab === 'INWARD' ? 'GRN' : 'Dispatch Note'}
-          </button>
+          {!isReadOnly && (
+            <button className="btn btn-primary" onClick={() => { setForm({ ...emptyForm, type: tab }); setShowCreate(true); }}>
+              <FaPlus /> Create {tab === 'INWARD' ? 'GRN' : 'Dispatch Note'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -280,10 +284,15 @@ export default function IMSGrn() {
                 </table>
               </div>
 
-              {selected.status === 'PENDING' && (
+              {selected.status === 'PENDING' && !isReadOnly && (
                 <div className="grn-approval-strip">
                   <button className="btn btn-primary" style={{ background: '#27ae60' }} onClick={approve}><FaCheckCircle /> Approve &amp; Update Stock</button>
                   <button className="btn btn-secondary" style={{ borderColor: '#e74c3c', color: '#e74c3c' }} onClick={reject}><FaTimes /> Reject</button>
+                </div>
+              )}
+              {selected.status === 'PENDING' && isReadOnly && (
+                <div style={{ marginTop: 24, padding: '12px', background: '#fef2f2', color: '#e74c3c', borderRadius: 8, textAlign: 'center', fontSize: 14, fontWeight: 600 }}>
+                  You have view-only access. You cannot approve or reject documents.
                 </div>
               )}
             </>

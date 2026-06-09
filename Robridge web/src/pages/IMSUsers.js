@@ -11,14 +11,21 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';
 
 const SYSTEM_ROLES = [
-  { value: 'owner', label: 'Owner', color: '#e74c3c', desc: 'Full admin access, can delete workspace' },
-  { value: 'admin', label: 'Admin', color: '#9b59b6', desc: 'Can manage members, roles and settings' },
-  { value: 'manager', label: 'Manager', color: '#f39c12', desc: 'Can view and edit inventory data' },
-  { value: 'member', label: 'Member', color: '#3498db', desc: 'Standard access, can scan and view' },
-  { value: 'viewer', label: 'Viewer', color: '#7f8c8d', desc: 'Read-only access to all data' },
+  { value: 'owner', label: 'Admin', color: '#e74c3c', desc: 'Has full authority and has multiple managers to see. Can view and edit all pages.' },
+  { value: 'admin', label: 'Admin', color: '#e74c3c', desc: 'Has full authority and has multiple managers to see. Can view and edit all pages.' },
+  { value: 'manager', label: 'Manager', color: '#f39c12', desc: 'Has admin privilege but is restricted to pay or increase the subscription plan. Manager can request to increase plan. Can only invite Users.' },
+  { value: 'user', label: 'User', color: '#3498db', desc: 'Master catalog and setting is hidden. Can view operation but cannot create or modify the data/order/GRN/QC. Hide Team & Access Control.' },
+  { value: 'member', label: 'User', color: '#3498db', desc: 'Master catalog and setting is hidden. Can view operation but cannot create or modify the data/order/GRN/QC. Hide Team & Access Control.' },
+  { value: 'viewer', label: 'User', color: '#3498db', desc: 'Master catalog and setting is hidden. Can view operation but cannot create or modify the data/order/GRN/QC. Hide Team & Access Control.' }
 ];
 
-const getRoleInfo = (role) => SYSTEM_ROLES.find(r => r.value === role) || { label: role, color: '#7f8c8d', desc: '' };
+const UNIQUE_ROLES_FOR_UI = [
+  { value: 'admin', label: 'Admin', color: '#e74c3c', desc: 'Has full authority and has multiple managers to see. Can view and edit all pages.' },
+  { value: 'manager', label: 'Manager', color: '#f39c12', desc: 'Has admin privilege but is restricted to pay or increase the subscription plan. Manager can request to increase plan. Can only invite Users.' },
+  { value: 'user', label: 'User', color: '#3498db', desc: 'Master catalog and setting is hidden. Can view operation but cannot create or modify the data/order/GRN/QC. Hide Team & Access Control.' }
+];
+
+const getRoleInfo = (role) => SYSTEM_ROLES.find(r => r.value === role) || { label: 'User', color: '#3498db', desc: '' };
 
 const getInitials = (name) => {
   if (!name) return '?';
@@ -38,7 +45,7 @@ const IMSUsers = () => {
   const [activeTab, setActiveTab] = useState('members');
 
   // Invite generator state
-  const [genRole, setGenRole] = useState('member');
+  const [genRole, setGenRole] = useState('user');
   const [genExpiry, setGenExpiry] = useState('7');
   const [generating, setGenerating] = useState(false);
   const [newInviteLink, setNewInviteLink] = useState('');
@@ -157,9 +164,14 @@ const IMSUsers = () => {
   );
 
   const isAdmin = ['owner', 'admin'].includes(activeWorkspace?.currentUserRole || 'member');
+  const isManager = activeWorkspace?.currentUserRole === 'manager';
+
+  const inviteRoles = isManager ? UNIQUE_ROLES_FOR_UI.filter(r => r.value === 'user') : UNIQUE_ROLES_FOR_UI.filter(r => r.value !== 'admin');
 
   return (
     <div className="ims-users-page">
+
+
 
       {/* ── HEADER ── */}
       <div className="page-header ims-page-header">
@@ -259,7 +271,7 @@ const IMSUsers = () => {
                             onChange={e => setEditRoleValue(e.target.value)}
                             autoFocus
                           >
-                            {SYSTEM_ROLES.map(r => (
+                            {UNIQUE_ROLES_FOR_UI.filter(r => r.value !== 'admin').map(r => (
                               <option key={r.value} value={r.value}>{r.label}</option>
                             ))}
                           </select>
@@ -334,7 +346,7 @@ const IMSUsers = () => {
               <div className="igp-field">
                 <label>Assign Role</label>
                 <div className="igp-role-grid">
-                  {SYSTEM_ROLES.filter(r => r.value !== 'owner').map(r => (
+                  {inviteRoles.map(r => (
                     <button
                       key={r.value}
                       className={`igp-role-btn ${genRole === r.value ? 'selected' : ''}`}
@@ -427,10 +439,10 @@ const IMSUsers = () => {
               <button className="btn-close" onClick={() => setShowRoleModal(false)}><FaTimes /></button>
             </div>
             <div className="role-guide-body">
-              {SYSTEM_ROLES.map(role => (
+              {UNIQUE_ROLES_FOR_UI.map(role => (
                 <div className="role-guide-row" key={role.value}>
                   <div className="role-guide-badge" style={{ background: role.color + '15', color: role.color }}>
-                    {role.value === 'owner' && <FaKey />} {role.label}
+                    {role.value === 'admin' && <FaKey />} {role.label}
                   </div>
                   <div className="role-guide-desc">{role.desc}</div>
                 </div>

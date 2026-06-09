@@ -15,8 +15,10 @@ const ZONE_COLORS = {
 };
 
 export default function IMSLocations() {
-  const { imsFetch, activeWorkspaceId } = useWorkspace();
+  const { imsFetch, activeWorkspaceId, activeWorkspace } = useWorkspace();
   const confirm = useConfirm();
+
+  const isReadOnly = ['user', 'member', 'viewer'].includes(activeWorkspace?.currentUserRole);
 
   // ── Core state ────────────────────────────────────────────────────────────
   const [locations, setLocations]   = useState([]);
@@ -237,16 +239,20 @@ export default function IMSLocations() {
         </div>
         <div className="ims-header-right" style={{ gap: 10, display: 'flex' }}>
           <button className="btn btn-secondary" onClick={loadLocations}><FaSync /> Refresh</button>
-          <button
-            className="btn btn-secondary"
-            style={{ borderColor: '#9b59b6', color: '#9b59b6' }}
-            onClick={() => openTransfer('')}
-          >
-            <FaExchangeAlt /> Transfer Stock
-          </button>
-          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-            <FaPlus /> Add Zone
-          </button>
+          {!isReadOnly && (
+            <>
+              <button
+                className="btn btn-secondary"
+                style={{ borderColor: '#9b59b6', color: '#9b59b6' }}
+                onClick={() => openTransfer('')}
+              >
+                <FaExchangeAlt /> Transfer Stock
+              </button>
+              <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+                <FaPlus /> Add Zone
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -330,22 +336,24 @@ export default function IMSLocations() {
                     </div>
 
                     {/* Per-card delete button — inline, not absolute */}
-                    <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
-                      <button
-                        title="Delete zone"
-                        onClick={e => deleteLocation(e, loc)}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 5,
-                          background: 'none', border: '1px solid #f5c6c6',
-                          color: '#e74c3c', borderRadius: 6, padding: '4px 10px',
-                          fontSize: 12, cursor: 'pointer', transition: 'all 0.15s'
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.background = '#fff0f0'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
-                      >
-                        <FaTrash style={{ fontSize: 11 }} /> Delete
-                      </button>
-                    </div>
+                    {!isReadOnly && (
+                      <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
+                        <button
+                          title="Delete zone"
+                          onClick={e => deleteLocation(e, loc)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 5,
+                            background: 'none', border: '1px solid #f5c6c6',
+                            color: '#e74c3c', borderRadius: 6, padding: '4px 10px',
+                            fontSize: 12, cursor: 'pointer', transition: 'all 0.15s'
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = '#fff0f0'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+                        >
+                          <FaTrash style={{ fontSize: 11 }} /> Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -414,18 +422,24 @@ export default function IMSLocations() {
               </div>
 
               {/* Action buttons */}
-              <div style={{ marginTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <button className="btn btn-primary" onClick={openBulkAssign}>
-                  <FaLayerGroup /> Assign Items to Zone
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  style={{ borderColor: '#9b59b6', color: '#9b59b6' }}
-                  onClick={() => openTransfer(String(selected.id))}
-                >
-                  <FaExchangeAlt /> Transfer Stock Here
-                </button>
-              </div>
+              {!isReadOnly ? (
+                <div style={{ marginTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <button className="btn btn-primary" onClick={openBulkAssign}>
+                    <FaLayerGroup /> Assign Items to Zone
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ borderColor: '#9b59b6', color: '#9b59b6' }}
+                    onClick={() => openTransfer(String(selected.id))}
+                  >
+                    <FaExchangeAlt /> Transfer Stock Here
+                  </button>
+                </div>
+              ) : (
+                <div style={{ marginTop: 24, padding: '12px', background: '#fef2f2', color: '#e74c3c', borderRadius: 8, textAlign: 'center', fontSize: 14, fontWeight: 600 }}>
+                  You have view-only access. You cannot assign or transfer items.
+                </div>
+              )}
             </>
           ) : (
             <div style={{
