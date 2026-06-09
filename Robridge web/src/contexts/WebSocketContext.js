@@ -153,6 +153,18 @@ export const WebSocketProvider = ({ children }) => {
           setLatestScan(completeScan);
           // autoSaveScanToDatabase(completeScan); // Commented out to prevent duplicate saves/overwrites
 
+          // Clear dashboard caches to keep data consistent across pages
+          try {
+            Object.keys(sessionStorage).forEach(key => {
+              if (key.startsWith('ims_dashboard_cache_')) {
+                sessionStorage.removeItem(key);
+              }
+            });
+            console.log('🧹 Cleared dashboard cache on WebSocket scan');
+          } catch (e) {
+            console.error('Error clearing sessionStorage:', e);
+          }
+
           setTimeout(() => {
             isProcessingScanRef.current = false;
             setIsProcessingScan(false);
@@ -283,7 +295,8 @@ export const WebSocketProvider = ({ children }) => {
     });
 
     socketRef.current.on('esp32_barcode_scan', (data) => processScanData(data, 'esp32_barcode_scan'));
-    socketRef.current.on('esp32_scan_processed', (data) => processScanData(data, 'esp32_scan_processed'));
+    // Commented out to prevent double-processing identical scan events emitted simultaneously
+    // socketRef.current.on('esp32_scan_processed', (data) => processScanData(data, 'esp32_scan_processed'));
     socketRef.current.on('esp32_device_connected', (device) => {
       setEsp32Devices(prev => {
         const exists = prev.find(d => d.deviceId === device.deviceId);

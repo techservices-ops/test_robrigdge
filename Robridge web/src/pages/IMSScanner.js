@@ -35,6 +35,8 @@ const IMSScanner = () => {
   const [dynamicCategories, setDynamicCategories] = useState(['General', 'Pharmacy', 'PPE', 'Hygiene', 'Electronics', 'Food & Beverage']);
   const inputRef = useRef(null);
   const isScanningRef = useRef(false); // guard against concurrent doScan() calls
+  const lastScanTimeRef = useRef(0);
+  const lastScanBarcodeRef = useRef('');
   // GRN/Dispatch/WO verify-scan result state
   const [scanMatch, setScanMatch] = useState(null); // { matched, type, data, message }
   const [searchQuery, setSearchQuery] = useState('');
@@ -84,7 +86,7 @@ const IMSScanner = () => {
       if (lastProcessedScanRef.current === latestScan.timestamp) return;
       lastProcessedScanRef.current = latestScan.timestamp;
       
-      doScan(latestScan.barcodeData);
+      doScan(latestScan.barcodeData, latestScan.id);
     }
   }, [latestScan]);
 
@@ -120,7 +122,7 @@ const IMSScanner = () => {
     loadData();
   }, [activeWorkspaceId]);
 
-  const recordScanEvent = async (item, workflow, qty = 1, batch = '', serial = '', nameFallback = '', notes = '') => {
+  const recordScanEvent = async (item, workflow, qty = 1, batch = '', serial = '', nameFallback = '', notes = '', websocketScanId = '') => {
     try {
       const res = await imsFetch('/api/ims/scanner/scan', {
         method: 'POST',
@@ -135,12 +137,15 @@ const IMSScanner = () => {
           trackingMode: item ? item.trackingMode : onboardForm.tracking,
           batchNo: batch,
           serialNo: serial,
-          notes: notes
+          notes: notes,
+          websocketScanId: websocketScanId
         })
       });
       const data = await res.json();
       if (data.success && data.updatedStock !== undefined) {
-        setFoundItem(prev => prev ? { ...prev, stock: data.updatedStock } : null);
+        if (item) {
+          setFoundItem({ ...item, stock: data.updatedStock });
+        }
       }
       fetchEvents();
     } catch (e) { console.error('Error recording scan'); }
@@ -149,9 +154,19 @@ const IMSScanner = () => {
   const isGrnMode = (stage) => stage === 'RECEIVE' || stage === 'DISPATCH';
   const isWoMode = (stage) => stage === 'PUTAWAY';
 
-  const doScan = async (code) => {
+  const doScan = async (code, websocketScanId = null) => {
     const val = code || scanInput.trim();
     if (!val) return;
+
+    // Debounce: ignore scans of the exact same barcode within 2500ms
+    const now = Date.now();
+    if (val === lastScanBarcodeRef.current && now - lastScanTimeRef.current < 2500) {
+      console.log('🚫 Ignoring duplicate scan (debounce):', val);
+      return;
+    }
+    lastScanBarcodeRef.current = val;
+    lastScanTimeRef.current = now;
+
     // Prevent double-firing from concurrent event sources (WebSocket + keyboard/button)
     if (isScanningRef.current) return;
     isScanningRef.current = true;
@@ -178,11 +193,41 @@ const IMSScanner = () => {
         try {
           const lookupRes = await imsFetch(`/api/ims/scanner/lookup/${encodeURIComponent(val)}`);
           const lookupData = await lookupRes.json();
+          let itemToLog = null;
           if (lookupData.success && lookupData.found) {
+            itemToLog = lookupData.item;
             setFoundItem(lookupData.item);
-            if (data.matched && autoLogEnabled) {
+          } else if (data.matched) {
+            // Construct a temporary catalog item from GRN item info
+            itemToLog = {
+              name: data.item.name,
+              barcode: val,
+              category: 'General',
+              baseUnit: data.item.unit || 'Unit',
+              trackingMode: 'FIFO',
+              stock: 0
+            };
+            setFoundItem(itemToLog);
+          } else {
+            // Not in catalog and not on GRN/WO -> trigger onboarding
+            setScanResult('unknown');
+            setNewItemBarcode(val);
+            setShowOnboard(true);
+            
+            setScanning(false);
+            setScanInput('');
+            isScanningRef.current = false;
+            setTimeout(() => inputRef.current?.focus(), 300);
+            return;
+          }
+
+          if (autoLogEnabled && itemToLog) {
+            if (data.matched) {
               const prefix = scanStage === 'DISPATCH' ? 'DN:' : 'GRN:';
-              await recordScanEvent(lookupData.item, scanStage, 1, '', '', '', prefix + data.grn.docNo);
+              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', prefix + data.grn.docNo, websocketScanId);
+            } else {
+              // Standalone scan (not matching GRN but autoLog is enabled)
+              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', '', websocketScanId);
             }
           }
         } catch (e) { /* catalog lookup failure is non-fatal */ }
@@ -208,10 +253,40 @@ const IMSScanner = () => {
         try {
           const lookupRes = await imsFetch(`/api/ims/scanner/lookup/${encodeURIComponent(val)}`);
           const lookupData = await lookupRes.json();
+          let itemToLog = null;
           if (lookupData.success && lookupData.found) {
+            itemToLog = lookupData.item;
             setFoundItem(lookupData.item);
-            if (data.matched && autoLogEnabled) {
-              await recordScanEvent(lookupData.item, scanStage, 1, '', '', '', 'WO:' + data.wo.woNumber);
+          } else if (data.matched) {
+            // Construct a temporary catalog item from WO info
+            itemToLog = {
+              name: data.wo.productName,
+              barcode: val,
+              category: 'General',
+              baseUnit: 'Unit',
+              trackingMode: 'FIFO',
+              stock: 0
+            };
+            setFoundItem(itemToLog);
+          } else {
+            // Not in catalog and not on Work Order -> trigger onboarding
+            setScanResult('unknown');
+            setNewItemBarcode(val);
+            setShowOnboard(true);
+            
+            setScanning(false);
+            setScanInput('');
+            isScanningRef.current = false;
+            setTimeout(() => inputRef.current?.focus(), 300);
+            return;
+          }
+
+          if (autoLogEnabled && itemToLog) {
+            if (data.matched) {
+              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', 'WO:' + data.wo.woNumber, websocketScanId);
+            } else {
+              // Standalone scan
+              await recordScanEvent(itemToLog, scanStage, 1, '', '', '', '', websocketScanId);
             }
           }
         } catch (e) { /* catalog lookup failure is non-fatal */ }
@@ -238,7 +313,7 @@ const IMSScanner = () => {
           } catch(e) { setFefoRec([]); }
         } else { setFefoRec([]); }
         setScanResult('known');
-        await recordScanEvent(data.item, scanStage, 1);
+        await recordScanEvent(data.item, scanStage, 1, '', '', '', '', websocketScanId);
         setTimeout(() => inputRef.current?.focus(), 100);
       } else {
         setScanResult('unknown');
@@ -254,15 +329,24 @@ const IMSScanner = () => {
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter') doScan();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      doScan();
+    }
   };
 
 
   const handleOnboardSave = async () => {
-    // For unknown items, we don't insert into catalog automatically yet, just record the scan event
-    await recordScanEvent(null, scanStage, onboardForm.qty || 1, '', '', onboardForm.name || 'New Item');
+    const tempItem = {
+      name: onboardForm.name || 'New Item',
+      barcode: newItemBarcode,
+      category: onboardForm.category,
+      baseUnit: onboardForm.unit,
+      trackingMode: onboardForm.tracking,
+      stock: 0
+    };
+    await recordScanEvent(tempItem, scanStage, onboardForm.qty || 1, '', '', tempItem.name);
     setShowOnboard(false);
-    setScanResult('onboarded');
     setOnboardForm({ name: '', category: 'General', unit: 'Unit', qty: '', tracking: 'FIFO' });
     setTimeout(() => inputRef.current?.focus(), 100);
   };
@@ -456,7 +540,7 @@ const IMSScanner = () => {
 
         {/* Right — Product Info */}
         <div className="scanner-right">
-          {(scanResult === 'known' || scanResult === 'pending_confirm' || scanResult === 'scan_match' || scanResult === 'scan_nomatch') && foundItem ? (
+          {foundItem ? (
             <div className="found-item-card">
               <div className="found-header">
                 <div className="found-name">{foundItem.name}</div>
@@ -531,9 +615,23 @@ const IMSScanner = () => {
                   <span className="fd-value">{foundItem.location}</span>
                 </div>
               </div>
-              <div className="found-actions" style={{ justifyContent: 'center', background: '#f0fff5', borderTop: '1px solid #c3e6cb', color: '#155724', padding: '12px', fontWeight: 'bold', width: '100%' }}>
-                <FaCheckCircle style={{ marginRight: '8px' }} /> Successfully Auto-Logged
-              </div>
+              {scanMatch === null ? (
+                <div className="found-actions" style={{ justifyContent: 'center', background: '#f0fff5', borderTop: '1px solid #c3e6cb', color: '#155724', padding: '12px', fontWeight: 'bold', width: '100%' }}>
+                  <FaCheckCircle style={{ marginRight: '8px' }} /> Successfully Auto-Logged
+                </div>
+              ) : scanMatch.matched ? (
+                <div className="found-actions" style={{ justifyContent: 'center', background: '#f0fff5', borderTop: '1px solid #c3e6cb', color: '#155724', padding: '12px', fontWeight: 'bold', width: '100%' }}>
+                  <FaCheckCircle style={{ marginRight: '8px' }} /> Verification Successful — Logged
+                </div>
+              ) : autoLogEnabled ? (
+                <div className="found-actions" style={{ justifyContent: 'center', background: '#fff9e6', borderTop: '1px solid #ffeeba', color: '#856404', padding: '12px', fontWeight: 'bold', width: '100%' }}>
+                  <FaExclamationCircle style={{ marginRight: '8px' }} /> Verification Failed — Logged as Standalone
+                </div>
+              ) : (
+                <div className="found-actions" style={{ justifyContent: 'center', background: '#fff0f0', borderTop: '1px solid #f5c6cb', color: '#721c24', padding: '12px', fontWeight: 'bold', width: '100%' }}>
+                  <FaExclamationCircle style={{ marginRight: '8px' }} /> Verification Failed — Not Logged
+                </div>
+              )}
             </div>
           ) : (
              <div className="empty-state" style={{ background: '#fff', border: '1px solid #dadce0', borderRadius: '12px', height: '100%' }}>

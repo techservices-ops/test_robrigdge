@@ -350,6 +350,7 @@ const initDatabase = async () => {
           await client.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS workspace_id INTEGER`);
         }
         await client.query(`ALTER TABLE ims_scan_events ADD COLUMN IF NOT EXISTS expiry_date TIMESTAMP`);
+        await client.query(`ALTER TABLE ims_scan_events ADD COLUMN IF NOT EXISTS websocket_scan_id VARCHAR(255)`);
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS alert_at NUMERIC DEFAULT 0`);
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS custom_fields JSONB DEFAULT '{}'`);
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS item_type VARCHAR(50) DEFAULT 'Raw Material'`);
@@ -5194,7 +5195,7 @@ app.get('/api/ims/scanner/lookup/:barcode', authenticateToken, requireWorkspace,
 // Record a scan event and update stock
 app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (req, res) => {
   try {
-    const { barcode, itemId, itemName, workflow, quantity, unit, batchNo, serialNo, notes } = req.body;
+    const { barcode, itemId, itemName, workflow, quantity, unit, batchNo, serialNo, notes, websocketScanId } = req.body;
     if (!barcode || !workflow) return res.status(400).json({ success: false, error: 'barcode and workflow required' });
     const qty = Number(quantity) || 1;
 
@@ -5202,6 +5203,42 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
     const settings = await getWorkspaceSettings(req.workspace_id);
     if (settings?.security?.batchStrict && !batchNo && !serialNo) {
       return res.status(403).json({ success: false, error: 'Strict Traceability is enabled. Batch No or Serial No is required for this operation.' });
+    }
+
+    // ── DEDUPLICATION CHECK ──
+    // 1. Check if this websocketScanId has already been recorded
+    if (websocketScanId) {
+      const dupIdResult = await pool.query(
+        'SELECT id FROM ims_scan_events WHERE workspace_id = $1 AND websocket_scan_id = $2 LIMIT 1',
+        [req.workspace_id, websocketScanId]
+      );
+      if (dupIdResult.rows.length > 0) {
+        console.log(`🚫 Duplicate websocket_scan_id detected on backend: ${websocketScanId}`);
+        const stockRes = await pool.query(
+          'SELECT stock FROM ims_items WHERE workspace_id = $1 AND barcode = $2 LIMIT 1',
+          [req.workspace_id, barcode]
+        );
+        const currentStock = Number(stockRes.rows[0]?.stock || 0);
+        return res.json({ success: true, message: 'Scan already recorded (duplicate ID)', updatedStock: currentStock });
+      }
+    }
+
+    // 2. Check for duplicate scans within 2 seconds window
+    const timeDupResult = await pool.query(
+      `SELECT id FROM ims_scan_events 
+       WHERE workspace_id = $1 AND barcode = $2 AND workflow = $3 
+         AND scanned_at > NOW() - INTERVAL '2 seconds'
+       ORDER BY scanned_at DESC LIMIT 1`,
+      [req.workspace_id, barcode, workflow]
+    );
+    if (timeDupResult.rows.length > 0) {
+      console.log(`🚫 Duplicate timestamp scan detected on backend for barcode: ${barcode}`);
+      const stockRes = await pool.query(
+        'SELECT stock FROM ims_items WHERE workspace_id = $1 AND barcode = $2 LIMIT 1',
+        [req.workspace_id, barcode]
+      );
+      const currentStock = Number(stockRes.rows[0]?.stock || 0);
+      return res.json({ success: true, message: 'Scan already recorded (duplicate timestamp)', updatedStock: currentStock });
     }
 
     let resolvedItemId = itemId;
@@ -5231,9 +5268,9 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
 
     // Insert scan event
     await pool.query(
-      `INSERT INTO ims_scan_events (user_id, workspace_id, barcode, item_id, item_name, workflow, quantity, unit, batch_no, serial_no, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [req.user.id, req.workspace_id, barcode, resolvedItemId||null, itemName||null, workflow, qty, unit||null, batchNo||null, serialNo||null, notes||null]
+      `INSERT INTO ims_scan_events (user_id, workspace_id, barcode, item_id, item_name, workflow, quantity, unit, batch_no, serial_no, notes, websocket_scan_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [req.user.id, req.workspace_id, barcode, resolvedItemId||null, itemName||null, workflow, qty, unit||null, batchNo||null, serialNo||null, notes||null, websocketScanId||null]
     );
 
     // Adjust stock if item exists in catalog
