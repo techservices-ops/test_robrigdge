@@ -1100,7 +1100,11 @@ app.get('/api/workspaces', authenticateToken, async (req, res) => {
        ORDER BY w.created_at ASC`,
       [req.user.id]
     );
-    res.json({ success: true, workspaces: result.rows });
+    const workspaces = result.rows.map(row => ({
+      ...row,
+      currentUserRole: row.role
+    }));
+    res.json({ success: true, workspaces });
   } catch (error) {
     console.error('Error fetching workspaces:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch workspaces' });
@@ -1139,10 +1143,16 @@ app.post('/api/workspaces', authenticateToken, async (req, res) => {
 // Generate a new invite link (token-based, anyone with the link can join)
 app.post('/api/workspaces/invites/generate', authenticateToken, requireWorkspace, async (req, res) => {
   try {
-    if (req.workspace_role !== 'owner' && req.workspace_role !== 'admin') {
-      return res.status(403).json({ success: false, error: 'Only admins can generate invite links' });
+    if (req.workspace_role !== 'owner' && req.workspace_role !== 'admin' && req.workspace_role !== 'manager') {
+      return res.status(403).json({ success: false, error: 'Only admins and managers can generate invite links' });
     }
     const { role = 'member', expiryDays = 7 } = req.body;
+    
+    // Managers can only invite 'user' / 'member' / 'viewer' role
+    if (req.workspace_role === 'manager' && !['user', 'member', 'viewer'].includes(role)) {
+      return res.status(403).json({ success: false, error: 'Managers are restricted to inviting User role only' });
+    }
+
     const token = require('crypto').randomBytes(24).toString('hex');
     const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
     await pool.query(
@@ -1178,8 +1188,8 @@ app.get('/api/workspaces/invites', authenticateToken, requireWorkspace, async (r
 // Revoke an invite link
 app.delete('/api/workspaces/invites/:id', authenticateToken, requireWorkspace, async (req, res) => {
   try {
-    if (req.workspace_role !== 'owner' && req.workspace_role !== 'admin') {
-      return res.status(403).json({ success: false, error: 'Only admins can revoke invite links' });
+    if (req.workspace_role !== 'owner' && req.workspace_role !== 'admin' && req.workspace_role !== 'manager') {
+      return res.status(403).json({ success: false, error: 'Only admins and managers can revoke invite links' });
     }
     await pool.query('DELETE FROM ims_workspace_invites WHERE id=$1 AND workspace_id=$2', [req.params.id, req.workspace_id]);
     res.json({ success: true });
@@ -5379,12 +5389,11 @@ app.get('/api/ims/dashboard', authenticateToken, requireWorkspace, async (req, r
     if (isNaN(bufferPct)) bufferPct = 0;
     const bufferMultiplier = 1 + (bufferPct / 100);
 
-    // Low stock: items below their category's alert threshold (scaled by predictive buffer)
     const lowStock = await pool.query(
-      `SELECT i.id, i.name, i.barcode, i.stock, i.category, ROUND(COALESCE(c.alert_at, 10) * $2) as alert_at
+      `SELECT i.id, i.name, i.barcode, i.stock, i.category, ROUND(COALESCE(c.alert_at, 10) * $2::numeric) as alert_at
        FROM ims_items i
        LEFT JOIN ims_categories c ON LOWER(c.name) = LOWER(i.category) AND c.workspace_id = i.workspace_id
-       WHERE i.workspace_id = $1 AND i.stock <= ROUND(COALESCE(c.alert_at, 10) * $2)
+       WHERE i.workspace_id = $1 AND i.stock <= ROUND(COALESCE(c.alert_at, 10) * $2::numeric)
        ORDER BY i.stock ASC LIMIT 20`,
       [wsId, bufferMultiplier]
     );

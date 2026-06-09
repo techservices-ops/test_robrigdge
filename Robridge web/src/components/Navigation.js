@@ -82,6 +82,16 @@ const Navigation = () => {
     if (!user || !userRole) return false;
     const hasRoleAccess = item.roles.includes(userRole);
     const hasPageAccessCheck = hasPageAccess(item.path);
+
+    // Apply Workspace-level role restrictions for 'user', 'member', 'viewer'
+    const wsRole = activeWorkspace?.currentUserRole;
+    if (wsRole === 'user' || wsRole === 'member' || wsRole === 'viewer') {
+      const restrictedPaths = ['/ims-catalog', '/ims-settings', '/ims-users', '/settings'];
+      if (restrictedPaths.includes(item.path)) {
+        return false; // Hide these for standard users
+      }
+    }
+
     return hasRoleAccess && hasPageAccessCheck;
   });
 

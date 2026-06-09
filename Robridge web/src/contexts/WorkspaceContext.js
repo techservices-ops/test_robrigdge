@@ -30,7 +30,11 @@ export const WorkspaceProvider = ({ children }) => {
       });
       const data = await res.json();
       if (data.success) {
-        setWorkspaces(data.workspaces || []);
+        const formatted = (data.workspaces || []).map(w => ({
+          ...w,
+          currentUserRole: w.currentUserRole || w.role
+        }));
+        setWorkspaces(formatted);
 
         // Auto-select: prefer stored id, then fall back to user's default, then first one
         const storedId = localStorage.getItem('robridge_workspace_id');

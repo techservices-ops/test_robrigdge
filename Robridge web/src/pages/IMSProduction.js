@@ -14,8 +14,11 @@ const OUTCOMES = [
 ];
 
 export default function IMSProduction() {
-  const { imsFetch, activeWorkspaceId } = useWorkspace();
+  const { imsFetch, activeWorkspaceId, activeWorkspace } = useWorkspace();
   const { latestScan, scanBuffer } = useWebSocket();
+  
+  const isReadOnly = ['user', 'member', 'viewer'].includes(activeWorkspace?.currentUserRole);
+
   const [stages, setStages] = useState([]);
   const [events, setEvents] = useState([]);
   const [summary, setSummary] = useState([]);
@@ -149,21 +152,21 @@ export default function IMSProduction() {
             <input className="form-input" placeholder="Scan or type barcode..." value={scan.barcode}
               style={{ width: '100%', padding: '10px 12px', border: '1px solid #ccc', borderRadius: 6, textAlign: 'left', boxSizing: 'border-box' }}
               onChange={e => setScan(s => ({ ...s, barcode: e.target.value }))}
-              onKeyDown={e => e.key === 'Enter' && recordScan()} autoFocus />
+              onKeyDown={e => e.key === 'Enter' && recordScan()} autoFocus disabled={isReadOnly} />
           </div>
           <div className="form-group" style={{ marginBottom: 16, textAlign: 'left' }}>
             <label className="form-label" style={{ display: 'block', textAlign: 'left', marginBottom: 6, fontWeight: 600, fontSize: 13, color: '#444' }}>Item Name</label>
             <input className="form-input" placeholder="Optional" value={scan.itemName} 
               style={{ width: '100%', padding: '10px 12px', border: '1px solid #ccc', borderRadius: 6, textAlign: 'left', boxSizing: 'border-box' }}
-              onChange={e => setScan(s => ({ ...s, itemName: e.target.value }))} />
+              onChange={e => setScan(s => ({ ...s, itemName: e.target.value }))} disabled={isReadOnly} />
           </div>
 
           <div style={{ marginBottom: 16, textAlign: 'left' }}>
             <label className="form-label" style={{ display: 'block', textAlign: 'left', marginBottom: 6, fontWeight: 600, fontSize: 13, color: '#444' }}>Outcome *</label>
             <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
               {OUTCOMES.map(o => (
-                <button key={o.value} onClick={() => setScan(s => ({ ...s, outcome: o.value }))}
-                  style={{ flex: 1, padding: '10px 0', border: `2px solid ${scan.outcome === o.value ? o.color : '#e0e0e0'}`, borderRadius: 8, background: scan.outcome === o.value ? o.bg : '#fff', color: o.color, fontWeight: 700, cursor: 'pointer', fontSize: 13, transition: 'all 0.15s' }}>
+                <button key={o.value} onClick={() => setScan(s => ({ ...s, outcome: o.value }))} disabled={isReadOnly}
+                  style={{ flex: 1, padding: '10px 0', border: `2px solid ${scan.outcome === o.value ? o.color : '#e0e0e0'}`, borderRadius: 8, background: scan.outcome === o.value ? o.bg : '#fff', color: o.color, fontWeight: 700, cursor: isReadOnly ? 'not-allowed' : 'pointer', fontSize: 13, transition: 'all 0.15s', opacity: isReadOnly ? 0.6 : 1 }}>
                   {o.label}
                 </button>
               ))}
@@ -175,13 +178,13 @@ export default function IMSProduction() {
               <label className="form-label" style={{ display: 'block', textAlign: 'left', marginBottom: 6, fontWeight: 600, fontSize: 13, color: '#444' }}>Qty</label>
               <input className="form-input" type="number" value={scan.qty} 
                 style={{ width: '100%', padding: '10px 12px', border: '1px solid #ccc', borderRadius: 6, textAlign: 'left', boxSizing: 'border-box' }}
-                onChange={e => setScan(s => ({ ...s, qty: e.target.value }))} />
+                onChange={e => setScan(s => ({ ...s, qty: e.target.value }))} disabled={isReadOnly} />
             </div>
             <div className="form-group" style={{ flex: 2, textAlign: 'left' }}>
               <label className="form-label" style={{ display: 'block', textAlign: 'left', marginBottom: 6, fontWeight: 600, fontSize: 13, color: '#444' }}>Batch No</label>
               <input className="form-input" placeholder="Optional" value={scan.batchNo} 
                 style={{ width: '100%', padding: '10px 12px', border: '1px solid #ccc', borderRadius: 6, textAlign: 'left', boxSizing: 'border-box' }}
-                onChange={e => setScan(s => ({ ...s, batchNo: e.target.value }))} />
+                onChange={e => setScan(s => ({ ...s, batchNo: e.target.value }))} disabled={isReadOnly} />
             </div>
           </div>
 
@@ -189,12 +192,13 @@ export default function IMSProduction() {
             <label className="form-label" style={{ display: 'block', textAlign: 'left', marginBottom: 6, fontWeight: 600, fontSize: 13, color: '#444' }}>Notes</label>
             <input className="form-input" placeholder="Reason for rework/reject..." value={scan.notes} 
               style={{ width: '100%', padding: '10px 12px', border: '1px solid #ccc', borderRadius: 6, textAlign: 'left', boxSizing: 'border-box' }}
-              onChange={e => setScan(s => ({ ...s, notes: e.target.value }))} />
+              onChange={e => setScan(s => ({ ...s, notes: e.target.value }))} disabled={isReadOnly} />
           </div>
 
-          <button className="btn btn-primary" style={{ width: '100%' }} onClick={recordScan} disabled={saving || !scan.barcode || !selectedStage}>
-            {saving ? <FaSpinner /> : <FaSave />} Record Scan
+          <button className="btn btn-primary" style={{ width: '100%' }} onClick={recordScan} disabled={saving || !scan.barcode || !selectedStage || isReadOnly}>
+            {saving ? <FaSpinner /> : <FaSave />} {isReadOnly ? "View Only" : "Record Scan"}
           </button>
+          {isReadOnly && <p style={{ color: '#e74c3c', fontSize: 12, marginTop: 8, textAlign: 'center' }}>You have view-only access.</p>}
         </div>
 
         {/* Events at Selected Stage */}

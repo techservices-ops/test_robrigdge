@@ -4,7 +4,7 @@ const payload = JSON.stringify({ email: 'admin@robridge.com', password: 'admin12
 
 const reqOpts = {
   hostname: 'localhost',
-  port: 3000,
+  port: 3001,
   path: '/api/auth/login',
   method: 'POST',
   headers: {
@@ -23,16 +23,19 @@ const req = http.request(reqOpts, (res) => {
       return;
     }
     
-    http.get('http://localhost:3000/api/ims/grn/5/items', {
+    const wsId = response.workspaces?.[0]?.id || '1';
+    console.log('Using token and workspace ID:', wsId);
+    
+    http.get(`http://localhost:3001/api/ims/dashboard`, {
       headers: {
         'Authorization': 'Bearer ' + response.token,
-        'x-workspace-id': response.workspaces?.[0]?.id || '1'
+        'x-workspace-id': wsId
       }
     }, (res2) => {
       let data2 = '';
       res2.on('data', d => data2 += d);
       res2.on('end', () => {
-        console.log('GET /api/ims/grn/5/items response:', res2.statusCode);
+        console.log('GET /api/ims/dashboard response status:', res2.statusCode);
         console.log('Body:', data2);
       });
     });

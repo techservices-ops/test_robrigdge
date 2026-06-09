@@ -3,15 +3,30 @@ import {
   FaBell, FaToggleOn, FaToggleOff, 
   FaSave, FaCheckCircle, FaLock, FaBrain, 
   FaRobot, FaPlug, FaMoneyBillWave, FaChartLine, 
-  FaPlus, FaTrash, FaLayerGroup, FaExchangeAlt
+  FaPlus, FaTrash, FaLayerGroup, FaExchangeAlt,
+  FaCloud, FaHourglassHalf
 } from 'react-icons/fa';
 import './IMSSettings.css';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { useConfirm } from '../components/ConfirmModal';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../components/Toast';
 
 const IMSSettings = () => {
-  const { imsFetch, activeWorkspaceId } = useWorkspace();
+  const { imsFetch, activeWorkspaceId, activeWorkspace } = useWorkspace();
+  const { getUserInfo } = useAuth();
+  const showToast = useToast();
   const confirm = useConfirm();
+  const currentUser = getUserInfo();
+  
+  const wsRole = activeWorkspace?.currentUserRole;
+  const isAdmin = ['owner', 'admin'].includes(wsRole || 'member');
+  const isManager = wsRole === 'manager';
+
+  // Storage Subscription State
+  const [storageGB, setStorageGB] = useState(1);
+  const [currentStorageGB, setCurrentStorageGB] = useState(1);
+  const [pendingUpgrade, setPendingUpgrade] = useState(null); // { requestedGB, requestedBy, status }
   
   // Master Dynamic State
   const [categories, setCategories] = useState([]);
@@ -65,11 +80,18 @@ const IMSSettings = () => {
              if(prefs.procurementAction) setProcurementAction(prefs.procurementAction);
              if(prefs.spendLimit) setSpendLimit(prefs.spendLimit);
              if(prefs.bufferPct) setBufferPct(prefs.bufferPct);
+             if(prefs.storageGB) {
+               setStorageGB(prefs.storageGB);
+               setCurrentStorageGB(prefs.storageGB);
+             }
+             if(prefs.pendingUpgrade) {
+               setPendingUpgrade(prefs.pendingUpgrade);
+             }
           }
        } catch (err) { console.error("Error fetching IMS data", err); }
     };
     loadData();
-  }, [activeWorkspaceId]);
+  }, [activeWorkspaceId, imsFetch]);
 
   const handleToggle = (setter, key) => setter(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -130,8 +152,87 @@ const IMSSettings = () => {
     } catch(err) { console.error(err); }
   };
 
+  const handleRequestUpgrade = async (requestedSize) => {
+    const newPending = {
+      requestedGB: requestedSize,
+      requestedBy: currentUser?.name || 'Manager',
+      status: 'pending',
+      requestedAt: new Date().toISOString()
+    };
+    setPendingUpgrade(newPending);
+    
+    const settings = {
+      alerts, security, aiSettings, integrations, scannerPrefs, procurementAction, spendLimit, bufferPct,
+      storageGB: currentStorageGB,
+      pendingUpgrade: newPending
+    };
+    try {
+      const res = await imsFetch('/api/ims/settings', {
+        method: 'POST',
+        body: JSON.stringify({ settings })
+      });
+      const data = await res.json();
+      if(data.success) {
+        showToast(`Upgrade request for ${requestedSize} GB sent to Admins.`, 'success');
+      }
+    } catch(err) {
+      console.error(err);
+      showToast('Failed to send upgrade request', 'error');
+    }
+  };
+
+  const handlePayAndUpgrade = async (newSize) => {
+    setCurrentStorageGB(newSize);
+    setStorageGB(newSize);
+    setPendingUpgrade(null);
+    
+    const settings = {
+      alerts, security, aiSettings, integrations, scannerPrefs, procurementAction, spendLimit, bufferPct,
+      storageGB: newSize,
+      pendingUpgrade: null
+    };
+    try {
+      const res = await imsFetch('/api/ims/settings', {
+        method: 'POST',
+        body: JSON.stringify({ settings })
+      });
+      const data = await res.json();
+      if(data.success) {
+        showToast(`Subscription upgraded to ${newSize} GB! Payment processed successfully.`, 'success');
+      }
+    } catch(err) {
+      console.error(err);
+      showToast('Upgrade payment failed', 'error');
+    }
+  };
+
+  const handleCancelRequest = async () => {
+    setPendingUpgrade(null);
+    const settings = {
+      alerts, security, aiSettings, integrations, scannerPrefs, procurementAction, spendLimit, bufferPct,
+      storageGB: currentStorageGB,
+      pendingUpgrade: null
+    };
+    try {
+      const res = await imsFetch('/api/ims/settings', {
+        method: 'POST',
+        body: JSON.stringify({ settings })
+      });
+      const data = await res.json();
+      if(data.success) {
+        showToast('Upgrade request cancelled', 'info');
+      }
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
   const handleSave = async () => {
-    const settings = { alerts, security, aiSettings, integrations, scannerPrefs, procurementAction, spendLimit, bufferPct };
+    const settings = { 
+      alerts, security, aiSettings, integrations, scannerPrefs, procurementAction, spendLimit, bufferPct,
+      storageGB: currentStorageGB,
+      pendingUpgrade
+    };
     try {
       const res = await imsFetch('/api/ims/settings', {
         method: 'POST',
@@ -156,6 +257,93 @@ const IMSSettings = () => {
           <button className="btn btn-primary btn-save-settings" onClick={handleSave}>
             {saved ? <><FaCheckCircle /> Saved!</> : <><FaSave /> Deploy Settings</>}
           </button>
+        </div>
+      </div>
+
+      {/* ── STORAGE SUBSCRIPTION BOX ── */}
+      <div className="subscription-card">
+        <div className="subscription-card-header">
+          <div className="subscription-header-left">
+            <FaCloud className="subscription-icon" />
+            <div>
+              <h2>Storage Subscription Plan</h2>
+              <p>Base storage is 1 GB (Free). Drag the slider to increase storage capacity.</p>
+            </div>
+          </div>
+          <div className="subscription-badge">
+            Active: <strong>{currentStorageGB} GB</strong>
+          </div>
+        </div>
+
+        <div className="subscription-body">
+          <div className="slider-wrapper">
+            <div className="slider-labels">
+              <span>1 GB (Base)</span>
+              <span>100 GB (Max)</span>
+            </div>
+            <input 
+              type="range" 
+              min="1" 
+              max="100" 
+              value={storageGB} 
+              onChange={(e) => setStorageGB(Number(e.target.value))} 
+              className="storage-slider"
+            />
+            <div className="slider-current-val">
+              Target Storage: <strong>{storageGB} GB</strong>
+            </div>
+          </div>
+
+          <div className="price-details-section">
+            <div className="price-info">
+              <span>Monthly Amount:</span>
+              <strong className="price-amount">${(storageGB - 1) * 5} <span className="price-period">/ month</span></strong>
+            </div>
+            
+            <div className="upgrade-actions">
+              {isManager ? (
+                <button 
+                  className="btn btn-primary"
+                  disabled={storageGB === currentStorageGB || (pendingUpgrade && pendingUpgrade.requestedGB === storageGB)}
+                  onClick={() => handleRequestUpgrade(storageGB)}
+                >
+                  {pendingUpgrade && pendingUpgrade.requestedGB === storageGB ? 'Request Sent' : 'Request Admin to Upgrade'}
+                </button>
+              ) : (
+                <button 
+                  className="btn btn-primary" 
+                  disabled={storageGB === currentStorageGB}
+                  onClick={() => handlePayAndUpgrade(storageGB)}
+                >
+                  Pay & Subscribe
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Pending Upgrade Alert Banner */}
+          {pendingUpgrade && pendingUpgrade.status === 'pending' && (
+            <div className="upgrade-alert-banner">
+              <FaHourglassHalf className="alert-spinner" />
+              <div className="banner-text">
+                {isAdmin ? (
+                  <span>Manager <strong>{pendingUpgrade.requestedBy}</strong> requested an upgrade to <strong>{pendingUpgrade.requestedGB} GB</strong> (${(pendingUpgrade.requestedGB - 1) * 5}/mo).</span>
+                ) : (
+                  <span>Your request to upgrade to <strong>{pendingUpgrade.requestedGB} GB</strong> is pending Admin approval.</span>
+                )}
+              </div>
+              <div className="banner-buttons">
+                {isAdmin ? (
+                  <>
+                    <button className="btn-approve-req" onClick={() => handlePayAndUpgrade(pendingUpgrade.requestedGB)}>Approve & Pay</button>
+                    <button className="btn-reject-req" onClick={handleCancelRequest}>Cancel</button>
+                  </>
+                ) : (
+                  <button className="btn-reject-req" onClick={handleCancelRequest}>Withdraw</button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

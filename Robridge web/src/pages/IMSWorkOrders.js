@@ -22,7 +22,7 @@ const NEXT_STATUS = { PENDING: 'IN_PROGRESS', IN_PROGRESS: 'QC', QC: 'COMPLETE' 
 const NEXT_LABEL  = { PENDING: 'Start Production', IN_PROGRESS: 'Move to QC', QC: 'Mark Complete ✓' };
 
 export default function IMSWorkOrders() {
-  const { imsFetch, activeWorkspaceId } = useWorkspace();
+  const { imsFetch, activeWorkspaceId, activeWorkspace } = useWorkspace();
   const { socket } = useWebSocket();
   const confirm = useConfirm();
   const [workorders, setWorkorders] = useState([]);
@@ -35,6 +35,8 @@ export default function IMSWorkOrders() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
   const [newWO, setNewWO] = useState({ productBarcode: '', productName: '', targetQty: '', dueDate: '', priority: 'NORMAL', notes: '' });
+
+  const isReadOnly = ['user', 'member', 'viewer'].includes(activeWorkspace?.currentUserRole);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
@@ -134,7 +136,7 @@ export default function IMSWorkOrders() {
         </div>
         <div className="ims-header-right" style={{ gap: 10, display: 'flex' }}>
           <button className="btn btn-secondary" onClick={loadWOs}><FaSync /> Refresh</button>
-          <button className="btn btn-primary" onClick={() => setShowCreate(true)}><FaPlus /> New Work Order</button>
+          {!isReadOnly && <button className="btn btn-primary" onClick={() => setShowCreate(true)}><FaPlus /> New Work Order</button>}
         </div>
       </div>
 
@@ -210,7 +212,7 @@ export default function IMSWorkOrders() {
                   <span className="wo-status-badge large" style={{ background: statusConfig[selected.status]?.bg, color: statusConfig[selected.status]?.color }}>
                     {statusConfig[selected.status]?.label}
                   </span>
-                  {selected.status !== 'COMPLETE' && selected.status !== 'CANCELLED' && (
+                  {!isReadOnly && selected.status !== 'COMPLETE' && selected.status !== 'CANCELLED' && (
                     <button className="icon-btn delete-btn" onClick={() => deleteWO(selected)}><FaTrash /></button>
                   )}
                 </div>
@@ -247,20 +249,26 @@ export default function IMSWorkOrders() {
 
               {selected.notes && <div style={{ background: '#f8f9fa', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#555', marginTop: 12 }}>📝 {selected.notes}</div>}
 
-              <div className="wo-actions">
-                {NEXT_STATUS[selected.status] && (
-                  <button className="btn btn-primary" style={selected.status === 'QC' ? { background: '#27ae60' } : {}}
-                    onClick={() => changeStatus(selected, NEXT_STATUS[selected.status])}>
-                    <FaArrowRight /> {NEXT_LABEL[selected.status]}
-                  </button>
-                )}
-                {selected.status !== 'COMPLETE' && selected.status !== 'CANCELLED' && (
-                  <button className="btn btn-secondary" style={{ borderColor: '#e74c3c', color: '#e74c3c' }}
-                    onClick={() => changeStatus(selected, 'CANCELLED')}>
-                    <FaTimes /> Cancel WO
-                  </button>
-                )}
-              </div>
+              {!isReadOnly ? (
+                <div className="wo-actions">
+                  {NEXT_STATUS[selected.status] && (
+                    <button className="btn btn-primary" style={selected.status === 'QC' ? { background: '#27ae60' } : {}}
+                      onClick={() => changeStatus(selected, NEXT_STATUS[selected.status])}>
+                      <FaArrowRight /> {NEXT_LABEL[selected.status]}
+                    </button>
+                  )}
+                  {selected.status !== 'COMPLETE' && selected.status !== 'CANCELLED' && (
+                    <button className="btn btn-secondary" style={{ borderColor: '#e74c3c', color: '#e74c3c' }}
+                      onClick={() => changeStatus(selected, 'CANCELLED')}>
+                      <FaTimes /> Cancel WO
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div style={{ marginTop: 24, padding: '12px', background: '#fef2f2', color: '#e74c3c', borderRadius: 8, textAlign: 'center', fontSize: 14, fontWeight: 600 }}>
+                  You have view-only access. You cannot modify the status of this Work Order.
+                </div>
+              )}
             </>
           ) : (
             <div className="wo-empty-detail">
