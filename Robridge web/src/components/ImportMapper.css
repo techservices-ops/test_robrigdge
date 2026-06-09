@@ -82,8 +82,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0;
-  padding: 14px 24px;
+  gap: 40px; /* Space out the steps nicely */
+  padding: 16px 24px;
   border-bottom: 1px solid var(--border-light, #e9ecef);
   background: var(--bg-secondary, #f8f9fa);
   flex-shrink: 0;
@@ -93,17 +93,18 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 20px;
   position: relative;
 }
 
 .im-step:not(:last-child)::after {
   content: '';
   position: absolute;
-  right: -2px;
-  width: 40px;
+  left: calc(100% + 8px); /* Position the line in the gap, 8px after this step */
+  width: 24px;            /* Span the middle of the 40px gap */
   height: 2px;
   background: var(--border-medium, #dee2e6);
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .im-step.done::after { background: #27ae60; }
@@ -170,7 +171,7 @@
   font-size: 56px;
   color: #27ae60;
   margin-bottom: 16px;
-  display: block;
+  display: inline-block;
 }
 
 .im-dz-title {
