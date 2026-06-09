@@ -182,6 +182,9 @@ const IMSScanner = () => {
     } catch (e) { console.error('Error recording scan'); }
   };
 
+  const isGrnMode = (stage) => stage === 'RECEIVE' || stage === 'DISPATCH';
+  const isWoMode = (stage) => stage === 'PUTAWAY';
+
   const doScan = async (code, websocketScanId = null) => {
     const val = code || scanInput.trim();
     if (!val) return;
@@ -207,7 +210,66 @@ const IMSScanner = () => {
     setSerialNo('');
 
     try {
-      // Look up catalog item
+      // ── GRN / Dispatch verify-scan mode ──────────────────────────
+      if (isGrnMode(scanStage)) {
+        const res = await imsFetch('/api/ims/grn/verify-scan', {
+          method: 'POST',
+          body: JSON.stringify({ barcode: val, mode: scanStage })
+        });
+        const data = await res.json();
+        setScanMatch({ type: 'GRN', ...data });
+        setScanResult(data.matched ? 'scan_match' : 'scan_nomatch');
+
+        // Also look up catalog item for right-panel product info
+        try {
+          const lookupRes = await imsFetch(`/api/ims/scanner/lookup/${encodeURIComponent(val)}`);
+          const lookupData = await lookupRes.json();
+          if (lookupData.success && lookupData.found) {
+            setFoundItem(lookupData.item);
+            if (data.matched && autoLogEnabled) {
+              const prefix = scanStage === 'DISPATCH' ? 'DN:' : 'GRN:';
+              await recordScanEvent(lookupData.item, scanStage, 1, '', '', '', prefix + data.grn.docNo, websocketScanId);
+            }
+          }
+        } catch (e) { /* catalog lookup failure is non-fatal */ }
+
+        setScanning(false);
+        setScanInput('');
+        isScanningRef.current = false;
+        setTimeout(() => inputRef.current?.focus(), 300);
+        return;
+      }
+
+      // ── Work Order verify-scan mode ──────────────────────────────
+      if (isWoMode(scanStage)) {
+        const res = await imsFetch('/api/ims/workorders/verify-scan', {
+          method: 'POST',
+          body: JSON.stringify({ barcode: val })
+        });
+        const data = await res.json();
+        setScanMatch({ type: 'WO', ...data });
+        setScanResult(data.matched ? 'scan_match' : 'scan_nomatch');
+
+        // Also look up catalog item for right-panel product info
+        try {
+          const lookupRes = await imsFetch(`/api/ims/scanner/lookup/${encodeURIComponent(val)}`);
+          const lookupData = await lookupRes.json();
+          if (lookupData.success && lookupData.found) {
+            setFoundItem(lookupData.item);
+            if (data.matched && autoLogEnabled) {
+              await recordScanEvent(lookupData.item, scanStage, 1, '', '', '', 'WO:' + data.wo.woNumber, websocketScanId);
+            }
+          }
+        } catch (e) { /* catalog lookup failure is non-fatal */ }
+
+        setScanning(false);
+        setScanInput('');
+        isScanningRef.current = false;
+        setTimeout(() => inputRef.current?.focus(), 300);
+        return;
+      }
+
+      // ── Regular catalog lookup mode ───────────────────────────────
       const res = await imsFetch(`/api/ims/scanner/lookup/${encodeURIComponent(val)}`);
       const data = await res.json();
       setScanning(false);

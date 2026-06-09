@@ -65,6 +65,11 @@
   flex-shrink: 0;
 }
 
+.master-card-content {
+  flex: 1;
+  min-width: 0;
+}
+
 .master-card-content h3 {
   margin: 0 0 6px 0;
   font-size: 16px;
@@ -177,7 +182,12 @@
   white-space: nowrap;
 }
 
-.table-actions { display: flex; gap: 6px; }
+.table-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
 
 .icon-btn {
   width: 30px; height: 30px;
@@ -188,10 +198,10 @@
   transition: all var(--transition-fast);
 }
 
-.edit-btn { background: #e8f4fd; color: #3498db; }
-.edit-btn:hover { background: #3498db; color: white; }
-.delete-btn { background: #fde8e8; color: #e74c3c; }
-.delete-btn:hover { background: #e74c3c; color: white; }
+.catalog-edit-btn { background: #e8f4fd; color: #3498db; }
+.catalog-edit-btn:hover { background: #3498db; color: white; }
+.catalog-delete-btn { background: #fde8e8; color: #e74c3c; }
+.catalog-delete-btn:hover { background: #e74c3c; color: white; }
 
 /* Modals */
 .ims-modal-overlay {
@@ -373,20 +383,20 @@
 .upload-success-icon { font-size: 28px; }
 
 /* Search/Filter reuse */
-.search-input {
+.catalog-search-wrapper {
   position: relative;
   display: flex;
   align-items: center;
 }
 
-.search-icon {
+.catalog-search-wrapper .search-icon {
   position: absolute;
   left: 12px;
   color: var(--text-tertiary);
   font-size: 14px;
 }
 
-.search-input input {
+.catalog-search-wrapper input {
   width: 100%;
   padding: var(--spacing-sm) var(--spacing-md) var(--spacing-sm) 36px;
   border: 2px solid var(--border-medium);
@@ -394,9 +404,10 @@
   font-size: var(--text-sm);
   transition: border-color var(--transition-base);
   background: var(--bg-primary);
+  text-align: left !important;
 }
 
-.search-input input:focus {
+.catalog-search-wrapper input:focus {
   outline: none;
   border-color: var(--primary-orange);
 }
@@ -416,13 +427,21 @@
 }
 
 .filter-dropdown select {
-  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-sm) 34px;
+  padding: var(--spacing-sm) 36px var(--spacing-sm) 34px;
   border: 2px solid var(--border-medium);
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   background: var(--bg-primary);
   cursor: pointer;
-  appearance: none;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-image: url("data:image/svg+xml;utf8,<svg fill='%232c3e50' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/><path d='M0 0h24v24H0z' fill='none'/></svg>") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 10px center !important;
+  background-size: 20px !important;
+  text-align: left !important;
+  text-align-last: left !important;
 }
 
 .filter-dropdown select:focus {
@@ -548,4 +567,61 @@
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
+}
+
+/* Table responsive scroll and sticky Actions column */
+.ims-catalog-page .table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ims-catalog-page .table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* Make actions column sticky on the right */
+.ims-catalog-page th:last-child,
+.ims-catalog-page td:last-child {
+  position: sticky;
+  right: 0;
+  background: var(--bg-primary);
+  box-shadow: -8px 0 12px -8px rgba(0, 0, 0, 0.15);
+  z-index: 2;
+  width: 100px;
+  min-width: 100px;
+  text-align: center;
+}
+
+.ims-catalog-page th:last-child {
+  background: var(--bg-secondary);
+  z-index: 3;
+  border-bottom: 2px solid var(--border-light);
+}
+
+/* Ensure other columns don't wrap too aggressively */
+.ims-catalog-page td {
+  white-space: nowrap;
+}
+
+/* Allow product name to wrap if needed but set minimum width */
+.ims-catalog-page td:nth-child(2) {
+  white-space: normal;
+  min-width: 180px;
+}
+
+/* Custom premium select styling for form fields in catalog */
+.ims-catalog-page select.form-select,
+.ims-catalog-page select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-image: url("data:image/svg+xml;utf8,<svg fill='%232c3e50' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/><path d='M0 0h24v24H0z' fill='none'/></svg>") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 14px center !important;
+  background-size: 20px !important;
+  padding-right: 36px !important;
+  text-align: left !important;
+  text-align-last: left !important;
 }
