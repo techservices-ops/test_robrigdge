@@ -680,6 +680,7 @@ const authenticateToken = (req, res, next) => {
       return res.status(403).json({ success: false, error: 'Invalid or expired token' });
     }
     req.user = user;
+    req.rawToken = token; // Store raw token for frontend session setup
     next();
   });
 };
@@ -1012,53 +1013,159 @@ app.post('/api/auth/logout', (req, res) => {
   res.clearCookie('token');
   res.json({ success: true });
 });
-// Verify Token
-app.get('/api/auth/verify', authenticateToken, async (req, res) => {
-  try {
-    // Get fresh user data from database
-    const result = await pool.query(
-      'SELECT id, email, name, role, is_active FROM users WHERE id = $1',
-      [req.user.id]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found'
-      });
-    }
-    const user = result.rows[0];
-    if (!user.is_active) {
-      return res.status(403).json({
-        success: false,
-        error: 'Account is deactivated'
-      });
-    }
-    // Fetch default workspace
-    let defaultWorkspaceId = null;
+// Verify Token & Email Verification GET Endpoint (Combined)
+app.get('/api/auth/verify', async (req, res) => {
+  const emailToken = req.query.token;
+
+  if (emailToken) {
+    // ─── EMAIL VERIFICATION REDIRECT FLOW ────────────────────────────────────
     try {
+      // 1. Look up user by verification token
+      const result = await pool.query(
+        'SELECT id, email, name, role, email_verified, created_at FROM users WHERE email_verification_token = $1',
+        [emailToken]
+      );
+
+      // Determine the redirect URL based on environment
+      const frontendUrl = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
+        ? 'https://robridgelabs.com/bvs'
+        : 'http://localhost:3000');
+
+      if (result.rows.length === 0) {
+        // Redirect to login with error parameter if token is invalid
+        return res.redirect(`${frontendUrl}/login?status=error&message=Invalid+verification+token`);
+      }
+
+      const user = result.rows[0];
+
+      // Token Expiration Check (24 hours validity based on user creation timestamp)
+      const tokenLifetimeMs = 24 * 60 * 60 * 1000;
+      const isExpired = Date.now() - new Date(user.created_at).getTime() > tokenLifetimeMs;
+      if (isExpired) {
+        return res.redirect(`${frontendUrl}/login?status=error&message=Verification+link+expired.+Please+register+again.`);
+      }
+
+      // 2. Mark user as verified in database
+      if (!user.email_verified) {
+        await pool.query(
+          'UPDATE users SET email_verified = TRUE, email_verification_token = NULL WHERE id = $1',
+          [user.id]
+        );
+      }
+
+      // 3. IDEMPOTENCY CHECK: Check if a workspace already exists for this user ID
       const wsCheck = await pool.query(
-        "SELECT workspace_id FROM ims_workspace_members WHERE user_id = $1 AND status = 'active' ORDER BY joined_at ASC LIMIT 1",
+        'SELECT id FROM ims_workspaces WHERE owner_id = $1 LIMIT 1',
         [user.id]
       );
+
+      // 4. Generate JWT Token
+      const jwtToken = jwt.sign(
+        { id: user.id, email: user.email, role: user.role },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      // Set JWT in httpOnly cookie
+      res.cookie('token', jwtToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      });
+
       if (wsCheck.rows.length > 0) {
-        defaultWorkspaceId = wsCheck.rows[0].workspace_id;
+        // Workspace ALREADY exists: Skip creation entirely, redirect to dashboard
+        return res.redirect(`${frontendUrl}/dashboard?status=already_verified`);
+      } else {
+        // No workspace exists: Create exactly ONE workspace in transaction
+        try {
+          await pool.query('BEGIN');
+          
+          const workspaceName = `${user.name || 'User'}'s Workspace`;
+          const wsResult = await pool.query(
+            'INSERT INTO ims_workspaces (name, owner_id) VALUES ($1, $2) RETURNING *',
+            [workspaceName, user.id]
+          );
+          const workspace = wsResult.rows[0];
+
+          // Add user as owner of their new workspace
+          await pool.query(
+            "INSERT INTO ims_workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'owner')",
+            [workspace.id, user.id]
+          );
+
+          await pool.query('COMMIT');
+
+          // Redirect to dashboard with success status
+          return res.redirect(`${frontendUrl}/dashboard?status=success`);
+        } catch (dbErr) {
+          await pool.query('ROLLBACK');
+          console.error('Error creating workspace during verification:', dbErr);
+          return res.redirect(`${frontendUrl}/login?status=error&message=Failed+to+create+workspace`);
+        }
       }
-    } catch(err) { console.error('Error fetching workspace for verify:', err); }
-    res.json({
-      success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        workspaceId: defaultWorkspaceId
+    } catch (err) {
+      console.error('Error verifying email:', err);
+      const frontendUrl = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
+        ? 'https://robridgelabs.com/bvs'
+        : 'http://localhost:3000');
+      return res.redirect(`${frontendUrl}/login?status=error&message=Server+error+during+verification`);
+    }
+  } else {
+    // ─── SESSION VERIFICATION FLOW (Backwards Compatible) ────────────────────
+    let token = req.cookies?.token;
+    if (!token) {
+      const authHeader = req.headers['authorization'];
+      token = authHeader && authHeader.split(' ')[1];
+    }
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'Access token required' });
+    }
+
+    jwt.verify(token, JWT_SECRET, async (err, decodedUser) => {
+      if (err) {
+        return res.status(403).json({ success: false, error: 'Invalid or expired token' });
       }
-    });
-  } catch (error) {
-    console.error('Error verifying token:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Token verification failed'
+
+      try {
+        const result = await pool.query(
+          'SELECT id, email, name, role, is_active FROM users WHERE id = $1',
+          [decodedUser.id]
+        );
+        if (result.rows.length === 0) {
+          return res.status(404).json({ success: false, error: 'User not found' });
+        }
+        const dbUser = result.rows[0];
+        if (!dbUser.is_active) {
+          return res.status(403).json({ success: false, error: 'Account is deactivated' });
+        }
+
+        // Fetch default workspace
+        let defaultWorkspaceId = null;
+        const wsCheck = await pool.query(
+          "SELECT workspace_id FROM ims_workspace_members WHERE user_id = $1 AND status = 'active' ORDER BY joined_at ASC LIMIT 1",
+          [dbUser.id]
+        );
+        if (wsCheck.rows.length > 0) {
+          defaultWorkspaceId = wsCheck.rows[0].workspace_id;
+        }
+
+        return res.json({
+          success: true,
+          token, // return rawToken for frontend storage
+          user: {
+            id: dbUser.id,
+            email: dbUser.email,
+            name: dbUser.name,
+            role: dbUser.role,
+            workspaceId: defaultWorkspaceId
+          }
+        });
+      } catch (dbErr) {
+        console.error('Error fetching user info in session check:', dbErr);
+        return res.status(500).json({ success: false, error: 'Token verification failed' });
+      }
     });
   }
 });
