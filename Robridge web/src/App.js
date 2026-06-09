@@ -59,7 +59,7 @@ const PageLoadingSpinner = () => (
 // Protected Route Component with Role-based Access Control
 function ProtectedRoute({ children, requiredPath }) {
   const { isAuthenticated, hasPageAccess, isLoading } = useAuth();
-  const { workspaces, loadingWorkspaces } = useWorkspace();
+  const { activeWorkspace } = useWorkspace();
 
   // Optimistic rendering: If authenticated (optimistically), render children even if loading.
   if (isLoading && !isAuthenticated()) {
@@ -75,6 +75,24 @@ function ProtectedRoute({ children, requiredPath }) {
 
   if (!isAuthenticated()) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Enforce workspace-level role restrictions for standard users
+  const wsRole = activeWorkspace?.currentUserRole;
+  if (wsRole === 'user' || wsRole === 'member' || wsRole === 'viewer') {
+    const restrictedPaths = ['/ims-catalog', '/ims-settings', '/ims-users', '/settings'];
+    if (requiredPath && restrictedPaths.includes(requiredPath)) {
+      return (
+        <div className="access-denied" style={{ padding: '40px', textAlign: 'center', background: '#fff', borderRadius: '12px', margin: '40px auto', maxWidth: '600px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+          <h2 style={{ color: '#e74c3c', marginBottom: '16px' }}>Access Denied</h2>
+          <p style={{ color: '#7f8c8d', fontSize: '16px', marginBottom: '24px' }}>You do not have permission to access this page.</p>
+          <p style={{ color: '#95a5a6', fontSize: '14px', marginBottom: '24px' }}>Your workspace role does not include access to this feature.</p>
+          <button className="btn btn-primary" onClick={() => window.history.back()}>
+            Go Back
+          </button>
+        </div>
+      );
+    }
   }
 
   // Removed forced redirect to onboarding so users go straight to dashboard upon login

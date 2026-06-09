@@ -23,7 +23,7 @@ const NEXT_STATUS = { PENDING: 'IN_PROGRESS', IN_PROGRESS: 'QC', QC: 'COMPLETE' 
 const NEXT_LABEL  = { PENDING: 'Start Production', IN_PROGRESS: 'Move to QC', QC: 'Mark Complete ✓' };
 
 export default function IMSWorkOrders() {
-  const { imsFetch, activeWorkspaceId } = useWorkspace();
+  const { imsFetch, activeWorkspaceId, activeWorkspace } = useWorkspace();
   const { socket } = useWebSocket();
   const confirm = useConfirm();
   const showToast = useToast();
@@ -37,6 +37,7 @@ export default function IMSWorkOrders() {
   const [saving, setSaving] = useState(false);
   const [newWO, setNewWO] = useState({ productBarcode: '', productName: '', targetQty: '', dueDate: '', priority: 'NORMAL', notes: '' });
 
+  const isReadOnly = ['user', 'member', 'viewer'].includes(activeWorkspace?.currentUserRole);
   const loadWOs = useCallback(async () => {
     if (!activeWorkspaceId) return;
     setLoading(true);
@@ -133,7 +134,7 @@ export default function IMSWorkOrders() {
         </div>
         <div className="ims-header-right ims-flex-gap-10">
           <button className="btn btn-secondary" onClick={loadWOs}><FaSync /> Refresh</button>
-          <button className="btn btn-primary" onClick={() => setShowCreate(true)}><FaPlus /> New Work Order</button>
+          {!isReadOnly && <button className="btn btn-primary" onClick={() => setShowCreate(true)}><FaPlus /> New Work Order</button>}
         </div>
       </div>
 
@@ -209,7 +210,7 @@ export default function IMSWorkOrders() {
                   <span className="wo-status-badge large" style={{ background: statusConfig[selected.status]?.bg, color: statusConfig[selected.status]?.color }}>
                     {statusConfig[selected.status]?.label}
                   </span>
-                  {selected.status !== 'COMPLETE' && selected.status !== 'CANCELLED' && (
+                  {!isReadOnly && selected.status !== 'COMPLETE' && selected.status !== 'CANCELLED' && (
                     <button className="icon-btn delete-btn" onClick={() => deleteWO(selected)}><FaTrash /></button>
                   )}
                 </div>

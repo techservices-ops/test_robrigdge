@@ -15,9 +15,10 @@ const OUTCOMES = [
 ];
 
 export default function IMSProduction() {
-  const { imsFetch, activeWorkspaceId } = useWorkspace();
+  const { imsFetch, activeWorkspaceId, activeWorkspace } = useWorkspace();
   const { latestScan, scanBuffer } = useWebSocket();
   const showToast = useToast();
+  const isReadOnly = ['user', 'member', 'viewer'].includes(activeWorkspace?.currentUserRole);
   const [stages, setStages] = useState([]);
   const [events, setEvents] = useState([]);
   const [summary, setSummary] = useState([]);
@@ -138,7 +139,7 @@ export default function IMSProduction() {
             <label className="form-label ims-form-label">Barcode *</label>
             <input className="form-input ims-form-input" placeholder="Scan or type barcode..." value={scan.barcode}
               onChange={e => setScan(s => ({ ...s, barcode: e.target.value }))}
-              onKeyDown={e => e.key === 'Enter' && recordScan()} autoFocus />
+              onKeyDown={e => e.key === 'Enter' && recordScan()} autoFocus disabled={isReadOnly} />
           </div>
           <div className="form-group ims-form-group">
             <label className="form-label ims-form-label">Item Name</label>
@@ -185,6 +186,7 @@ export default function IMSProduction() {
           <button className="btn btn-primary ims-full-width" onClick={recordScan} disabled={saving || !scan.barcode || !selectedStage}>
             {saving ? <FaSpinner /> : <FaSave />} Record Scan
           </button>
+          {isReadOnly && <p style={{ color: '#e74c3c', fontSize: 12, marginTop: 8, textAlign: 'center' }}>You have view-only access.</p>}
         </div>
 
         {/* Events at Selected Stage */}

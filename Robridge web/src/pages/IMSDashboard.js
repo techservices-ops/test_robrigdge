@@ -81,11 +81,20 @@ const IMSDashboard = () => {
   const navigate = useNavigate();
 
   const [animated, setAnimated] = useState(false);
+  const [storageGB, setStorageGB] = useState(1);
   const [data, setData] = useState(() => {
+    if (!activeWorkspaceId) return null;
     const cached = sessionStorage.getItem(`ims_dashboard_cache_${activeWorkspaceId}`);
-    return cached ? JSON.parse(cached) : null;
+    if (!cached) return null;
+    try {
+      const parsed = JSON.parse(cached);
+      if (parsed && typeof parsed === 'object' && 'totalSKUs' in parsed && 'trends' in parsed && 'lowStockItems' in parsed) {
+        return parsed;
+      }
+    } catch (e) {}
+    return null;
   });
-  const [loading, setLoading] = useState(!data);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const timer = setTimeout(() => setAnimated(true), 100);
@@ -93,25 +102,51 @@ const IMSDashboard = () => {
   }, []);
 
   useEffect(() => {
-    if (!activeWorkspaceId) return;
-    if (!data) setLoading(true);
-    imsFetch('/api/ims/dashboard')
-      .then(res => res.json())
-      .then(d => {
-        if (d.success) {
-          setData(d.dashboard);
-          sessionStorage.setItem(`ims_dashboard_cache_${activeWorkspaceId}`, JSON.stringify(d.dashboard));
+    if (!activeWorkspaceId) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
+
+    // Dynamic cache switching when workspace changes
+    const cached = sessionStorage.getItem(`ims_dashboard_cache_${activeWorkspaceId}`);
+    let parsedCache = null;
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed === 'object' && 'totalSKUs' in parsed && 'trends' in parsed && 'lowStockItems' in parsed) {
+          parsedCache = parsed;
+        }
+      } catch (e) {}
+    }
+    setData(parsedCache);
+    setLoading(!parsedCache);
+
+    Promise.all([
+      imsFetch('/api/ims/dashboard').then(res => res.json()),
+      imsFetch('/api/ims/settings').then(res => res.json())
+    ])
+      .then(([dashData, settingsData]) => {
+        if (dashData.success) {
+          setData(dashData.dashboard);
+          sessionStorage.setItem(`ims_dashboard_cache_${activeWorkspaceId}`, JSON.stringify(dashData.dashboard));
+        }
+        if (settingsData.success && settingsData.settings && settingsData.settings.storageGB) {
+          setStorageGB(settingsData.settings.storageGB);
         }
       })
-      .catch(console.error)
+      .catch(err => {
+        console.error("Dashboard / Settings loading error", err);
+      })
       .finally(() => setLoading(false));
   }, [activeWorkspaceId, imsFetch]);
 
   // Derive health score
   const getHealthScore = () => {
-    if (!data || data.totalSKUs === 0) return 100;
-    const critical = data.lowStockItems.filter(a => a.stock <= a.alert_at / 2).length;
-    const warning = data.lowStockItems.filter(a => a.stock > a.alert_at / 2).length;
+    if (!data || !data.totalSKUs) return 100;
+    const lowStockItems = data.lowStockItems || [];
+    const critical = lowStockItems.filter(a => a.stock <= a.alert_at / 2).length;
+    const warning = lowStockItems.filter(a => a.stock > a.alert_at / 2).length;
     const expiry = data.expiry ? data.expiry.filter(e => e.zone === 'week').length : 0;
     return Math.max(0, Math.round(100 - critical * 14 - warning * 5 - expiry * 6));
   };
@@ -132,28 +167,31 @@ const IMSDashboard = () => {
   
   if (!data) return null;
 
-  const expiryItems = data.expiry || [];
-  const wipList = data.wip || [];
-  const weekLabels = data.trendLabels || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const dynamicTrends = data.trends || [
+  const expiryItems = data?.expiry || [];
+  const wipList = data?.wip || [];
+  const weekLabels = data?.trendLabels || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dynamicTrends = data?.trends || [
     { name: 'Stock IN', color: '#27ae60', data: [0, 0, 0, 0, 0, 0, 0] },
     { name: 'Stock OUT', color: '#e74c3c', data: [0, 0, 0, 0, 0, 0, 0] }
   ];
+  const lowStockItems = data?.lowStockItems || [];
+  const recentActivity = data?.recentActivity || [];
 
 
   // Build dynamic KPIs with navigation links
   const liveKPIs = [
-    { label: 'Total SKUs', value: data.totalSKUs, icon: FaBoxes, color: '#E3821E', change: 'Total catalog items', up: true, link: '/ims-catalog' },
-    { label: 'Total Stock Units', value: data.totalStock, icon: FaDatabase, color: '#27ae60', change: 'All active items', up: true, link: '/ims-catalog' },
-    { label: "Today's Scans", value: data.todayMovements, icon: FaExchangeAlt, color: '#3498db', change: 'Movements today', up: true, link: '/ims-scanner' },
-    { label: 'Low Stock Alerts', value: data.lowStockCount, icon: FaExclamationTriangle, color: '#e74c3c', change: 'Needs reorder', up: false, link: '/ims-catalog' },
+    { label: 'Total SKUs', value: data.totalSKUs || 0, icon: FaBoxes, color: '#E3821E', change: 'Total catalog items', up: true, link: '/ims-catalog' },
+    { label: 'Total Stock Units', value: data.totalStock || 0, icon: FaDatabase, color: '#27ae60', change: 'All active items', up: true, link: '/ims-catalog' },
+    { label: "Today's Scans", value: data.todayMovements || 0, icon: FaExchangeAlt, color: '#3498db', change: 'Movements today', up: true, link: '/ims-scanner' },
+    { label: 'Low Stock Alerts', value: data.lowStockCount || 0, icon: FaExclamationTriangle, color: '#e74c3c', change: 'Needs reorder', up: false, link: '/ims-catalog' },
     { label: 'Items in WIP', value: data.activeWorkordersCount || 0, icon: FaCogs, color: '#9b59b6', change: 'Active work orders', up: true, link: '/ims-workorders' },
     { label: 'Reserved Stock', value: 0, icon: FaClipboardList, color: '#f39c12', change: 'Awaiting Pick', up: false, link: '/ims-scanner' },
   ];
 
   // Storage quota — dynamically updated based on SKUs (1 MB/SKU) and stock units (0.1 MB/unit)
-  const usedMB = parseFloat(((data.totalSKUs * 1.0) + (data.totalStock * 0.1)).toFixed(1));
-  const quotaPct = Math.min(100, Math.round((usedMB / 1000) * 100));
+  const usedMB = parseFloat((((data.totalSKUs || 0) * 1.0) + ((data.totalStock || 0) * 0.1)).toFixed(1));
+  const totalMB = storageGB * 1000;
+  const quotaPct = Math.min(100, Math.round((usedMB / totalMB) * 100));
 
   return (
     <div className="ims-dashboard-page">
@@ -189,8 +227,8 @@ const IMSDashboard = () => {
         </div>
         <div className="health-breakdown">
           {[
-            { label: 'Critical', count: data.lowStockItems.filter(a => a.stock <= a.alert_at / 2).length, cls: 'critical' }, 
-            { label: 'Warning', count: data.lowStockItems.filter(a => a.stock > a.alert_at / 2).length, cls: 'warning' },
+            { label: 'Critical', count: lowStockItems.filter(a => a.stock <= a.alert_at / 2).length, cls: 'critical' }, 
+            { label: 'Warning', count: lowStockItems.filter(a => a.stock > a.alert_at / 2).length, cls: 'warning' },
             { label: 'Expiry Risk', count: expiryItems.length, cls: 'expiry' }, 
             { label: 'Overstocked', count: 0, cls: 'overstock' }
           ].map(b => (
@@ -206,7 +244,7 @@ const IMSDashboard = () => {
             <div className="ai-note-title">AI Recommendation</div>
             <div className="ai-note-desc">
               {data.totalSKUs === 0 ? "No data to analyze. Add products to get AI recommendations." :
-               data.lowStockItems.length > 0 ? `Prioritise reordering ${data.lowStockItems.slice(0, 2).map(i => i.name).join(' & ')}. Score can reach 100 after restock.` :
+               lowStockItems.length > 0 ? `Prioritise reordering ${lowStockItems.slice(0, 2).map(i => i.name).join(' & ')}. Score can reach 100 after restock.` :
                "Stock levels are optimal. No immediate action required."}
             </div>
           </div>
@@ -244,7 +282,7 @@ const IMSDashboard = () => {
               <div className={`quota-fill ${quotaPct > 80 ? 'danger' : quotaPct > 60 ? 'warning' : 'ok'}`}
                 style={{ width: animated ? `${quotaPct}%` : '0%' }}></div>
             </div>
-            <span className="quota-pct">{quotaPct}% used — {usedMB} MB of 1 GB</span>
+            <span className="quota-pct">{quotaPct}% used — {usedMB} MB of {storageGB} GB</span>
           </div>
         </div>
         <div className="quota-suggestion">
@@ -269,9 +307,9 @@ const IMSDashboard = () => {
         <div className="forecast-rings-grid">
           {data.totalSKUs === 0 ? (
             <p style={{color: '#7f8c8d', gridColumn: '1 / -1', textAlign: 'center'}}>No forecasting data available. Add items to see analytics.</p>
-          ) : data.lowStockItems.length === 0 ? (
+          ) : lowStockItems.length === 0 ? (
             <p style={{color: '#27ae60', gridColumn: '1 / -1', textAlign: 'center'}}>All products have sufficient days of supply.</p>
-          ) : data.lowStockItems.slice(0, 4).map((fc, i) => {
+          ) : lowStockItems.slice(0, 4).map((fc, i) => {
             const daysLeft = Math.max(0, Math.floor(fc.stock / 2)); // Calculated consumption
             const urgency = daysLeft <= 7 ? 'danger' : daysLeft <= 14 ? 'warning' : 'ok';
             return (
@@ -302,9 +340,9 @@ const IMSDashboard = () => {
             <button onClick={() => navigate('/ims-catalog')} style={{marginLeft: '8px', background: 'none', border: '1px solid #e74c3c', color: '#e74c3c', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px'}}>View Catalog →</button>
           </div>
           <div className="ims-alert-list">
-            {data.lowStockItems.length === 0 ? (
+            {lowStockItems.length === 0 ? (
               <div style={{padding: '20px', textAlign: 'center', color: '#7f8c8d'}}>No stock alerts currently.</div>
-            ) : data.lowStockItems.map(alert => {
+            ) : lowStockItems.map(alert => {
               const type = alert.stock <= alert.alert_at / 2 ? 'critical' : 'warning';
               return (
               <div key={alert.id} className={`ims-alert-item alert-${type}`}>
@@ -336,9 +374,9 @@ const IMSDashboard = () => {
           <div className="reorder-card-list">
             {data.totalSKUs === 0 ? (
               <p style={{color: '#7f8c8d', padding: '20px', textAlign: 'center'}}>No items to analyze.</p>
-            ) : data.lowStockItems.length === 0 ? (
+            ) : lowStockItems.length === 0 ? (
               <p style={{color: '#27ae60', padding: '20px', textAlign: 'center'}}>No reorder suggestions. Stock levels are healthy.</p>
-            ) : data.lowStockItems.map(r => {
+            ) : lowStockItems.map(r => {
               const urgency = r.stock <= r.alert_at / 2 ? 'critical' : 'warning';
               return (
               <div key={r.id} className={`reorder-card urgency-${urgency}`}>
@@ -370,9 +408,9 @@ const IMSDashboard = () => {
             <span className="pulse-live-dot-wrap"><span className="pulse-live-dot"></span> Real-time</span>
           </div>
           <div className="ims-activity-list">
-            {data.recentActivity.length === 0 ? (
+            {recentActivity.length === 0 ? (
               <div style={{padding: '20px', textAlign: 'center', color: '#7f8c8d'}}>No recent activity found.</div>
-            ) : data.recentActivity.map((item, idx) => {
+            ) : recentActivity.map((item, idx) => {
               const wf = item.workflow.toUpperCase();
               const isIn = ['RECEIVE', 'IN', 'RETURN', 'RESTOCK', 'PUTAWAY'].some(op => wf.includes(op));
               const isOut = ['DISPATCH', 'OUT', 'ISSUE', 'SHIP', 'PICK'].some(op => wf.includes(op));

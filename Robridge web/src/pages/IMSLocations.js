@@ -16,9 +16,11 @@ const ZONE_COLORS = {
 };
 
 export default function IMSLocations() {
-  const { imsFetch, activeWorkspaceId } = useWorkspace();
+  const { imsFetch, activeWorkspaceId, activeWorkspace } = useWorkspace();
   const confirm = useConfirm();
   const showToast = useToast();
+
+  const isReadOnly = ['user', 'member', 'viewer'].includes(activeWorkspace?.currentUserRole);
 
   // ── Core state ────────────────────────────────────────────────────────────
   const [locations, setLocations]   = useState([]);
@@ -228,15 +230,19 @@ export default function IMSLocations() {
         </div>
         <div className="ims-header-right ims-flex-gap-10">
           <button className="btn btn-secondary" onClick={loadLocations}><FaSync /> Refresh</button>
-          <button
-            className="btn btn-secondary btn-purple-outline"
-            onClick={() => openTransfer('')}
-          >
-            <FaExchangeAlt /> Transfer Stock
-          </button>
-          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-            <FaPlus /> Add Zone
-          </button>
+          {!isReadOnly && (
+            <>
+              <button
+                className="btn btn-secondary btn-purple-outline"
+                onClick={() => openTransfer('')}
+              >
+                <FaExchangeAlt /> Transfer Stock
+              </button>
+              <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+                <FaPlus /> Add Zone
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -312,15 +318,17 @@ export default function IMSLocations() {
                     </div>
 
                     {/* Per-card delete button — inline, not absolute */}
-                    <div className="ims-margin-top-10-flex-end">
-                      <button
-                        title="Delete zone"
-                        onClick={e => deleteLocation(e, loc)}
-                        className="ims-btn-delete-zone"
-                      >
-                        <FaTrash style={{ fontSize: 11 }} /> Delete
-                      </button>
-                    </div>
+                    {!isReadOnly && (
+                      <div className="ims-margin-top-10-flex-end">
+                        <button
+                          title="Delete zone"
+                          onClick={e => deleteLocation(e, loc)}
+                          className="ims-btn-delete-zone"
+                        >
+                          <FaTrash style={{ fontSize: 11 }} /> Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -389,17 +397,23 @@ export default function IMSLocations() {
               </div>
 
               {/* Action buttons */}
-              <div className="ims-margin-top-16-flex-wrap">
-                <button className="btn btn-primary" onClick={openBulkAssign}>
-                  <FaLayerGroup /> Assign Items to Zone
-                </button>
-                <button
-                  className="btn btn-secondary btn-purple-outline"
-                  onClick={() => openTransfer(String(selected.id))}
-                >
-                  <FaExchangeAlt /> Transfer Stock Here
-                </button>
-              </div>
+              {!isReadOnly ? (
+                <div className="ims-margin-top-16-flex-wrap">
+                  <button className="btn btn-primary" onClick={openBulkAssign}>
+                    <FaLayerGroup /> Assign Items to Zone
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-purple-outline"
+                    onClick={() => openTransfer(String(selected.id))}
+                  >
+                    <FaExchangeAlt /> Transfer Stock Here
+                  </button>
+                </div>
+              ) : (
+                <div style={{ marginTop: 24, padding: '12px', background: '#fef2f2', color: '#e74c3c', borderRadius: 8, textAlign: 'center', fontSize: 14, fontWeight: 600 }}>
+                  You have view-only access. You cannot assign or transfer items.
+                </div>
+              )}
             </>
           ) : (
             <div className="ims-empty-detail">

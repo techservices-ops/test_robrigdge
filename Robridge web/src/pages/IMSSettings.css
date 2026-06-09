@@ -325,3 +325,237 @@
   .ai-card { grid-column: 1; grid-row: auto; }
   .category-builder-card, .workflow-builder-card { grid-column: 1; }
 }
+
+/* ── Storage Subscription Box Styles ── */
+.subscription-card {
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border-medium);
+  margin-bottom: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, var(--bg-primary) 0%, rgba(52, 152, 219, 0.03) 100%);
+}
+
+.subscription-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-light);
+  padding-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.subscription-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.subscription-icon {
+  font-size: 32px;
+  color: var(--primary-blue);
+  background: rgba(52, 152, 219, 0.1);
+  padding: 10px;
+  border-radius: var(--radius-md);
+}
+
+.subscription-header-left h2 {
+  font-size: 18px;
+  font-weight: var(--font-semibold);
+  margin: 0 0 4px 0;
+  color: var(--text-primary);
+}
+
+.subscription-header-left p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.subscription-badge {
+  background: rgba(46, 204, 113, 0.12);
+  color: #27ae60;
+  border: 1px solid rgba(46, 204, 113, 0.3);
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+}
+
+.subscription-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.slider-wrapper {
+  background: var(--bg-secondary);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+}
+
+.slider-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  font-weight: var(--font-semibold);
+}
+
+.storage-slider {
+  width: 100%;
+  accent-color: var(--primary-blue);
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.slider-current-val {
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.slider-current-val strong {
+  color: var(--primary-blue);
+  font-size: 16px;
+}
+
+.price-details-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-secondary);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+}
+
+.price-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.price-info span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.price-amount {
+  font-size: 24px;
+  color: #27ae60;
+  font-weight: 700;
+}
+
+.price-period {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: normal;
+}
+
+.upgrade-actions button {
+  padding: 10px 24px;
+  font-weight: var(--font-semibold);
+}
+
+/* Upgrade banner */
+.upgrade-alert-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  background: rgba(243, 156, 18, 0.08);
+  border: 1px solid rgba(243, 156, 18, 0.25);
+  border-radius: var(--radius-md);
+  padding: 12px var(--spacing-md);
+  margin-top: 4px;
+  animation: fadeIn 0.3s ease;
+}
+
+.alert-spinner {
+  color: var(--primary-orange);
+  font-size: 18px;
+  animation: slowSpin 2.5s linear infinite;
+}
+
+@keyframes slowSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.banner-text {
+  flex: 1;
+  font-size: 13.5px;
+  color: #d35400;
+  line-height: 1.4;
+}
+
+.banner-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-approve-req {
+  background: #27ae60;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-approve-req:hover {
+  background: #219653;
+}
+
+.btn-reject-req {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-reject-req:hover {
+  background: #c0392b;
+}
+
+@media (max-width: 600px) {
+  .subscription-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+  }
+  .price-details-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+  }
+  .upgrade-actions {
+    width: 100%;
+  }
+  .upgrade-actions button {
+    width: 100%;
+  }
+  .upgrade-alert-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .banner-buttons {
+    width: 100%;
+    margin-top: 8px;
+  }
+  .banner-buttons button {
+    flex: 1;
+  }
+}

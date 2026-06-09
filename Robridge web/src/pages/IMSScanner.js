@@ -160,13 +160,11 @@ const IMSScanner = () => {
           itemName: item ? item.name : nameFallback,
           workflow,
           quantity: qty,
-          unit: item ? item.baseUnit : onboardForm.unit,
-          category: item ? item.category : onboardForm.category,
-          trackingMode: item ? item.trackingMode : onboardForm.tracking,
+          unit: item ? item.baseUnit : '',
           batchNo: batch,
           serialNo: serial,
-          notes: notes,
-          websocketScanId: websocketScanId,
+          notes,
+          websocketScanId,
           location,
           locationId
         })
@@ -179,7 +177,11 @@ const IMSScanner = () => {
         }
       }
       fetchEvents();
-    } catch (e) { console.error('Error recording scan'); }
+      return data;
+    } catch (e) { 
+      console.error('Error recording scan'); 
+      return { success: false, error: 'Network error' };
+    }
   };
 
   const isGrnMode = (stage) => stage === 'RECEIVE' || stage === 'DISPATCH';
@@ -226,10 +228,33 @@ const IMSScanner = () => {
           const lookupData = await lookupRes.json();
           if (lookupData.success && lookupData.found) {
             setFoundItem(lookupData.item);
-            if (data.matched && autoLogEnabled) {
-              const prefix = scanStage === 'DISPATCH' ? 'DN:' : 'GRN:';
-              await recordScanEvent(lookupData.item, scanStage, 1, '', '', '', prefix + data.grn.docNo, websocketScanId);
+            
+            if (autoLogEnabled) {
+              if (scanStage === 'DISPATCH' && lookupData.item.stock <= 0) {
+                setScanResult('error');
+                showToast(`Cannot dispatch ${lookupData.item.name}. Stock is 0.`, 'error');
+              } else {
+                if (data.matched) {
+                  const prefix = scanStage === 'DISPATCH' ? 'DN:' : 'GRN:';
+                  const res = await recordScanEvent(lookupData.item, scanStage, 1, '', '', '', prefix + data.grn.docNo, websocketScanId);
+                  if (res?.success) showToast(`${scanStage === 'RECEIVE' ? 'Received' : 'Dispatched'} 1 unit of ${lookupData.item.name}`, 'success');
+                  else showToast(`Backend error: ${res?.error || 'Failed to record'}`, 'error');
+                } else {
+                  const res = await recordScanEvent(lookupData.item, scanStage, 1, '', '', '', 'Standalone Log', websocketScanId);
+                  if (res?.success) showToast(`${scanStage === 'RECEIVE' ? 'Received' : 'Dispatched'} 1 unit of ${lookupData.item.name} (Standalone)`, 'success');
+                  else showToast(`Backend error: ${res?.error || 'Failed to record'}`, 'error');
+                }
+              }
             }
+          } else {
+             if (scanStage === 'RECEIVE') {
+                setScanResult('unknown');
+                setNewItemBarcode(val);
+                setShowOnboard(true);
+             } else {
+                setScanResult('error');
+                showToast(`Item with barcode ${val} not found in catalog.`, 'error');
+             }
           }
         } catch (e) { /* catalog lookup failure is non-fatal */ }
 
@@ -256,9 +281,25 @@ const IMSScanner = () => {
           const lookupData = await lookupRes.json();
           if (lookupData.success && lookupData.found) {
             setFoundItem(lookupData.item);
-            if (data.matched && autoLogEnabled) {
-              await recordScanEvent(lookupData.item, scanStage, 1, '', '', '', 'WO:' + data.wo.woNumber, websocketScanId);
+            if (autoLogEnabled) {
+              if (!selectedLocation) {
+                setScanResult('error');
+                showToast('Please select a target location for Putaway.', 'error');
+              } else {
+                if (data.matched) {
+                  const res = await recordScanEvent(lookupData.item, scanStage, 0, '', '', '', 'WO:' + data.wo.woNumber, websocketScanId, selectedLocation.name, selectedLocation.id);
+                  if (res?.success) showToast(`Moved ${lookupData.item.name} to ${selectedLocation.name}`, 'success');
+                  else showToast(`Backend error: ${res?.error || 'Failed to record'}`, 'error');
+                } else {
+                  const res = await recordScanEvent(lookupData.item, scanStage, 0, '', '', '', 'Standalone Log', websocketScanId, selectedLocation.name, selectedLocation.id);
+                  if (res?.success) showToast(`Moved ${lookupData.item.name} to ${selectedLocation.name} (Standalone)`, 'success');
+                  else showToast(`Backend error: ${res?.error || 'Failed to record'}`, 'error');
+                }
+              }
             }
+          } else {
+             setScanResult('error');
+             showToast(`Item with barcode ${val} not found in catalog.`, 'error');
           }
         } catch (e) { /* catalog lookup failure is non-fatal */ }
 
@@ -332,6 +373,7 @@ const IMSScanner = () => {
     }
     setScanInput('');
     isScanningRef.current = false;
+    setTimeout(() => inputRef.current?.focus(), 300);
   };
 
   const handleKeyDown = (e) => {
