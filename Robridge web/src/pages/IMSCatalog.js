@@ -458,7 +458,20 @@ const IMSCatalog = () => {
             {categories.map(c => <option key={c}>{c}</option>)}
           </select>
         </div>
-        <button className="btn btn-secondary" style={{ marginLeft: 'auto' }}><FaDownload /> Export</button>
+        <button 
+          className="btn btn-secondary" 
+          style={{ marginLeft: 'auto' }}
+          onClick={() => {
+            const link = document.createElement('a');
+            link.href = '/Product_Inventory_and_Opening_Stock.xlsx';
+            link.download = 'Product Inventory and Opening Stock.xlsx';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }}
+        >
+          <FaDownload /> Export
+        </button>
         <span className="catalog-count">{filtered.length} of {products.length} products</span>
       </div>
 
