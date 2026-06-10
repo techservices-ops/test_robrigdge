@@ -763,8 +763,10 @@ app.post('/api/auth/register', async (req, res) => {
 
     // Send verification email
     const origin = req.headers.origin;
+    const host = req.get('host');
+    const protocol = req.protocol;
     let clientUrl = origin || process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
-      ? 'https://robridgelabs.com/bvs'
+      ? `${protocol}://${host}/bvs`
       : 'http://localhost:3000');
     
     // Normalize clientUrl: ensure it has /bvs subdirectory prefix if in production and not localhost/127.0.0.1
@@ -1022,17 +1024,18 @@ app.get('/api/auth/verify', async (req, res) => {
 
   if (emailToken) {
     // ─── EMAIL VERIFICATION REDIRECT FLOW ────────────────────────────────────
+    const host = req.get('host');
+    const protocol = req.protocol;
+    const frontendUrl = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
+      ? `${protocol}://${host}/bvs`
+      : 'http://localhost:3000');
+
     try {
       // 1. Look up user by verification token
       const result = await pool.query(
         'SELECT id, email, name, role, email_verified, created_at FROM users WHERE email_verification_token = $1',
         [emailToken]
       );
-
-      // Determine the redirect URL based on environment
-      const frontendUrl = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
-        ? 'https://robridgelabs.com/bvs'
-        : 'http://localhost:3000');
 
       if (result.rows.length === 0) {
         // Redirect to login with error parameter if token is invalid
@@ -1110,9 +1113,6 @@ app.get('/api/auth/verify', async (req, res) => {
       }
     } catch (err) {
       console.error('Error verifying email:', err);
-      const frontendUrl = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
-        ? 'https://robridgelabs.com/bvs'
-        : 'http://localhost:3000');
       return res.redirect(`${frontendUrl}/login?status=error&message=Server+error+during+verification`);
     }
   } else {
@@ -1689,8 +1689,10 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     // Create reset link
     // Changes domain based on environment
     const origin = req.headers.origin;
+    const host = req.get('host');
+    const protocol = req.protocol;
     let clientUrl = origin || process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
-      ? 'https://robridgelabs.com/bvs' // Adjust if your base path is strictly /bvs
+      ? `${protocol}://${host}/bvs` // Adjust if your base path is strictly /bvs
       : 'http://localhost:3000'); // Development
 
     // Normalize clientUrl: ensure it has /bvs subdirectory prefix if in production and not localhost/127.0.0.1

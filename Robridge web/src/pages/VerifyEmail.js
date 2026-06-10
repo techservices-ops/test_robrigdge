@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { FaCheckCircle, FaExclamationCircle, FaSpinner } from 'react-icons/fa';
+import { getServerURL } from '../config/api';
 import './LoginPage.css';
 
 const VerifyEmail = () => {
@@ -19,8 +20,7 @@ const VerifyEmail = () => {
 
         // Redirect the browser window directly to the backend verification endpoint.
         // This implements the Bridge Redirection, avoiding any double-request issues due to React StrictMode or quick refreshes.
-        const apiUrl = process.env.REACT_APP_API_URL || 'https://test-robrigdge.onrender.com';
-        window.location.href = `${apiUrl}/api/auth/verify?token=${token}`;
+        window.location.href = `${getServerURL()}/api/auth/verify?token=${token}`;
     }, [token]);
 
     return (
