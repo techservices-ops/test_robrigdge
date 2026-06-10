@@ -5589,6 +5589,70 @@ app.get('/api/ims/scanner/events', authenticateToken, requireWorkspace, async (r
   }
 });
 
+// Revert (Delete) a scan event and restore item stock
+app.delete('/api/ims/scanner/events/:id', authenticateToken, requireWorkspace, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const eventId = parseInt(req.params.id);
+    if (isNaN(eventId)) {
+      return res.status(400).json({ success: false, error: 'Invalid event ID' });
+    }
+
+    // 1. Fetch the scan event
+    const eventRes = await client.query(
+      'SELECT * FROM ims_scan_events WHERE id = $1 AND workspace_id = $2',
+      [eventId, req.workspace_id]
+    );
+
+    if (eventRes.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Scan event not found' });
+    }
+
+    const event = eventRes.rows[0];
+    const { barcode, item_id, workflow, quantity } = event;
+    const qty = Number(quantity) || 0;
+
+    await client.query('BEGIN');
+
+    // 2. Adjust item catalog stock if applicable
+    if (item_id && qty > 0) {
+      const wf = (workflow || '').toUpperCase();
+      const inOps = ['RECEIVE', 'IN', 'RETURN', 'RESTOCK'];
+      const outOps = ['DISPATCH', 'OUT', 'PICK', 'ISSUE', 'SHIP'];
+
+      if (inOps.some(op => wf.includes(op))) {
+        // Revert inward: subtract stock
+        await client.query(
+          'UPDATE ims_items SET stock = GREATEST(stock - $1, 0), updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND workspace_id = $3',
+          [qty, item_id, req.workspace_id]
+        );
+      } else if (outOps.some(op => wf.includes(op))) {
+        // Revert outward: add stock
+        await client.query(
+          'UPDATE ims_items SET stock = stock + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND workspace_id = $3',
+          [qty, item_id, req.workspace_id]
+        );
+      }
+    }
+
+    // 3. Delete the scan event from the log
+    await client.query(
+      'DELETE FROM ims_scan_events WHERE id = $1 AND workspace_id = $2',
+      [eventId, req.workspace_id]
+    );
+
+    await client.query('COMMIT');
+    res.json({ success: true, message: 'Scan event reverted successfully' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Revert scan error:', error);
+    res.status(500).json({ success: false, error: 'Failed to revert scan event' });
+  } finally {
+    client.release();
+  }
+});
+
+
 // ==========================================
 // RFID AND MOBILE SCANNING
 // ==========================================

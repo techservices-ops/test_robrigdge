@@ -466,3 +466,28 @@
   color: white !important;
 }
 
+/* History Explorer Table Action Buttons styling to prevent UI flicker/dependency issues */
+.ims-scanner-page .icon-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all var(--transition-fast);
+  background: transparent;
+}
+
+.ims-scanner-page .delete-btn {
+  color: #EA4335;
+}
+
+.ims-scanner-page .delete-btn:hover {
+  background: #FEE7E6;
+  color: #D93025;
+}
+
+
