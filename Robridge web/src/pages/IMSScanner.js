@@ -94,7 +94,8 @@ const IMSScanner = () => {
   useEffect(() => {
     if (latestScan && latestScan.barcodeData) {
       // Prevent processing historical scans on mount (older than page load time)
-      const scanTime = new Date(latestScan.timestamp || latestScan.scanned_at || latestScan.created_at || Date.now()).getTime();
+      // Prioritize clientReceivedAt (which uses client's clock) to avoid client-server clock-skew issues.
+      const scanTime = latestScan.clientReceivedAt || new Date(latestScan.timestamp || latestScan.scanned_at || latestScan.created_at || Date.now()).getTime();
       if (scanTime < mountTimeRef.current - 1000) {
         console.log('⏳ Skipping historical WebSocket scan on mount:', latestScan.barcodeData);
         return;

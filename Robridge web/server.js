@@ -2007,17 +2007,25 @@ app.post('/api/esp32/scan/:deviceId', async (req, res) => {
     // We explicitly set this to null or a "pending" state so the frontend knows to show the button
     console.log('ℹ️ AI analysis skipped (waiting for manual trigger)');
     aiAnalysis = null;
-    // Convert timestamp to ISO string if it's a Unix timestamp (number)
+    // Convert timestamp to ISO string if it's a Unix timestamp (number or stringified number)
     // ESP32 sends millis() which is milliseconds since boot, not Unix timestamp
-    // If timestamp is invalid (before year 2000 = 946684800000ms), use server time
+    // If timestamp is invalid (before year 2000 = 946684800000ms) or not parseable, use server time
     let scanTimestamp = timestamp || new Date().toISOString();
-    if (typeof scanTimestamp === 'number') {
-      // Check if timestamp is valid (after Jan 1, 2000)
-      if (scanTimestamp < 946684800000) {
+    const parsedTs = Number(scanTimestamp);
+    if (!isNaN(parsedTs)) {
+      if (parsedTs < 946684800000) {
         console.log(`⚠️  Invalid timestamp from ESP32 (millis): ${scanTimestamp} - using server time`);
         scanTimestamp = new Date().toISOString();
       } else {
-        scanTimestamp = new Date(scanTimestamp).toISOString();
+        scanTimestamp = new Date(parsedTs).toISOString();
+      }
+    } else {
+      const dateObj = new Date(scanTimestamp);
+      if (isNaN(dateObj.getTime())) {
+        console.log(`⚠️  Invalid date string from ESP32: ${scanTimestamp} - using server time`);
+        scanTimestamp = new Date().toISOString();
+      } else {
+        scanTimestamp = dateObj.toISOString();
       }
     }
     // Create scan record with AI analysis

@@ -10,7 +10,7 @@ services:
         destination: /index.html
     envVars:
       - key: REACT_APP_API_URL
-        value: https://robridge-express.onrender.com
+        value: https://test-robrigdge.onrender.com
       - key: REACT_APP_AI_SERVER_URL
         value: https://robridge-ai.onrender.com
 

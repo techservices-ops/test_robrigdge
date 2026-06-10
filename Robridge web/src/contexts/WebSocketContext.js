@@ -96,6 +96,7 @@ export const WebSocketProvider = ({ children }) => {
     const completeScan = {
       ...scanData,
       timestamp: rawTs,
+      clientReceivedAt: Date.now(), // Arrival time relative to local client clock to prevent clock-skew skips
       source: 'ESP32'
     };
 
