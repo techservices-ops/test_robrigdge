@@ -22,6 +22,18 @@ const formatMemberSince = (dateString) => {
   return `Member since ${date.toLocaleDateString('en-US', options)}`;
 };
 
+const getDisplayRole = (role) => {
+  if (!role) return { text: 'USER', bg: '#f3f4f6', color: '#374151' };
+  const r = role.toLowerCase();
+  if (r === 'owner' || r === 'admin') {
+    return { text: 'ADMIN', bg: '#e0f2fe', color: '#0369a1' };
+  }
+  if (r === 'manager') {
+    return { text: 'MANAGER', bg: '#fef3c7', color: '#b45309' };
+  }
+  return { text: 'USER', bg: '#f3f4f6', color: '#374151' };
+};
+
 const Profile = () => {
   const { getUserInfo } = useAuth();
   const { activeWorkspace } = useWorkspace();
@@ -284,8 +296,8 @@ const Profile = () => {
     <div className="profile-page">
       <div className="page-header ims-page-header">
         <div className="ims-header-left">
-          <h1>Workspace Profile</h1>
-          <p>Manage your account and workspace capacity details</p>
+          <h1>User Profile</h1>
+          <p>Manage your personal profile and account credentials</p>
         </div>
         <div className="ims-header-right ims-flex-gap-10">
           {/* Security button hidden */}
@@ -350,15 +362,16 @@ const Profile = () => {
                 <h2>{userDetails.name}</h2>
                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', margin: '8px 0' }}>
                   <span className="user-id-badge">{userDetails.id}</span>
-                  <span className="user-id-badge" style={{ background: '#e3f2fd', color: '#1565c0' }}>{activeWorkspace?.role?.toUpperCase() || 'MEMBER'}</span>
+                  {(() => {
+                    const roleDisplay = getDisplayRole(activeWorkspace?.role);
+                    return (
+                      <span className="user-id-badge" style={{ background: roleDisplay.bg, color: roleDisplay.color }}>
+                        {roleDisplay.text}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <p className="member-date" style={{ color: '#666', fontSize: '13px' }}>{userDetails.memberSince}</p>
-
-                <div className="workspace-card" style={{ marginTop: '20px', padding: '15px', background: '#F8F9FA', borderRadius: '12px', border: '1px solid #EAEAEA', textAlign: 'left' }}>
-                  <h4 style={{ margin: '0 0 10px', fontSize: '14px', color: '#333' }}>Current Workspace</h4>
-                  <div style={{ fontWeight: '600', fontSize: '16px', color: '#fa1804' }}>{activeWorkspace?.name || 'No Workspace'}</div>
-
-                </div>
               </div>
             </>
           )}

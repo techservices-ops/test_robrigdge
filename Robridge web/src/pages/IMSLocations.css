@@ -53,13 +53,13 @@
   z-index: 2;
 }
 
-/* Reduce unwanted spacing in modals */
+/* Spacing in modals */
 .ims-modal .modal-header {
-  padding-bottom: 16px !important;
+  padding-bottom: 20px !important;
 }
 
 .ims-modal .modal-body {
-  padding-top: 0 !important;
+  padding-top: 20px !important;
 }
 
 /* Align all modal inputs and selects to the left */
@@ -406,8 +406,87 @@
   margin-right: auto;
 }
 
+/* ── Route Visualizer inside Transfer Modal ── */
+.ims-route-visualizer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  padding: 16px 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 1px solid #e2e8f0;
+}
 
+.ims-route-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
 
+.ims-route-node-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #888;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
 
+.ims-route-node-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: #2c3e50;
+  text-align: center;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
+.ims-route-connector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  color: #9b59b6;
+  font-size: 14px;
+  margin: 0 12px;
+  flex-shrink: 0;
+  animation: pulse-exchange-btn 2s infinite ease-in-out;
+}
 
+@keyframes pulse-exchange-btn {
+  0% { transform: scale(1); box-shadow: 0 4px 6px rgba(155, 89, 182, 0.1); }
+  50% { transform: scale(1.1); box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3); }
+  100% { transform: scale(1); box-shadow: 0 4px 6px rgba(155, 89, 182, 0.1); }
+}
+
+.ims-spinner-small {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.ims-validation-warning {
+  background: #fff5f5;
+  border: 1px solid #fed7d7;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+.ims-input-error {
+  border-color: #e74c3c !important;
+  color: #e74c3c !important;
+  background-color: #fdf2f2 !important;
+}

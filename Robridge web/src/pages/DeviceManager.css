@@ -133,7 +133,7 @@
 /* Main Content Area */
 .device-manager .main-content {
     display: grid;
-    grid-template-columns: 1fr 400px;
+    grid-template-columns: 1fr 1fr;
     gap: 24px;
 }
 
@@ -801,7 +801,7 @@
 /* Responsive Design */
 @media (max-width: 1400px) {
     .device-manager .main-content {
-        grid-template-columns: 1fr 350px;
+        grid-template-columns: 1fr 1fr;
     }
 }
 
