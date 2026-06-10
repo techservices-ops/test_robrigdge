@@ -46,11 +46,11 @@ const IMSSettings = () => {
   // Other Settings
   const [alerts, setAlerts] = useState({ email: true });
   const [security, setSecurity] = useState({ restrictRobot: true, blockUnpaired: true, immutableLogs: true, managerApproval: false, supervisorPin: '1234' });
-  const [aiSettings, setAiSettings] = useState({ autoReorder: true, predictiveBuffer: true, dynamicThresholds: true, advisoryMode: false });
+  const [aiSettings, setAiSettings] = useState({ robotDispatch: true, aiClassify: true, anomalyDetect: true, predictiveStock: false });
   const [scannerPrefs, setScannerPrefs] = useState({ autoLog: true, sound: true, vibration: true });
 
-  const [procurementAction, setProcurementAction] = useState('draft'); // draft, email, erp
-  const [spendLimit, setSpendLimit] = useState(5000);
+  const [aiAction, setAiAction] = useState('queue'); // queue, dispatch, alert
+  const [dispatchLimit, setDispatchLimit] = useState(10);
   const [bufferPct, setBufferPct] = useState(15);
   const [saved, setSaved] = useState(false);
 
@@ -73,11 +73,13 @@ const IMSSettings = () => {
              const prefs = setData.settings;
              if(prefs.alerts) setAlerts(prefs.alerts);
              if(prefs.security) setSecurity(prev => ({ ...prev, ...prefs.security }));
-             if(prefs.aiSettings) setAiSettings(prefs.aiSettings);
-             if(prefs.scannerPrefs) setScannerPrefs(prefs.scannerPrefs);
-             if(prefs.procurementAction) setProcurementAction(prefs.procurementAction);
-             if(prefs.spendLimit) setSpendLimit(prefs.spendLimit);
-             if(prefs.bufferPct) setBufferPct(prefs.bufferPct);
+              if(prefs.aiSettings) setAiSettings(prev => ({ ...prev, ...prefs.aiSettings }));
+              if(prefs.scannerPrefs) setScannerPrefs(prefs.scannerPrefs);
+              if(prefs.aiAction) setAiAction(prefs.aiAction);
+              else if(prefs.procurementAction) setAiAction(prefs.procurementAction === 'draft' ? 'queue' : prefs.procurementAction === 'email' ? 'alert' : 'dispatch');
+              if(prefs.dispatchLimit !== undefined) setDispatchLimit(prefs.dispatchLimit);
+              else if(prefs.spendLimit) setDispatchLimit(Math.min(50, Math.round(prefs.spendLimit / 500)));
+              if(prefs.bufferPct) setBufferPct(prefs.bufferPct);
              if(prefs.storageGB) {
                setStorageGB(prefs.storageGB);
                setCurrentStorageGB(prefs.storageGB);
@@ -164,7 +166,7 @@ const IMSSettings = () => {
     setPendingUpgrade(newPending);
     
     const settings = {
-      alerts, security, aiSettings, scannerPrefs, procurementAction, spendLimit, bufferPct,
+      alerts, security, aiSettings, scannerPrefs, aiAction, dispatchLimit, bufferPct,
       storageGB: currentStorageGB,
       pendingUpgrade: newPending
     };
@@ -189,7 +191,7 @@ const IMSSettings = () => {
     setPendingUpgrade(null);
     
     const settings = {
-      alerts, security, aiSettings, scannerPrefs, procurementAction, spendLimit, bufferPct,
+      alerts, security, aiSettings, scannerPrefs, aiAction, dispatchLimit, bufferPct,
       storageGB: newSize,
       pendingUpgrade: null
     };
@@ -211,7 +213,7 @@ const IMSSettings = () => {
   const handleCancelRequest = async () => {
     setPendingUpgrade(null);
     const settings = {
-      alerts, security, aiSettings, scannerPrefs, procurementAction, spendLimit, bufferPct,
+      alerts, security, aiSettings, scannerPrefs, aiAction, dispatchLimit, bufferPct,
       storageGB: currentStorageGB,
       pendingUpgrade: null
     };
@@ -232,7 +234,7 @@ const IMSSettings = () => {
   const handleSave = async () => {
     if (!isAdmin) return;
     const settings = { 
-      alerts, security, aiSettings, scannerPrefs, procurementAction, spendLimit, bufferPct,
+      alerts, security, aiSettings, scannerPrefs, aiAction, dispatchLimit, bufferPct,
       storageGB: currentStorageGB,
       pendingUpgrade
     };
@@ -380,7 +382,7 @@ const IMSSettings = () => {
           </div>
         </div>
 
-        {/* ── AI ENGINE CONFIGURATION ── */}
+        {/* ── AUTONOMOUS AI ENGINE ── */}
         <div className="settings-card ai-card">
           <div className="settings-card-header">
             <FaBrain className="settings-card-icon ai-icon" />
@@ -389,44 +391,58 @@ const IMSSettings = () => {
           </div>
           
           <div className="alert-toggles">
-            <div className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAiSettings, 'autoReorder')} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
+            <div className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAiSettings, 'robotDispatch')} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
               <div className="toggle-info">
-                <div className="toggle-label">Autonomous Procurement</div>
-                <div className="toggle-desc">Allow AI to form restock requests based on velocity</div>
+                <div className="toggle-label">Autonomous Robot Dispatch</div>
+                <div className="toggle-desc">Allow AI to dispatch AMR robots to target bins with pending scans</div>
               </div>
-              {aiSettings.autoReorder ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
+              {aiSettings.robotDispatch ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
             </div>
-            <div className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAiSettings, 'dynamicThresholds')} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
+            <div className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAiSettings, 'aiClassify')} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
               <div className="toggle-info">
-                <div className="toggle-label">Dynamic Thresholds</div>
-                <div className="toggle-desc">AI shifts minimums based on seasonal demand</div>
+                <div className="toggle-label">AI Product Classification</div>
+                <div className="toggle-desc">Use Gemini/AI to identify and categorize items from ESP32 scanner images</div>
               </div>
-              {aiSettings.dynamicThresholds ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
+              {aiSettings.aiClassify ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
+            </div>
+            <div className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAiSettings, 'anomalyDetect')} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
+              <div className="toggle-info">
+                <div className="toggle-label">Scan Anomaly Detection</div>
+                <div className="toggle-desc">AI flags shelf mismatches and misplaced items detected by scanner sensors</div>
+              </div>
+              {aiSettings.anomalyDetect ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
+            </div>
+            <div className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAiSettings, 'predictiveStock')} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
+              <div className="toggle-info">
+                <div className="toggle-label">Predictive Stock Forecast</div>
+                <div className="toggle-desc">AI automatically shifts minimum inventory levels based on scan velocity</div>
+              </div>
+              {aiSettings.predictiveStock ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
             </div>
           </div>
 
           <div className="settings-slider-group">
             <div className="slider-header">
-              <span><FaChartLine /> Predictive Safety Buffer</span>
+              <span><FaChartLine /> Predictive Stock Buffer</span>
               <strong>+{bufferPct}%</strong>
             </div>
-            <input type="range" min="0" max="50" step="5" value={bufferPct} onChange={(e) => setBufferPct(e.target.value)} className="slider-input" disabled={!isAdmin} />
+            <input type="range" min="0" max="50" step="5" value={bufferPct} onChange={(e) => setBufferPct(Number(e.target.value))} className="slider-input" disabled={!isAdmin} />
           </div>
 
           <div className="settings-slider-group">
             <div className="slider-header">
-              <span><FaMoneyBillWave /> Auto-Approval Spend Limit</span>
-              <strong>${spendLimit.toLocaleString()}</strong>
+              <span><FaRobot /> AMR Dispatch Threshold</span>
+              <strong>{dispatchLimit} pending scans</strong>
             </div>
-            <input type="range" min="0" max="25000" step="1000" value={spendLimit} onChange={(e) => setSpendLimit(e.target.value)} className="slider-input" disabled={!isAdmin} />
+            <input type="range" min="1" max="50" step="1" value={dispatchLimit} onChange={(e) => setDispatchLimit(Number(e.target.value))} className="slider-input" disabled={!isAdmin} />
           </div>
 
           <div className="dropdown-group">
-            <p className="dropdown-label"><FaRobot /> AI Procurement Action</p>
-            <select value={procurementAction} onChange={e => setProcurementAction(e.target.value)} className="form-select dropdown-select" disabled={!isAdmin}>
-              <option value="draft">Draft PO for Manager Review (Safest)</option>
-              <option value="email">Auto-Email Authorized Vendors</option>
-              <option value="erp">Push Directly to ERP (SAP/Oracle)</option>
+            <p className="dropdown-label"><FaRobot /> AI Dispatch Action</p>
+            <select value={aiAction} onChange={e => setAiAction(e.target.value)} className="form-select dropdown-select" disabled={!isAdmin}>
+              <option value="queue">Queue Task for Operator Verification</option>
+              <option value="dispatch">Auto-Dispatch Nearest AMR Robot</option>
+              <option value="alert">Log Anomaly and Alert Supervisor</option>
             </select>
           </div>
         </div>
