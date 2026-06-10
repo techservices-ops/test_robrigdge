@@ -99,63 +99,19 @@ export const WebSocketProvider = ({ children }) => {
       source: 'ESP32'
     };
 
-    // Check completeness
-    setTimeout(() => {
-      setScanBuffer(currentBuffer => {
-        if (isCompleteScanData(currentBuffer) && !isProcessingScanRef.current) {
-          console.log('✅ Complete scan data found, processing...');
-          isProcessingScanRef.current = true;
-          setIsProcessingScan(true);
+    setLatestScan(completeScan);
 
-          const hasValidTimestamp = (ts) => {
-            if (!ts) return false;
-            const date = new Date(ts);
-            return !isNaN(date.getTime()) && date.getFullYear() > 2020;
-          };
-
-          const rawTs = currentBuffer.timestamp || currentBuffer.scanned_at || currentBuffer.created_at;
-          const validTimestamp = hasValidTimestamp(rawTs)
-            ? rawTs
-            : Date.now();
-
-          const completeScan = {
-            ...currentBuffer,
-            timestamp: validTimestamp,
-            source: 'ESP32',
-            aiAnalysis: currentBuffer.aiAnalysis,
-            dbRecord: currentBuffer.productInfo ? {
-              id: currentBuffer.barcodeData,
-              name: currentBuffer.productInfo.productName,
-              category: currentBuffer.productInfo.productType,
-              price: '$0.00',
-              location: 'ESP32 Scanner',
-              lastUpdated: validTimestamp,
-              status: currentBuffer.productInfo.foundInLocalDB ? 'ACTIVE' : 'UNKNOWN'
-            } : null
-          };
-
-          setLatestScan(completeScan);
-          // autoSaveScanToDatabase(completeScan); // Commented out to prevent duplicate saves/overwrites
-
-            try {
-              Object.keys(sessionStorage).forEach(key => {
-                if (key.startsWith('ims_dashboard_cache_')) {
-                  sessionStorage.removeItem(key);
-                }
-              });
-              console.log('🧹 Cleared dashboard cache on WebSocket scan');
-            } catch (e) {
-              console.error('Error clearing sessionStorage:', e);
-            }
-
-          setTimeout(() => {
-            isProcessingScanRef.current = false;
-            setIsProcessingScan(false);
-            setScanBuffer({});
-          }, 2000);
-          }
-        });
-      }, 0);
+    // Clear dashboard caches to keep data consistent across pages
+    try {
+      Object.keys(sessionStorage).forEach(key => {
+        if (key.startsWith('ims_dashboard_cache_')) {
+          sessionStorage.removeItem(key);
+        }
+      });
+      console.log('🧹 Cleared dashboard cache on WebSocket scan');
+    } catch (e) {
+      console.error('Error clearing sessionStorage:', e);
+    }
   };
 
   // Connect & Authenticate function
