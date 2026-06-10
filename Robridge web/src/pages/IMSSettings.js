@@ -419,33 +419,57 @@ const IMSSettings = () => {
           <div className="builder-desc">Defined categories are synced to Catalog Master and enforce rotational behaviour (FEFO/FIFO).</div>
           
           <div className="builder-form">
-            <div className="bf-inputs flex-row">
-              <input type="text" placeholder="Cat Name (e.g. Chemicals)" value={newCatName} onChange={e => setNewCatName(e.target.value)} className="form-input" disabled={!isAdmin} />
-              <select value={newCatMode} onChange={e => setNewCatMode(e.target.value)} className="form-select" disabled={!isAdmin}>
-                <option value="FIFO">FIFO (First In First Out)</option>
-                <option value="FEFO">FEFO (First Expire First Out)</option>
-                <option value="LIFO">LIFO (Last In First Out)</option>
-              </select>
+            <div className="builder-form-row">
+              <div className="builder-field-group" style={{ flex: 2 }}>
+                <label>Category Name</label>
+                <input type="text" placeholder="e.g. Chemicals" value={newCatName} onChange={e => setNewCatName(e.target.value)} className="form-input" disabled={!isAdmin} />
+              </div>
+              <div className="builder-field-group" style={{ flex: 1.2 }}>
+                <label>Rotation Mode</label>
+                <select value={newCatMode} onChange={e => setNewCatMode(e.target.value)} className="form-select" disabled={!isAdmin}>
+                  <option value="FIFO">FIFO (First In First Out)</option>
+                  <option value="FEFO">FEFO (First Expire First Out)</option>
+                  <option value="LIFO">LIFO (Last In First Out)</option>
+                </select>
+              </div>
             </div>
-            <div className="bf-inputs flex-row">
-              <input type="number" placeholder="Alert Threshold" value={newCatAlert} onChange={e => setNewCatAlert(e.target.value)} className="form-input" disabled={!isAdmin} />
-              <input type="number" placeholder="Reorder point" value={newCatReorder} onChange={e => setNewCatReorder(e.target.value)} className="form-input" disabled={!isAdmin} />
-              <input type="color" value={newCatColor} onChange={e => setNewCatColor(e.target.value)} className="color-picker" title="Tag Color" disabled={!isAdmin} />
-              <button className="btn btn-secondary btn-icon-only" onClick={addCategory} disabled={!isAdmin}><FaPlus /></button>
+            <div className="builder-form-row">
+              <div className="builder-field-group" style={{ flex: 1 }}>
+                <label>Alert Threshold</label>
+                <input type="number" placeholder="Alert Qty" value={newCatAlert} onChange={e => setNewCatAlert(e.target.value)} className="form-input" disabled={!isAdmin} />
+              </div>
+              <div className="builder-field-group" style={{ flex: 1 }}>
+                <label>Reorder Point</label>
+                <input type="number" placeholder="Reorder Qty" value={newCatReorder} onChange={e => setNewCatReorder(e.target.value)} className="form-input" disabled={!isAdmin} />
+              </div>
+              <div className="builder-field-group" style={{ width: '44px', flexShrink: 0 }}>
+                <label>Color</label>
+                <input type="color" value={newCatColor} onChange={e => setNewCatColor(e.target.value)} className="color-picker" title="Tag Color" disabled={!isAdmin} style={{ height: '38px', width: '44px', padding: '2px' }} />
+              </div>
+              <div className="builder-field-group" style={{ flexShrink: 0 }}>
+                <label>&nbsp;</label>
+                <button className="btn btn-secondary btn-icon-only" onClick={addCategory} disabled={!isAdmin} style={{ height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaPlus /></button>
+              </div>
             </div>
           </div>
 
           <div className="builder-list">
-            {categories.map(cat => (
-              <div key={cat.id} className="builder-row">
-                <span className="builder-color-dot" style={{background: cat.color}}></span>
-                <div className="builder-info">
-                  <strong>{cat.name}</strong> <span className="cat-mode-badge">{cat.mode}</span>
-                  <div className="cat-limits">Alert: {cat.alertAt} · Reorder: {cat.reorderAt}</div>
-                </div>
-                {isAdmin && <button className="btn-icon danger" onClick={() => removeCategory(cat.id, cat.name)}><FaTrash /></button>}
+            {categories.length === 0 ? (
+              <div className="no-data-placeholder">
+                No categories configured. Build one above.
               </div>
-            ))}
+            ) : (
+              categories.map(cat => (
+                <div key={cat.id} className="builder-row">
+                  <span className="builder-color-dot" style={{background: cat.color}}></span>
+                  <div className="builder-info">
+                    <strong>{cat.name}</strong> <span className="cat-mode-badge">{cat.mode}</span>
+                    <div className="cat-limits">Alert: {cat.alertAt} · Reorder: {cat.reorderAt}</div>
+                  </div>
+                  {isAdmin && <button className="btn-icon danger" onClick={() => removeCategory(cat.id, cat.name)}><FaTrash /></button>}
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -457,19 +481,36 @@ const IMSSettings = () => {
           </div>
           <div className="builder-desc">Custom action modes loaded dynamically into the Smart Scanner app.</div>
           
-          <div className="builder-form flex-row">
-            <input type="text" placeholder="Operation (e.g. Return To Vendor)" value={newFlowName} onChange={e => setNewFlowName(e.target.value)} className="form-input" disabled={!isAdmin} />
-            <input type="color" value={newFlowColor} onChange={e => setNewFlowColor(e.target.value)} className="color-picker" disabled={!isAdmin} />
-            <button className="btn btn-secondary btn-icon-only" onClick={addWorkflow} disabled={!isAdmin}><FaPlus /></button>
+          <div className="builder-form">
+            <div className="builder-form-row">
+              <div className="builder-field-group" style={{ flex: 1 }}>
+                <label>Operation Name</label>
+                <input type="text" placeholder="e.g. Return To Vendor" value={newFlowName} onChange={e => setNewFlowName(e.target.value)} className="form-input" disabled={!isAdmin} />
+              </div>
+              <div className="builder-field-group" style={{ width: '44px', flexShrink: 0 }}>
+                <label>Color</label>
+                <input type="color" value={newFlowColor} onChange={e => setNewFlowColor(e.target.value)} className="color-picker" disabled={!isAdmin} style={{ height: '38px', width: '44px', padding: '2px' }} />
+              </div>
+              <div className="builder-field-group" style={{ flexShrink: 0 }}>
+                <label>&nbsp;</label>
+                <button className="btn btn-secondary btn-icon-only" onClick={addWorkflow} disabled={!isAdmin} style={{ height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaPlus /></button>
+              </div>
+            </div>
           </div>
 
           <div className="workflows-grid">
-            {workflows.map(flow => (
-              <div key={flow.id} className="workflow-pill" style={{borderLeftColor: flow.color}}>
-                <span className="wf-name">{flow.name}</span>
-                {isAdmin && <FaTrash className="wf-del" onClick={() => removeWorkflow(flow.id)} />}
+            {workflows.length === 0 ? (
+              <div className="no-data-placeholder" style={{ width: '100%' }}>
+                No scanner operations defined. Add one above.
               </div>
-            ))}
+            ) : (
+              workflows.map(flow => (
+                <div key={flow.id} className="workflow-pill" style={{borderLeftColor: flow.color}}>
+                  <span className="wf-name">{flow.name}</span>
+                  {isAdmin && <FaTrash className="wf-del" onClick={() => removeWorkflow(flow.id)} />}
+                </div>
+              ))
+            )}
           </div>
         </div>
 

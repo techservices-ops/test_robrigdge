@@ -285,7 +285,6 @@
 .wf-del:hover { color: #e74c3c; }
 
 /* Specific Grid Alignments */
-.ai-card { grid-column: span 1; grid-row: span 2; }
 .category-builder-card { grid-column: span 1; }
 .workflow-builder-card { grid-column: span 1; }
 
@@ -558,4 +557,82 @@
   .banner-buttons button {
     flex: 1;
   }
+}
+
+/* Page Header styling */
+.ims-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xl);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.ims-header-left h1 {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 6px 0;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+}
+
+.ims-header-left p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.ims-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Builder layout improvements */
+.builder-form-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 8px;
+  width: 100%;
+}
+
+.builder-form-row:last-child {
+  margin-bottom: 0;
+}
+
+.builder-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.builder-field-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Empty State Placeholders */
+.no-data-placeholder {
+  padding: var(--spacing-lg);
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-medium);
+  margin-top: 4px;
+  width: 100%;
+}
+
+/* Premium subscriptions hover details */
+.subscription-card {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.subscription-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
 }
