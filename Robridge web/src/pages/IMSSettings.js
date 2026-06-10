@@ -3,7 +3,7 @@ import {
   FaBell, FaToggleOn, FaToggleOff, 
   FaSave, FaCheckCircle, FaLock, FaBrain, 
   FaChartLine, 
-  FaPlus, FaTrash, FaLayerGroup, FaExchangeAlt,
+  FaPlus, FaTrash, FaLayerGroup,
   FaCloud, FaHourglassHalf
 } from 'react-icons/fa';
 import './IMSSettings.css';
@@ -30,7 +30,6 @@ const IMSSettings = () => {
   
   // Master Dynamic State
   const [categories, setCategories] = useState([]);
-  const [workflows, setWorkflows] = useState([]);
 
   // Category Builder State
   const [newCatName, setNewCatName] = useState('');
@@ -39,10 +38,6 @@ const IMSSettings = () => {
   const [newCatReorder, setNewCatReorder] = useState('');
   const [newCatColor, setNewCatColor] = useState('#3498db');
 
-  // Workflow Builder State
-  const [newFlowName, setNewFlowName] = useState('');
-  const [newFlowColor, setNewFlowColor] = useState('#3498db');
-  const [newFlowDirection, setNewFlowDirection] = useState('NEUTRAL');
 
   // Other Settings
   const [alerts, setAlerts] = useState({ email: true });
@@ -61,10 +56,6 @@ const IMSSettings = () => {
           const catRes = await imsFetch('/api/ims/categories');
           const catData = await catRes.json();
           if(catData.success) setCategories(catData.categories);
-
-          const wfRes = await imsFetch('/api/ims/workflows');
-          const wfData = await wfRes.json();
-          if(wfData.success) setWorkflows(wfData.workflows);
 
           const setRes = await imsFetch('/api/ims/settings');
           const setData = await setRes.json();
@@ -139,54 +130,6 @@ const IMSSettings = () => {
     }
   };
 
-  const addWorkflow = async () => {
-    if (!isAdmin) return;
-    if (!newFlowName) {
-      showToast('Operation name is required', 'error');
-      return;
-    }
-    try {
-      const res = await imsFetch('/api/ims/workflows', {
-        method: 'POST',
-        body: JSON.stringify({ name: newFlowName, color: newFlowColor, direction: newFlowDirection })
-      });
-      const data = await res.json();
-      if(data.success) {
-        setWorkflows([...workflows, data.workflow]);
-        setNewFlowName('');
-        setNewFlowDirection('NEUTRAL');
-        showToast(`Scanner operation "${data.workflow.name}" created successfully.`, 'success');
-      } else {
-        showToast(data.error || 'Failed to create scanner operation', 'error');
-      }
-    } catch(err) { 
-      console.error(err);
-      showToast('Error creating scanner operation', 'error');
-    }
-  };
-
-  const removeWorkflow = async (id, name) => {
-    if (!isAdmin) return;
-    const ok = await confirm({
-      title: `Delete operation "${name}"?`,
-      message: 'Scans using this operation will lose their workflow classification.',
-      type: 'danger', confirmLabel: 'Delete Operation'
-    });
-    if (!ok) return;
-    try {
-      const res = await imsFetch(`/api/ims/workflows/${id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if(data.success) {
-        setWorkflows(workflows.filter(w => w.id !== id));
-        showToast(`Scanner operation "${name}" deleted successfully.`, 'success');
-      } else {
-        showToast(data.error || 'Failed to delete scanner operation', 'error');
-      }
-    } catch(err) { 
-      console.error(err);
-      showToast('Error deleting scanner operation', 'error');
-    }
-  };
 
   const handleRequestUpgrade = async (requestedSize) => {
     const newPending = {
@@ -392,7 +335,7 @@ const IMSSettings = () => {
       </div>
 
       <div className="settings-grid">
-        {/* Left Column: Alerts, Category Builder, Compliance */}
+        {/* Left Column: Alerts & Category Builder */}
         <div className="settings-column">
           {/* ── ALERTS & NOTIFICATIONS ── */}
           <div className="settings-card alerts-card">
@@ -477,6 +420,43 @@ const IMSSettings = () => {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Right Column: AI Engine & Security Compliance */}
+        <div className="settings-column">
+          {/* ── AUTONOMOUS AI ENGINE ── */}
+          <div className="settings-card ai-card">
+            <div className="settings-card-header">
+              <FaBrain className="settings-card-icon ai-icon" />
+              <h2>Autonomous AI Engine</h2>
+              <span className="ai-badge">Brain Config</span>
+            </div>
+            
+            <div className="alert-toggles">
+              <div className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAiSettings, 'aiClassify')} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
+                <div className="toggle-info">
+                  <div className="toggle-label">AI Product Classification</div>
+                  <div className="toggle-desc">Use Gemini/AI to identify and categorize items from ESP32 scanner images</div>
+                </div>
+                {aiSettings.aiClassify ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
+              </div>
+              <div className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAiSettings, 'predictiveStock')} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
+                <div className="toggle-info">
+                  <div className="toggle-label">Predictive Stock Forecast</div>
+                  <div className="toggle-desc">AI automatically shifts minimum inventory levels based on scan velocity</div>
+                </div>
+                {aiSettings.predictiveStock ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
+              </div>
+            </div>
+
+            <div className="settings-slider-group">
+              <div className="slider-header">
+                <span><FaChartLine /> Predictive Stock Buffer</span>
+                <strong>+{bufferPct}%</strong>
+              </div>
+              <input type="range" min="0" max="50" step="5" value={bufferPct} onChange={(e) => setBufferPct(Number(e.target.value))} className="slider-input" disabled={!isAdmin} />
+            </div>
+          </div>
 
           {/* ── SECURITY & AUDIT COMPLIANCE ── */}
           <div className="settings-card compliance-card">
@@ -538,95 +518,6 @@ const IMSSettings = () => {
                     }}
                   />
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: AI Engine, Scanner Operations */}
-        <div className="settings-column">
-          {/* ── AUTONOMOUS AI ENGINE ── */}
-          <div className="settings-card ai-card">
-            <div className="settings-card-header">
-              <FaBrain className="settings-card-icon ai-icon" />
-              <h2>Autonomous AI Engine</h2>
-              <span className="ai-badge">Brain Config</span>
-            </div>
-            
-            <div className="alert-toggles">
-              <div className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAiSettings, 'aiClassify')} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
-                <div className="toggle-info">
-                  <div className="toggle-label">AI Product Classification</div>
-                  <div className="toggle-desc">Use Gemini/AI to identify and categorize items from ESP32 scanner images</div>
-                </div>
-                {aiSettings.aiClassify ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
-              </div>
-              <div className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAiSettings, 'predictiveStock')} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
-                <div className="toggle-info">
-                  <div className="toggle-label">Predictive Stock Forecast</div>
-                  <div className="toggle-desc">AI automatically shifts minimum inventory levels based on scan velocity</div>
-                </div>
-                {aiSettings.predictiveStock ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
-              </div>
-            </div>
-
-            <div className="settings-slider-group">
-              <div className="slider-header">
-                <span><FaChartLine /> Predictive Stock Buffer</span>
-                <strong>+{bufferPct}%</strong>
-              </div>
-              <input type="range" min="0" max="50" step="5" value={bufferPct} onChange={(e) => setBufferPct(Number(e.target.value))} className="slider-input" disabled={!isAdmin} />
-            </div>
-          </div>
-
-          {/* ── DYNAMIC SCANNER WORKFLOWS ── */}
-          <div className="settings-card workflow-builder-card">
-            <div className="settings-card-header">
-              <FaExchangeAlt className="settings-card-icon" style={{color: '#3498db'}} />
-              <h2>Scanner Operations Definition</h2>
-            </div>
-            <div className="builder-desc">Custom action modes loaded dynamically into the Smart Scanner app.</div>
-            
-             <div className="builder-form">
-              <div className="builder-form-row">
-                <div className="builder-field-group" style={{ flex: 2 }}>
-                  <label>Operation Name</label>
-                  <input type="text" placeholder="e.g. Return To Vendor" value={newFlowName} onChange={e => setNewFlowName(e.target.value)} className="form-input" disabled={!isAdmin} />
-                </div>
-                <div className="builder-field-group" style={{ flex: 1.5 }}>
-                  <label>Operation Type</label>
-                  <select value={newFlowDirection} onChange={e => setNewFlowDirection(e.target.value)} className="form-select" disabled={!isAdmin}>
-                    <option value="IN">Inward (Increases Stock)</option>
-                    <option value="OUT">Outward (Decreases Stock)</option>
-                    <option value="NEUTRAL">Neutral (No Stock Change)</option>
-                  </select>
-                </div>
-                <div className="builder-field-group" style={{ width: '44px', flexShrink: 0 }}>
-                  <label>Color</label>
-                  <input type="color" value={newFlowColor} onChange={e => setNewFlowColor(e.target.value)} className="color-picker" disabled={!isAdmin} style={{ height: '38px', width: '44px', padding: '2px' }} />
-                </div>
-                <div className="builder-field-group" style={{ flexShrink: 0 }}>
-                  <label>&nbsp;</label>
-                  <button className="btn btn-secondary btn-icon-only" onClick={addWorkflow} disabled={!isAdmin} style={{ height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaPlus /></button>
-                </div>
-              </div>
-            </div>
-
-            <div className="workflows-grid">
-              {workflows.length === 0 ? (
-                <div className="no-data-placeholder" style={{ width: '100%' }}>
-                  No scanner operations defined. Add one above.
-                </div>
-              ) : (
-                workflows.map(flow => (
-                  <div key={flow.id} className="workflow-pill" style={{borderLeftColor: flow.color}}>
-                    <span className="wf-name">{flow.name}</span>
-                    <span className="cat-mode-badge" style={{ marginLeft: '8px', fontSize: '11px', background: 'rgba(0,0,0,0.05)', padding: '2px 6px', borderRadius: '4px' }}>
-                      {flow.direction === 'IN' ? 'Inward' : flow.direction === 'OUT' ? 'Outward' : 'Neutral'}
-                    </span>
-                    {isAdmin && <FaTrash className="wf-del" onClick={() => removeWorkflow(flow.id, flow.name)} />}
-                  </div>
-                ))
               )}
             </div>
           </div>
