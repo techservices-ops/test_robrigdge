@@ -12,19 +12,6 @@ import { useToast } from '../components/Toast';
 
 const trackingColors = { FEFO: '#e74c3c', FIFO: '#3498db', LIFO: '#27ae60' };
 
-const getWorkflowDirection = (stageName) => {
-  const wf = (stageName || '').toUpperCase();
-  const inOps = ['RECEIVE', 'IN', 'RETURN', 'RESTOCK'];
-  const outOps = ['DISPATCH', 'OUT', 'PICK', 'ISSUE', 'SHIP'];
-  
-  if (inOps.some(op => wf.includes(op))) {
-    return 'IN';
-  } else if (outOps.some(op => wf.includes(op))) {
-    return 'OUT';
-  }
-  return 'NEUTRAL';
-};
-
 const IMSScanner = () => {
   const { imsFetch, activeWorkspaceId } = useWorkspace();
   const { latestScan } = useWebSocket();
@@ -262,14 +249,13 @@ const IMSScanner = () => {
               }
             }
           } else {
-              const dir = getWorkflowDirection(scanStage);
-              if (dir === 'IN') {
-                 setScanResult('unknown');
-                 triggerOnboard(val);
-              } else {
-                 setScanResult('error');
-                 showToast(`Item with barcode ${val} not found in catalog.`, 'error');
-              }
+             if (scanStage === 'RECEIVE') {
+                setScanResult('unknown');
+                triggerOnboard(val);
+             } else {
+                setScanResult('error');
+                showToast(`Item with barcode ${val} not found in catalog.`, 'error');
+             }
           }
         } catch (e) { /* catalog lookup failure is non-fatal */ }
 
@@ -344,38 +330,34 @@ const IMSScanner = () => {
           setFefoRec([]);
         }
 
-        const dir = getWorkflowDirection(scanStage);
-        if (dir === 'IN') {
+        if (scanStage === 'RECEIVE') {
           setScanResult('known');
-          await recordScanEvent(item, scanStage, 1, '', '', '', '', websocketScanId);
-          showToast(`Received 1 unit of ${item.name} via ${scanStage}`, 'success');
-        } else if (dir === 'OUT') {
+          await recordScanEvent(item, 'RECEIVE', 1, '', '', '', '', websocketScanId);
+          showToast(`Received 1 unit of ${item.name}`, 'success');
+        } else if (scanStage === 'DISPATCH') {
           if (item.stock <= 0) {
             setScanResult('error');
-            showToast(`Cannot dispatch ${item.name} via ${scanStage}. Stock is already 0.`, 'error');
+            showToast(`Cannot dispatch ${item.name}. Stock is already 0.`, 'error');
           } else {
             setScanResult('known');
-            await recordScanEvent(item, scanStage, 1, '', '', '', '', websocketScanId);
-            showToast(`Dispatched 1 unit of ${item.name} via ${scanStage}`, 'success');
+            await recordScanEvent(item, 'DISPATCH', 1, '', '', '', '', websocketScanId);
+            showToast(`Dispatched 1 unit of ${item.name}`, 'success');
           }
-        } else if (scanStage.toUpperCase() === 'PUTAWAY') {
+        } else if (scanStage === 'PUTAWAY') {
           if (!selectedLocation) {
             setScanResult('error');
             showToast('Please select a target location for Putaway.', 'error');
           } else {
             setScanResult('confirmed');
-            await recordScanEvent(item, scanStage, 0, '', '', '', '', websocketScanId, selectedLocation.name, selectedLocation.id);
+            await recordScanEvent(item, 'PUTAWAY', 0, '', '', '', '', websocketScanId, selectedLocation.name, selectedLocation.id);
             showToast(`Moved ${item.name} to ${selectedLocation.name}`, 'success');
           }
         } else {
           setScanResult('known');
-          await recordScanEvent(item, scanStage, 1, '', '', '', '', websocketScanId);
-          showToast(`Logged scan for ${item.name} under ${scanStage}`, 'success');
         }
       } else {
         // Item not found in catalog
-        const dir = getWorkflowDirection(scanStage);
-        if (dir === 'IN') {
+        if (scanStage === 'RECEIVE') {
           setScanResult('unknown');
           triggerOnboard(val);
         } else {
