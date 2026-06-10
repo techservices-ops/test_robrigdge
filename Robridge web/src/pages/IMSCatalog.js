@@ -70,6 +70,7 @@ const IMSCatalog = () => {
   const [masterForm, setMasterForm] = useState({ name: '', description: '', category: 'All' });
   const [, setLoading] = useState(false);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [categoryDetails, setCategoryDetails] = useState([]);
   const [, setWorkflows] = useState(['RECEIVE', 'DISPATCH', 'PUTAWAY', 'PICK', 'RETURN']);
 
   const [products, setProducts] = useState([]);
@@ -106,6 +107,7 @@ const IMSCatalog = () => {
       .then(r => r.json())
       .then(d => {
         if (d.success && d.categories.length > 0) {
+          setCategoryDetails(d.categories);
           const dynamicCats = d.categories.map(c => c.name);
           // Merge dynamic with defaults, keeping 'All' at front
           const merged = ['All', ...new Set([...dynamicCats])];
@@ -574,7 +576,15 @@ const IMSCatalog = () => {
                   <div className="modal-row">
                     <div className="form-group">
                       <label className="form-label">Category</label>
-                      <select className="form-select" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                      <select className="form-select" value={form.category} onChange={e => {
+                        const selectedCatName = e.target.value;
+                        const matchedCat = categoryDetails.find(c => c.name === selectedCatName);
+                        setForm(f => ({ 
+                          ...f, 
+                          category: selectedCatName,
+                          trackingMode: matchedCat ? matchedCat.mode : 'FIFO'
+                        }));
+                      }}>
                         {categories.filter(c => c !== 'All').map(c => <option key={c}>{c}</option>)}
                       </select>
                     </div>

@@ -5074,15 +5074,28 @@ app.post('/api/ims/masters/:masterId/items', authenticateToken, requireWorkspace
   try {
     const { barcode, name, category, baseUnit, stock, trackingMode, parentBarcode, multiplier, supplier, locations, bom, weight, cost, imageUrl } = req.body;
     if (!barcode || !name) return res.status(400).json({ success: false, error: 'Barcode and name are required' });
+
+    // Lookup Category Mode & Alert Threshold
+    const catCheck = await pool.query(
+      'SELECT mode, alert_at FROM ims_categories WHERE LOWER(name) = LOWER($1) AND workspace_id = $2 LIMIT 1',
+      [category ? category.trim() : 'General', req.workspace_id]
+    );
+    let resolvedTracking = trackingMode || 'FIFO';
+    let resolvedAlertAt = 10;
+    if (catCheck.rows.length > 0) {
+      resolvedTracking = catCheck.rows[0].mode || resolvedTracking;
+      resolvedAlertAt = catCheck.rows[0].alert_at || 10;
+    }
+
     const result = await pool.query(
       `INSERT INTO ims_items 
-        (master_id, user_id, workspace_id, barcode, name, category, base_unit, stock, tracking_mode, parent_barcode, multiplier, supplier, locations, bom, weight, cost, image_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        (master_id, user_id, workspace_id, barcode, name, category, base_unit, stock, tracking_mode, alert_at, parent_barcode, multiplier, supplier, locations, bom, weight, cost, image_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        ON CONFLICT (master_id, barcode)
-       DO UPDATE SET name=$5, category=$6, base_unit=$7, stock=$8, tracking_mode=$9, parent_barcode=$10, multiplier=$11, supplier=$12, locations=$13, bom=$14, weight=$15, cost=$16, image_url=$17, updated_at=CURRENT_TIMESTAMP
+       DO UPDATE SET name=$5, category=$6, base_unit=$7, stock=$8, tracking_mode=$9, alert_at=$10, parent_barcode=$11, multiplier=$12, supplier=$13, locations=$14, bom=$15, weight=$16, cost=$17, image_url=$18, updated_at=CURRENT_TIMESTAMP
        RETURNING *`,
       [req.params.masterId, req.user.id, req.workspace_id, barcode, name, category||'General', baseUnit||'Unit',
-       Number(stock)||0, trackingMode||'FIFO', parentBarcode||null, multiplier?Number(multiplier):null,
+       Number(stock)||0, resolvedTracking, resolvedAlertAt, parentBarcode||null, multiplier?Number(multiplier):null,
        supplier||null, JSON.stringify(locations||[]), JSON.stringify(bom||[]), weight?Number(weight):null, cost?Number(cost):null, imageUrl||null]
     );
     const r = result.rows[0];
@@ -5155,11 +5168,23 @@ app.put('/api/ims/masters/:masterId/items/:itemId', authenticateToken, requireWo
       }
     }
 
+    // Lookup Category Mode & Alert Threshold
+    const catCheck = await pool.query(
+      'SELECT mode, alert_at FROM ims_categories WHERE LOWER(name) = LOWER($1) AND workspace_id = $2 LIMIT 1',
+      [category ? category.trim() : 'General', req.workspace_id]
+    );
+    let resolvedTracking = trackingMode || 'FIFO';
+    let resolvedAlertAt = 10;
+    if (catCheck.rows.length > 0) {
+      resolvedTracking = catCheck.rows[0].mode || resolvedTracking;
+      resolvedAlertAt = catCheck.rows[0].alert_at || 10;
+    }
+
     const result = await pool.query(
-      `UPDATE ims_items SET barcode=$1, name=$2, category=$3, base_unit=$4, stock=$5, tracking_mode=$6,
-       parent_barcode=$7, multiplier=$8, supplier=$9, locations=$10, bom=$11, weight=$12, cost=$13, image_url=$14, updated_at=CURRENT_TIMESTAMP
-       WHERE id=$15 AND master_id=$16 AND workspace_id=$17 RETURNING *`,
-      [barcode, name, category||'General', baseUnit||'Unit', newStock||0, trackingMode||'FIFO',
+      `UPDATE ims_items SET barcode=$1, name=$2, category=$3, base_unit=$4, stock=$5, tracking_mode=$6, alert_at=$7,
+       parent_barcode=$8, multiplier=$9, supplier=$10, locations=$11, bom=$12, weight=$13, cost=$14, image_url=$15, updated_at=CURRENT_TIMESTAMP
+       WHERE id=$16 AND master_id=$17 AND workspace_id=$18 RETURNING *`,
+      [barcode, name, category||'General', baseUnit||'Unit', newStock||0, resolvedTracking, resolvedAlertAt,
        parentBarcode||null, multiplier?Number(multiplier):null, supplier||null,
        JSON.stringify(locations||[]), JSON.stringify(bom||[]), weight?Number(weight):null, cost?Number(cost):null, imageUrl||null,
        req.params.itemId, req.params.masterId, req.workspace_id]
@@ -5433,10 +5458,22 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
         const baseUnitVal = unit || 'Unit';
         const nameVal = itemName || `Scanned Item (${barcode})`;
         
+        // Lookup Category Mode & Alert Threshold
+        const catCheck = await pool.query(
+          'SELECT mode, alert_at FROM ims_categories WHERE LOWER(name) = LOWER($1) AND workspace_id = $2 LIMIT 1',
+          [categoryVal.trim(), req.workspace_id]
+        );
+        let resolvedTracking = trackingModeVal;
+        let resolvedAlertAt = 10;
+        if (catCheck.rows.length > 0) {
+          resolvedTracking = catCheck.rows[0].mode || resolvedTracking;
+          resolvedAlertAt = catCheck.rows[0].alert_at || 10;
+        }
+
         const insertResult = await pool.query(
-          `INSERT INTO ims_items (workspace_id, master_id, user_id, barcode, name, category, base_unit, tracking_mode, stock) 
-           VALUES ($1, NULL, $2, $3, $4, $5, $6, $7, 0) RETURNING id`,
-          [req.workspace_id, req.user.id, barcode, nameVal, categoryVal, baseUnitVal, trackingModeVal]
+          `INSERT INTO ims_items (workspace_id, master_id, user_id, barcode, name, category, base_unit, tracking_mode, alert_at, stock) 
+           VALUES ($1, NULL, $2, $3, $4, $5, $6, $7, $8, 0) RETURNING id`,
+          [req.workspace_id, req.user.id, barcode, nameVal, categoryVal, baseUnitVal, resolvedTracking, resolvedAlertAt]
         );
         resolvedItemId = insertResult.rows[0].id;
       }
@@ -6525,8 +6562,22 @@ app.get('/api/ims/fefo-recommendation', authenticateToken, requireWorkspace, asy
     const result = await pool.query(
       `WITH batch_stock AS (
          SELECT batch_no, expiry_date, 
-                SUM(CASE WHEN workflow IN ('INWARD', 'ADD') THEN quantity ELSE 0 END) - 
-                SUM(CASE WHEN workflow IN ('OUTWARD', 'REMOVE', 'BOM_CONSUMPTION') THEN quantity ELSE 0 END) as current_qty
+                SUM(CASE WHEN (
+                  LOWER(workflow) LIKE '%receive%' OR 
+                  LOWER(workflow) LIKE '%in%' OR 
+                  LOWER(workflow) LIKE '%return%' OR 
+                  LOWER(workflow) LIKE '%restock%' OR
+                  LOWER(workflow) LIKE '%add%'
+                ) THEN quantity ELSE 0 END) - 
+                SUM(CASE WHEN (
+                  LOWER(workflow) LIKE '%dispatch%' OR 
+                  LOWER(workflow) LIKE '%out%' OR 
+                  LOWER(workflow) LIKE '%pick%' OR 
+                  LOWER(workflow) LIKE '%issue%' OR 
+                  LOWER(workflow) LIKE '%ship%' OR 
+                  LOWER(workflow) = 'bom_consumption' OR
+                  LOWER(workflow) LIKE '%remove%'
+                ) THEN quantity ELSE 0 END) as current_qty
          FROM ims_scan_events 
          WHERE workspace_id=$1 AND barcode=$2 AND batch_no IS NOT NULL AND expiry_date IS NOT NULL
          GROUP BY batch_no, expiry_date

@@ -92,7 +92,10 @@ const IMSSettings = () => {
   // Dynamic Add Methods
   const addCategory = async () => {
     if (!isAdmin) return;
-    if (!newCatName || !newCatAlert || !newCatReorder) return;
+    if (!newCatName || !newCatAlert || !newCatReorder) {
+      showToast('All fields are required to build a category', 'error');
+      return;
+    }
     try {
       const res = await imsFetch('/api/ims/categories', {
         method: 'POST',
@@ -102,8 +105,14 @@ const IMSSettings = () => {
       if(data.success) {
         setCategories([...categories, data.category]);
         setNewCatName(''); setNewCatAlert(''); setNewCatReorder('');
+        showToast(`Category "${data.category.name}" created successfully.`, 'success');
+      } else {
+        showToast(data.error || 'Failed to create category', 'error');
       }
-    } catch(err) { console.error(err); }
+    } catch(err) { 
+      console.error(err); 
+      showToast('Error creating category', 'error');
+    }
   };
 
   const removeCategory = async (id, name) => {
@@ -115,9 +124,18 @@ const IMSSettings = () => {
     });
     if (!ok) return;
     try {
-      await imsFetch(`/api/ims/categories/${id}`, { method: 'DELETE' });
-      setCategories(categories.filter(c => c.id !== id));
-    } catch(err) { console.error(err); }
+      const res = await imsFetch(`/api/ims/categories/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if(data.success) {
+        setCategories(categories.filter(c => c.id !== id));
+        showToast(`Category "${name}" deleted successfully.`, 'success');
+      } else {
+        showToast(data.error || 'Failed to delete category', 'error');
+      }
+    } catch(err) { 
+      console.error(err); 
+      showToast('Error deleting category', 'error');
+    }
   };
 
   const addWorkflow = async () => {
