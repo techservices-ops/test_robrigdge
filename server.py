@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from openai import OpenAI
+import google.generativeai as genai
 import uvicorn
 import re
 import os
@@ -16,21 +16,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Force load from env.env if exists
-if not os.getenv("OPENAI_API_KEY") and os.path.exists("env.env"):
+if not os.getenv("GEMINI_API_KEY") and os.path.exists("env.env"):
     with open("env.env") as f:
         for line in f:
-            if line.startswith("OPENAI_API_KEY="):
-                os.environ["OPENAI_API_KEY"] = line.split("=", 1)[1].strip()
+            if line.startswith("GEMINI_API_KEY="):
+                os.environ["GEMINI_API_KEY"] = line.split("=", 1)[1].strip()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Validate API key
-if not OPENAI_API_KEY:
-    logger.warning("OPENAI_API_KEY environment variable is not set!")
+if not GEMINI_API_KEY:
+    logger.warning("GEMINI_API_KEY environment variable is not set!")
     logger.warning("AI analysis will use fallback responses.")
-    client = None
+    model = None
 else:
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel('gemini-flash-lite-latest')
 
 app = FastAPI(title="Robridge AI Scanner", version="2.0.0")
 
@@ -44,10 +45,10 @@ app.add_middleware(
 )
 
 # Log the API key being used
-if OPENAI_API_KEY:
-    logger.info(f"Using OpenAI API Key: {OPENAI_API_KEY[:20]}...")
+if GEMINI_API_KEY:
+    logger.info(f"Using Gemini API Key: {GEMINI_API_KEY[:10]}...")
 else:
-    logger.info("No OpenAI API Key configured - using fallback responses")
+    logger.info("No Gemini API Key configured - using fallback responses")
 
 # ======================
 # Pydantic Models
@@ -221,16 +222,15 @@ def generate_qr_info(url: str):
     its purpose, reputation, and what a visitor would find or do on that link.>
     """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You describe QR links accurately and consistently without extra commentary."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.3
+    if model is None:
+        return f"Scanned Code: {url}\nTitle: Unknown\nCategory: Website\nDescription: API Key not configured."
+
+    response = model.generate_content(
+        "System: You describe QR links accurately and consistently without extra commentary.\nUser: " + prompt,
+        generation_config=genai.types.GenerationConfig(temperature=0.3)
     )
 
-    return response.choices[0].message.content.strip()
+    return response.text.strip()
 
 # ======================
 # Endpoints
@@ -529,11 +529,15 @@ async def scan_code(data: ScanInput):
 class ChatMessage(BaseModel):
     message: str
 
+class IMSChatMessage(BaseModel):
+    message: str
+    catalog_context: str
+
 @app.post("/api/demo-chat")
 async def demo_chat(data: ChatMessage):
     try:
-        current_client = client
-        if current_client is None:
+        current_model = model
+        if current_model is None:
             return {"reply": "API Key not configured. (Fallback Mode)"}
             
         system_prompt = """
@@ -593,19 +597,42 @@ async def demo_chat(data: ChatMessage):
         5. Match the user's problem description to the closest PROBLEM above and give the corresponding SOLUTION.
         """
 
-        response = current_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": data.message}
-            ],
-            temperature=0.1
+        response = current_model.generate_content(
+            system_prompt + "\n\nUser Message:\n" + data.message,
+            generation_config=genai.types.GenerationConfig(temperature=0.1)
         )
         
-        reply = response.choices[0].message.content.strip()
+        reply = response.text.strip()
         return {"reply": reply}
     except Exception as e:
         logger.error(f"Chat error: {e}")
+        return {"reply": "I am experiencing technical difficulties right now."}
+
+@app.post("/api/ims-chat")
+async def ims_chat(data: IMSChatMessage):
+    try:
+        current_model = model
+        if current_model is None:
+            return {"reply": "API Key not configured. (Fallback Mode)"}
+            
+        system_prompt = f"""
+You are an assistant for this specific IMS (Inventory Management System). 
+You must ONLY answer queries using products present in the provided catalog context below. 
+Do not invent or hallucinate placeholder items. If the user asks about an item not in the context, politely inform them it is not in the catalog.
+
+=== CATALOG CONTEXT ===
+{data.catalog_context}
+"""
+
+        response = current_model.generate_content(
+            system_prompt + "\n\nUser Message:\n" + data.message,
+            generation_config=genai.types.GenerationConfig(temperature=0.1)
+        )
+        
+        reply = response.text.strip()
+        return {"reply": reply}
+    except Exception as e:
+        logger.error(f"IMS Chat error: {e}")
         return {"reply": "I am experiencing technical difficulties right now."}
 
 # ======================
