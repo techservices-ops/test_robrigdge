@@ -44,10 +44,9 @@ const IMSSettings = () => {
   const [newFlowColor, setNewFlowColor] = useState('#3498db');
 
   // Other Settings
-  const [alerts, setAlerts] = useState({ email: true, dashboard: true, sms: false, push: true });
-  const [security, setSecurity] = useState({ batchStrict: true, managerApproval: false, immutableLogs: true, requireSSO: false });
+  const [alerts, setAlerts] = useState({ email: true });
+  const [security, setSecurity] = useState({ batchStrict: true, managerApproval: false, immutableLogs: true, requireSSO: false, supervisorPin: '1234' });
   const [aiSettings, setAiSettings] = useState({ autoReorder: true, predictiveBuffer: true, dynamicThresholds: true, advisoryMode: false });
-  const [integrations, setIntegrations] = useState({ sap: true, oracle: false, vendorEmail: true, zebraPrinter: true });
   const [scannerPrefs, setScannerPrefs] = useState({ autoLog: true, sound: true, vibration: true });
 
   const [procurementAction, setProcurementAction] = useState('draft'); // draft, email, erp
@@ -73,9 +72,8 @@ const IMSSettings = () => {
           if(setData.success && setData.settings && Object.keys(setData.settings).length > 0) {
              const prefs = setData.settings;
              if(prefs.alerts) setAlerts(prefs.alerts);
-             if(prefs.security) setSecurity(prefs.security);
+             if(prefs.security) setSecurity(prev => ({ ...prev, ...prefs.security }));
              if(prefs.aiSettings) setAiSettings(prefs.aiSettings);
-             if(prefs.integrations) setIntegrations(prefs.integrations);
              if(prefs.scannerPrefs) setScannerPrefs(prefs.scannerPrefs);
              if(prefs.procurementAction) setProcurementAction(prefs.procurementAction);
              if(prefs.spendLimit) setSpendLimit(prefs.spendLimit);
@@ -97,6 +95,7 @@ const IMSSettings = () => {
 
   // Dynamic Add Methods
   const addCategory = async () => {
+    if (!isAdmin) return;
     if (!newCatName || !newCatAlert || !newCatReorder) return;
     try {
       const res = await imsFetch('/api/ims/categories', {
@@ -112,6 +111,7 @@ const IMSSettings = () => {
   };
 
   const removeCategory = async (id, name) => {
+    if (!isAdmin) return;
     const ok = await confirm({
       title: `Delete category "${name}"?`,
       message: 'Items using this category will retain their current category label but lose threshold enforcement.',
@@ -125,6 +125,7 @@ const IMSSettings = () => {
   };
 
   const addWorkflow = async () => {
+    if (!isAdmin) return;
     if (!newFlowName) return;
     try {
       const res = await imsFetch('/api/ims/workflows', {
@@ -140,6 +141,7 @@ const IMSSettings = () => {
   };
 
   const removeWorkflow = async (id, name) => {
+    if (!isAdmin) return;
     const ok = await confirm({
       title: `Delete workflow "${name}"?`,
       message: 'Scans using this workflow will lose their workflow classification.',
@@ -162,7 +164,7 @@ const IMSSettings = () => {
     setPendingUpgrade(newPending);
     
     const settings = {
-      alerts, security, aiSettings, integrations, scannerPrefs, procurementAction, spendLimit, bufferPct,
+      alerts, security, aiSettings, scannerPrefs, procurementAction, spendLimit, bufferPct,
       storageGB: currentStorageGB,
       pendingUpgrade: newPending
     };
@@ -187,7 +189,7 @@ const IMSSettings = () => {
     setPendingUpgrade(null);
     
     const settings = {
-      alerts, security, aiSettings, integrations, scannerPrefs, procurementAction, spendLimit, bufferPct,
+      alerts, security, aiSettings, scannerPrefs, procurementAction, spendLimit, bufferPct,
       storageGB: newSize,
       pendingUpgrade: null
     };
@@ -209,7 +211,7 @@ const IMSSettings = () => {
   const handleCancelRequest = async () => {
     setPendingUpgrade(null);
     const settings = {
-      alerts, security, aiSettings, integrations, scannerPrefs, procurementAction, spendLimit, bufferPct,
+      alerts, security, aiSettings, scannerPrefs, procurementAction, spendLimit, bufferPct,
       storageGB: currentStorageGB,
       pendingUpgrade: null
     };
@@ -228,8 +230,9 @@ const IMSSettings = () => {
   };
 
   const handleSave = async () => {
+    if (!isAdmin) return;
     const settings = { 
-      alerts, security, aiSettings, integrations, scannerPrefs, procurementAction, spendLimit, bufferPct,
+      alerts, security, aiSettings, scannerPrefs, procurementAction, spendLimit, bufferPct,
       storageGB: currentStorageGB,
       pendingUpgrade
     };
@@ -254,9 +257,15 @@ const IMSSettings = () => {
           <p>Configure autonomous rules, thresholds, and dynamic parameters</p>
         </div>
         <div className="ims-header-right">
-          <button className="btn btn-primary btn-save-settings" onClick={handleSave}>
-            {saved ? <><FaCheckCircle /> Saved!</> : <><FaSave /> Deploy Settings</>}
-          </button>
+          {isAdmin ? (
+            <button className="btn btn-primary btn-save-settings" onClick={handleSave}>
+              {saved ? <><FaCheckCircle /> Saved!</> : <><FaSave /> Deploy Settings</>}
+            </button>
+          ) : (
+            <span className="badge badge-info" style={{ padding: '8px 16px', fontSize: '13px', background: 'rgba(52,152,219,0.15)', color: '#3498db', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FaLock /> Read Only View
+            </span>
+          )}
         </div>
       </div>
 
@@ -288,6 +297,7 @@ const IMSSettings = () => {
               value={storageGB} 
               onChange={(e) => setStorageGB(Number(e.target.value))} 
               className="storage-slider"
+              disabled={!isAdmin}
             />
             <div className="slider-current-val">
               Target Storage: <strong>{storageGB} GB</strong>
@@ -312,7 +322,7 @@ const IMSSettings = () => {
               ) : (
                 <button 
                   className="btn btn-primary" 
-                  disabled={storageGB === currentStorageGB}
+                  disabled={storageGB === currentStorageGB || !isAdmin}
                   onClick={() => handlePayAndUpgrade(storageGB)}
                 >
                   Pay & Subscribe
@@ -357,12 +367,9 @@ const IMSSettings = () => {
           </div>
           <div className="alert-toggles">
             {[
-              { key: 'dashboard', label: 'Dashboard Alerts', desc: 'Show critical flags on IMS Command Center' },
-              { key: 'email', label: 'Email Notifications', desc: 'Send daily digests and critical alerts to Admins' },
-              { key: 'push', label: 'Mobile Push Notifications', desc: 'Real-time push to staff devices for stock-outs' },
-              { key: 'sms', label: 'SMS Escallation', desc: 'Text supply chain managers on emergency shortages' },
+              { key: 'email', label: 'Email Notifications', desc: 'Send daily digests and critical alerts to Admins' }
             ].map(a => (
-              <div key={a.key} className="alert-toggle-row" onClick={() => handleToggle(setAlerts, a.key)}>
+              <div key={a.key} className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAlerts, a.key)} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
                 <div className="toggle-info">
                   <div className="toggle-label">{a.label}</div>
                   <div className="toggle-desc">{a.desc}</div>
@@ -382,14 +389,14 @@ const IMSSettings = () => {
           </div>
           
           <div className="alert-toggles">
-            <div className="alert-toggle-row" onClick={() => handleToggle(setAiSettings, 'autoReorder')}>
+            <div className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAiSettings, 'autoReorder')} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
               <div className="toggle-info">
                 <div className="toggle-label">Autonomous Procurement</div>
                 <div className="toggle-desc">Allow AI to form restock requests based on velocity</div>
               </div>
               {aiSettings.autoReorder ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
             </div>
-            <div className="alert-toggle-row" onClick={() => handleToggle(setAiSettings, 'dynamicThresholds')}>
+            <div className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAiSettings, 'dynamicThresholds')} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
               <div className="toggle-info">
                 <div className="toggle-label">Dynamic Thresholds</div>
                 <div className="toggle-desc">AI shifts minimums based on seasonal demand</div>
@@ -403,7 +410,7 @@ const IMSSettings = () => {
               <span><FaChartLine /> Predictive Safety Buffer</span>
               <strong>+{bufferPct}%</strong>
             </div>
-            <input type="range" min="0" max="50" step="5" value={bufferPct} onChange={(e) => setBufferPct(e.target.value)} className="slider-input" />
+            <input type="range" min="0" max="50" step="5" value={bufferPct} onChange={(e) => setBufferPct(e.target.value)} className="slider-input" disabled={!isAdmin} />
           </div>
 
           <div className="settings-slider-group">
@@ -411,12 +418,12 @@ const IMSSettings = () => {
               <span><FaMoneyBillWave /> Auto-Approval Spend Limit</span>
               <strong>${spendLimit.toLocaleString()}</strong>
             </div>
-            <input type="range" min="0" max="25000" step="1000" value={spendLimit} onChange={(e) => setSpendLimit(e.target.value)} className="slider-input" />
+            <input type="range" min="0" max="25000" step="1000" value={spendLimit} onChange={(e) => setSpendLimit(e.target.value)} className="slider-input" disabled={!isAdmin} />
           </div>
 
           <div className="dropdown-group">
             <p className="dropdown-label"><FaRobot /> AI Procurement Action</p>
-            <select value={procurementAction} onChange={e => setProcurementAction(e.target.value)} className="form-select dropdown-select">
+            <select value={procurementAction} onChange={e => setProcurementAction(e.target.value)} className="form-select dropdown-select" disabled={!isAdmin}>
               <option value="draft">Draft PO for Manager Review (Safest)</option>
               <option value="email">Auto-Email Authorized Vendors</option>
               <option value="erp">Push Directly to ERP (SAP/Oracle)</option>
@@ -424,31 +431,7 @@ const IMSSettings = () => {
           </div>
         </div>
 
-        {/* ── EXTERNAL INTEGRATIONS ── */}
-        <div className="settings-card integrations-card">
-          <div className="settings-card-header">
-            <FaPlug className="settings-card-icon sync-icon" />
-            <h2>System Integrations</h2>
-          </div>
-          <div className="alert-toggles">
-            {[
-              { key: 'sap', label: 'SAP Data Sync', desc: 'Bi-directional sync of inventory counts & POs' },
-              { key: 'oracle', label: 'Oracle NetSuite', desc: 'Sync material mastering and financial ledgers' },
-              { key: 'vendorEmail', label: 'Vendor EDI/Email', desc: 'Automated outgoing vendor communications' },
-              { key: 'zebraPrinter', label: 'Zebra Label Printers', desc: 'Auto-print barcode tags on receiving items' },
-            ].map(a => (
-              <div key={a.key} className="alert-toggle-row" onClick={() => handleToggle(setIntegrations, a.key)}>
-                <div className="toggle-info">
-                  <div className="toggle-label">{a.label}</div>
-                  <div className="toggle-desc">{a.desc}</div>
-                </div>
-                {integrations[a.key] ? <FaToggleOn className="toggle-icon sync-on" /> : <FaToggleOff className="toggle-icon off" />}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── DYNAMIC CATEGORY BUILDER (New) ── */}
+        {/* ── DYNAMIC CATEGORY BUILDER ── */}
         <div className="settings-card category-builder-card">
           <div className="settings-card-header">
             <FaLayerGroup className="settings-card-icon" style={{color: '#f39c12'}} />
@@ -458,18 +441,18 @@ const IMSSettings = () => {
           
           <div className="builder-form">
             <div className="bf-inputs flex-row">
-              <input type="text" placeholder="Cat Name (e.g. Chemicals)" value={newCatName} onChange={e => setNewCatName(e.target.value)} className="form-input" />
-              <select value={newCatMode} onChange={e => setNewCatMode(e.target.value)} className="form-select">
+              <input type="text" placeholder="Cat Name (e.g. Chemicals)" value={newCatName} onChange={e => setNewCatName(e.target.value)} className="form-input" disabled={!isAdmin} />
+              <select value={newCatMode} onChange={e => setNewCatMode(e.target.value)} className="form-select" disabled={!isAdmin}>
                 <option value="FIFO">FIFO (First In First Out)</option>
                 <option value="FEFO">FEFO (First Expire First Out)</option>
                 <option value="LIFO">LIFO (Last In First Out)</option>
               </select>
             </div>
             <div className="bf-inputs flex-row">
-              <input type="number" placeholder="Alert Threshold" value={newCatAlert} onChange={e => setNewCatAlert(e.target.value)} className="form-input" />
-              <input type="number" placeholder="Reorder point" value={newCatReorder} onChange={e => setNewCatReorder(e.target.value)} className="form-input" />
-              <input type="color" value={newCatColor} onChange={e => setNewCatColor(e.target.value)} className="color-picker" title="Tag Color" />
-              <button className="btn btn-secondary btn-icon-only" onClick={addCategory}><FaPlus /></button>
+              <input type="number" placeholder="Alert Threshold" value={newCatAlert} onChange={e => setNewCatAlert(e.target.value)} className="form-input" disabled={!isAdmin} />
+              <input type="number" placeholder="Reorder point" value={newCatReorder} onChange={e => setNewCatReorder(e.target.value)} className="form-input" disabled={!isAdmin} />
+              <input type="color" value={newCatColor} onChange={e => setNewCatColor(e.target.value)} className="color-picker" title="Tag Color" disabled={!isAdmin} />
+              <button className="btn btn-secondary btn-icon-only" onClick={addCategory} disabled={!isAdmin}><FaPlus /></button>
             </div>
           </div>
 
@@ -481,13 +464,13 @@ const IMSSettings = () => {
                   <strong>{cat.name}</strong> <span className="cat-mode-badge">{cat.mode}</span>
                   <div className="cat-limits">Alert: {cat.alertAt} · Reorder: {cat.reorderAt}</div>
                 </div>
-                <button className="btn-icon danger" onClick={() => removeCategory(cat.id, cat.name)}><FaTrash /></button>
+                {isAdmin && <button className="btn-icon danger" onClick={() => removeCategory(cat.id, cat.name)}><FaTrash /></button>}
               </div>
             ))}
           </div>
         </div>
 
-        {/* ── DYNAMIC SCANNER WORKFLOWS (New) ── */}
+        {/* ── DYNAMIC SCANNER WORKFLOWS ── */}
         <div className="settings-card workflow-builder-card">
           <div className="settings-card-header">
             <FaExchangeAlt className="settings-card-icon" style={{color: '#3498db'}} />
@@ -496,22 +479,22 @@ const IMSSettings = () => {
           <div className="builder-desc">Custom action modes loaded dynamically into the Smart Scanner app.</div>
           
           <div className="builder-form flex-row">
-            <input type="text" placeholder="Operation (e.g. Return To Vendor)" value={newFlowName} onChange={e => setNewFlowName(e.target.value)} className="form-input" />
-            <input type="color" value={newFlowColor} onChange={e => setNewFlowColor(e.target.value)} className="color-picker" />
-            <button className="btn btn-secondary btn-icon-only" onClick={addWorkflow}><FaPlus /></button>
+            <input type="text" placeholder="Operation (e.g. Return To Vendor)" value={newFlowName} onChange={e => setNewFlowName(e.target.value)} className="form-input" disabled={!isAdmin} />
+            <input type="color" value={newFlowColor} onChange={e => setNewFlowColor(e.target.value)} className="color-picker" disabled={!isAdmin} />
+            <button className="btn btn-secondary btn-icon-only" onClick={addWorkflow} disabled={!isAdmin}><FaPlus /></button>
           </div>
 
           <div className="workflows-grid">
             {workflows.map(flow => (
               <div key={flow.id} className="workflow-pill" style={{borderLeftColor: flow.color}}>
                 <span className="wf-name">{flow.name}</span>
-                <FaTrash className="wf-del" onClick={() => removeWorkflow(flow.id)} />
+                {isAdmin && <FaTrash className="wf-del" onClick={() => removeWorkflow(flow.id)} />}
               </div>
             ))}
           </div>
         </div>
 
-        {/* ── SECURITY ── */}
+        {/* ── SECURITY & AUDIT COMPLIANCE ── */}
         <div className="settings-card compliance-card">
           <div className="settings-card-header">
             <FaLock className="settings-card-icon" style={{ color: '#e74c3c' }} />
@@ -521,10 +504,10 @@ const IMSSettings = () => {
             {[
               { key: 'batchStrict', label: 'Strict Traceability', desc: 'Prevent stock changes without valid Batch/Serial inputs' },
               { key: 'managerApproval', label: 'Manager Overrides', desc: 'Require supervisor PIN for manual quantity adjustments' },
-              { key: 'immutableLogs', label: 'Immutable Audit Trail', desc: 'Lock scan history from deletion (FDA / ISO compliance)' },
+              { key: 'immutableLogs', label: 'Immutable Audit Trail', desc: 'Lock scan history and catalog from deletion (FDA / ISO compliance)' },
               { key: 'requireSSO', label: 'Enterprise SSO', desc: 'Enforce Microsoft Entra ID / Okta login for portal access' },
             ].map(a => (
-              <div key={a.key} className="alert-toggle-row" onClick={() => handleToggle(setSecurity, a.key)}>
+              <div key={a.key} className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setSecurity, a.key)} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
                 <div className="toggle-info">
                   <div className="toggle-label">{a.label}</div>
                   <div className="toggle-desc">{a.desc}</div>
@@ -532,6 +515,46 @@ const IMSSettings = () => {
                 {security[a.key] ? <FaToggleOn className="toggle-icon on-red" /> : <FaToggleOff className="toggle-icon off" />}
               </div>
             ))}
+
+            {/* Configurable Supervisor PIN for Manager Overrides */}
+            {security.managerApproval && (
+              <div style={{
+                padding: '12px var(--spacing-md)',
+                background: 'var(--bg-secondary)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-light)',
+                margin: '8px var(--spacing-md) 12px var(--spacing-md)'
+              }}>
+                <label style={{
+                  fontSize: '12.5px',
+                  fontWeight: 'var(--font-semibold)',
+                  color: 'var(--text-secondary)',
+                  display: 'block',
+                  marginBottom: '6px'
+                }}>
+                  Set Supervisor Override PIN
+                </label>
+                <input 
+                  type="password" 
+                  maxLength="6"
+                  placeholder="e.g. 1234"
+                  value={security.supervisorPin || ''}
+                  onChange={(e) => setSecurity(prev => ({ ...prev, supervisorPin: e.target.value.replace(/\D/g, '') }))}
+                  disabled={!isAdmin}
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: '14px',
+                    border: '1px solid var(--border-medium)',
+                    borderRadius: 'var(--radius-sm)',
+                    width: '140px',
+                    letterSpacing: '4px',
+                    textAlign: 'center',
+                    background: 'var(--bg-primary)',
+                    color: 'var(--text-primary)'
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
 

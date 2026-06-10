@@ -940,6 +940,22 @@ app.post('/api/auth/login', async (req, res) => {
         error: 'Incorrect password'
       });
     }
+    // Check if Enterprise SSO is enforced for any workspace this user belongs to
+    const ssoCheck = await pool.query(
+      `SELECT w.id, w.name 
+       FROM ims_workspace_members wm
+       JOIN ims_workspaces w ON wm.workspace_id = w.id
+       JOIN ims_settings s ON w.id = s.workspace_id
+       WHERE wm.user_id = $1 AND wm.status = 'active'
+         AND (s.preferences->'security'->>'requireSSO')::boolean = true`,
+      [user.id]
+    );
+    if (ssoCheck.rows.length > 0) {
+      return res.status(403).json({
+        success: false,
+        error: 'Enterprise SSO is enforced for your workspace. Please log in using Okta or Microsoft Entra ID.'
+      });
+    }
     // Check if email is verified
     if (!user.email_verified) {
       return res.status(403).json({
@@ -1105,6 +1121,21 @@ const requireRole = (allowedRoles) => {
     next();
   };
 };
+
+// Audit Log Helper
+const logAudit = async (workspaceId, userId, action, entityType, entityId, details, req) => {
+  try {
+    const ipAddress = req ? (req.headers['x-forwarded-for'] || req.socket.remoteAddress) : null;
+    await pool.query(
+      `INSERT INTO ims_audit_log (workspace_id, user_id, action, entity_type, entity_id, details, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [workspaceId, userId, action, entityType, entityId, JSON.stringify(details || {}), ipAddress]
+    );
+  } catch (err) {
+    console.error('Failed to log audit event:', err);
+  }
+};
+
 // ======================
 // WORKSPACES ENDPOINTS
 // ======================
@@ -4793,6 +4824,7 @@ app.post('/api/ims/settings', authenticateToken, requireWorkspace, async (req, r
          [req.user.id, req.workspace_id, JSON.stringify(settings)]
        );
     }
+    await logAudit(req.workspace_id, req.user.id, 'update_settings', 'settings', null, { settings }, req);
     res.json({ success: true, message: 'Settings saved.' });
   } catch (error) {
     console.error('Error saving settings:', error);
@@ -4849,7 +4881,9 @@ app.post('/api/ims/workflows', authenticateToken, requireWorkspace, async (req, 
       'INSERT INTO ims_workflows (user_id, workspace_id, name, color) VALUES ($1, $2, $3, $4) RETURNING id',
       [req.user.id, req.workspace_id, name, color || '#3498db']
     );
-    res.json({ success: true, workflow: { id: result.rows[0].id, name, color } });
+    const wfId = result.rows[0].id;
+    await logAudit(req.workspace_id, req.user.id, 'create_workflow', 'workflow', wfId, { name }, req);
+    res.json({ success: true, workflow: { id: wfId, name, color } });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to add workflow' });
   }
@@ -4858,6 +4892,7 @@ app.post('/api/ims/workflows', authenticateToken, requireWorkspace, async (req, 
 app.delete('/api/ims/workflows/:id', authenticateToken, requireWorkspace, async (req, res) => {
   try {
     await pool.query('DELETE FROM ims_workflows WHERE id = $1 AND workspace_id = $2', [req.params.id, req.workspace_id]);
+    await logAudit(req.workspace_id, req.user.id, 'delete_workflow', 'workflow', req.params.id, {}, req);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to delete workflow' });
@@ -4881,7 +4916,9 @@ app.post('/api/ims/categories', authenticateToken, requireWorkspace, async (req,
       'INSERT INTO ims_categories (user_id, workspace_id, name, mode, alert_at, reorder_at, color) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
       [req.user.id, req.workspace_id, name, mode, alertAt, reorderAt, color || '#3498db']
     );
-    res.json({ success: true, category: { id: result.rows[0].id, name, mode, alertAt, reorderAt, color } });
+    const catId = result.rows[0].id;
+    await logAudit(req.workspace_id, req.user.id, 'create_category', 'category', catId, { name, mode, alertAt, reorderAt }, req);
+    res.json({ success: true, category: { id: catId, name, mode, alertAt, reorderAt, color } });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to add category' });
   }
@@ -4890,6 +4927,7 @@ app.post('/api/ims/categories', authenticateToken, requireWorkspace, async (req,
 app.delete('/api/ims/categories/:id', authenticateToken, requireWorkspace, async (req, res) => {
   try {
     await pool.query('DELETE FROM ims_categories WHERE id = $1 AND workspace_id = $2', [req.params.id, req.workspace_id]);
+    await logAudit(req.workspace_id, req.user.id, 'delete_category', 'category', req.params.id, {}, req);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to delete category' });
@@ -4940,18 +4978,26 @@ app.post('/api/ims/masters', authenticateToken, requireWorkspace, async (req, re
       'INSERT INTO ims_masters (user_id, workspace_id, name, description, category) VALUES ($1, $2, $3, $4, $5) RETURNING *',
       [req.user.id, req.workspace_id, name, description || '', category || 'General']
     );
-    res.json({ success: true, master: { ...result.rows[0], count: 0 } });
+    const m = result.rows[0];
+    await logAudit(req.workspace_id, req.user.id, 'create_master', 'master', m.id, { name, description, category }, req);
+    res.json({ success: true, master: { ...m, count: 0 } });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to create master catalog' });
   }
 });
 
 app.delete('/api/ims/masters/:id', authenticateToken, requireWorkspace, requireRole(['manager']), async (req, res) => {
+  const { id } = req.params;
+  const wsId = req.workspace_id;
+
+  // --- ENFORCE IMMUTABLE AUDIT TRAIL ---
+  const settings = await getWorkspaceSettings(wsId);
+  if (settings?.security?.immutableLogs) {
+    return res.status(403).json({ success: false, error: 'Immutable Audit Trail is enabled. Master catalog deletion is locked to prevent scan history deletion.' });
+  }
+
   const client = await pool.connect();
   try {
-    const { id } = req.params;
-    const wsId = req.workspace_id;
-
     // Verify ownership
     const check = await client.query('SELECT id FROM ims_masters WHERE id = $1 AND workspace_id = $2', [id, wsId]);
     if (check.rows.length === 0) return res.status(404).json({ success: false, error: 'Master catalog not found' });
@@ -4972,6 +5018,7 @@ app.delete('/api/ims/masters/:id', authenticateToken, requireWorkspace, requireR
     await client.query('DELETE FROM ims_masters WHERE id = $1 AND workspace_id = $2', [id, wsId]);
 
     await client.query('COMMIT');
+    await logAudit(wsId, req.user.id, 'delete_master', 'master', id, {}, req);
     res.json({ success: true, deletedItems: deleted.rowCount });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -5073,6 +5120,8 @@ app.post('/api/ims/masters/:masterId/items', authenticateToken, requireWorkspace
       }
     }
 
+    await logAudit(req.workspace_id, req.user.id, 'create_item', 'item', r.id, { barcode: r.barcode, name: r.name, stock: Number(r.stock) }, req);
+
     res.json({ success: true, item: {
       id: r.id, masterId: r.master_id, barcode: r.barcode, name: r.name,
       category: r.category, baseUnit: r.base_unit, stock: Number(r.stock),
@@ -5089,20 +5138,35 @@ app.post('/api/ims/masters/:masterId/items', authenticateToken, requireWorkspace
 
 app.put('/api/ims/masters/:masterId/items/:itemId', authenticateToken, requireWorkspace, async (req, res) => {
   try {
-    const { barcode, name, category, baseUnit, stock, trackingMode, parentBarcode, multiplier, supplier, locations, bom, weight, cost, imageUrl } = req.body;
+    const { barcode, name, category, baseUnit, stock, trackingMode, parentBarcode, multiplier, supplier, locations, bom, weight, cost, imageUrl, supervisorPin } = req.body;
     
-    // Get old barcode to clear its zone assignments if it changed
+    // Get old item to check if stock or barcode changed
     const oldItemResult = await pool.query(
-      `SELECT barcode FROM ims_items WHERE id=$1 AND workspace_id=$2`,
+      `SELECT barcode, stock FROM ims_items WHERE id=$1 AND workspace_id=$2`,
       [req.params.itemId, req.workspace_id]
     );
-    const oldBarcode = oldItemResult.rows[0]?.barcode;
+    if (oldItemResult.rows.length === 0) return res.status(404).json({ success: false, error: 'Item not found' });
+    const oldItem = oldItemResult.rows[0];
+    const oldBarcode = oldItem.barcode;
+    const oldStock = Number(oldItem.stock);
+    const newStock = Number(stock);
+
+    if (oldStock !== newStock) {
+      // Stock is being changed manually!
+      const settings = await getWorkspaceSettings(req.workspace_id);
+      if (settings?.security?.managerApproval) {
+        const expectedPin = settings.security.supervisorPin || '1234';
+        if (req.workspace_role !== 'owner' && req.workspace_role !== 'admin' && supervisorPin !== expectedPin) {
+          return res.status(403).json({ success: false, error: 'Manager Overrides is enabled. A valid Supervisor PIN is required to manually adjust stock quantity.' });
+        }
+      }
+    }
 
     const result = await pool.query(
       `UPDATE ims_items SET barcode=$1, name=$2, category=$3, base_unit=$4, stock=$5, tracking_mode=$6,
        parent_barcode=$7, multiplier=$8, supplier=$9, locations=$10, bom=$11, weight=$12, cost=$13, image_url=$14, updated_at=CURRENT_TIMESTAMP
        WHERE id=$15 AND master_id=$16 AND workspace_id=$17 RETURNING *`,
-      [barcode, name, category||'General', baseUnit||'Unit', Number(stock)||0, trackingMode||'FIFO',
+      [barcode, name, category||'General', baseUnit||'Unit', newStock||0, trackingMode||'FIFO',
        parentBarcode||null, multiplier?Number(multiplier):null, supplier||null,
        JSON.stringify(locations||[]), JSON.stringify(bom||[]), weight?Number(weight):null, cost?Number(cost):null, imageUrl||null,
        req.params.itemId, req.params.masterId, req.workspace_id]
@@ -5129,7 +5193,7 @@ app.put('/api/ims/masters/:masterId/items/:itemId', authenticateToken, requireWo
           );
           if (locCheck.rows.length > 0) {
             const locationId = locCheck.rows[0].id;
-            const locQty = Number(loc.qty) || Number(stock) || 0;
+            const locQty = Number(loc.qty) || newStock || 0;
             await pool.query(
               `INSERT INTO ims_location_stock (location_id, workspace_id, barcode, item_name, qty)
                VALUES ($1,$2,$3,$4,$5)
@@ -5141,6 +5205,7 @@ app.put('/api/ims/masters/:masterId/items/:itemId', authenticateToken, requireWo
       }
     }
 
+    await logAudit(req.workspace_id, req.user.id, 'update_item', 'item', req.params.itemId, { barcode, name, oldStock, newStock }, req);
     res.json({ success: true });
   } catch (error) {
     console.error('Error updating item:', error);
@@ -5151,6 +5216,7 @@ app.put('/api/ims/masters/:masterId/items/:itemId', authenticateToken, requireWo
 app.delete('/api/ims/masters/:masterId/items/:itemId', authenticateToken, requireWorkspace, async (req, res) => {
   try {
     await pool.query('DELETE FROM ims_items WHERE id=$1 AND master_id=$2 AND workspace_id=$3', [req.params.itemId, req.params.masterId, req.workspace_id]);
+    await logAudit(req.workspace_id, req.user.id, 'delete_item', 'item', req.params.itemId, {}, req);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to delete item' });
