@@ -373,6 +373,7 @@ const initDatabase = async () => {
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS custom_fields JSONB DEFAULT '{}'`);
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS item_type VARCHAR(50) DEFAULT 'Raw Material'`);
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS image_url TEXT`);
+        await client.query(`ALTER TABLE ims_workflows ADD COLUMN IF NOT EXISTS direction VARCHAR(20) DEFAULT 'NEUTRAL'`);
       } catch (alterErr) { console.log('Notice: Could not alter tables (might be fresh DB)'); }
       console.log('Starting user migration (batch mode)...');
       // BATCH: Create default workspaces for ALL users that don't have one — in one query
@@ -4860,7 +4861,7 @@ app.delete('/api/ims/roles/:id', authenticateToken, requireWorkspace, async (req
 // --- WORKFLOWS ---
 app.get('/api/ims/workflows', authenticateToken, requireWorkspace, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, name, color FROM ims_workflows WHERE workspace_id = $1 ORDER BY id ASC', [req.workspace_id]);
+    const result = await pool.query('SELECT id, name, color, direction FROM ims_workflows WHERE workspace_id = $1 ORDER BY id ASC', [req.workspace_id]);
     res.json({ success: true, workflows: result.rows });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to fetch workflows' });
@@ -4869,7 +4870,7 @@ app.get('/api/ims/workflows', authenticateToken, requireWorkspace, async (req, r
 
 app.post('/api/ims/workflows', authenticateToken, requireWorkspace, async (req, res) => {
   try {
-    const { name, color } = req.body;
+    const { name, color, direction } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, error: 'Operation name is required' });
     }
@@ -4884,12 +4885,12 @@ app.post('/api/ims/workflows', authenticateToken, requireWorkspace, async (req, 
     }
 
     const result = await pool.query(
-      'INSERT INTO ims_workflows (user_id, workspace_id, name, color) VALUES ($1, $2, $3, $4) RETURNING id',
-      [req.user.id, req.workspace_id, name.trim(), color || '#3498db']
+      'INSERT INTO ims_workflows (user_id, workspace_id, name, color, direction) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [req.user.id, req.workspace_id, name.trim(), color || '#3498db', direction || 'NEUTRAL']
     );
     const wfId = result.rows[0].id;
-    await logAudit(req.workspace_id, req.user.id, 'create_workflow', 'workflow', wfId, { name: name.trim() }, req);
-    res.json({ success: true, workflow: { id: wfId, name: name.trim(), color } });
+    await logAudit(req.workspace_id, req.user.id, 'create_workflow', 'workflow', wfId, { name: name.trim(), direction: direction || 'NEUTRAL' }, req);
+    res.json({ success: true, workflow: { id: wfId, name: name.trim(), color, direction: direction || 'NEUTRAL' } });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to add workflow' });
   }
@@ -5499,16 +5500,34 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
       [req.user.id, req.workspace_id, barcode, resolvedItemId||null, itemName||null, workflow, qty, unit||null, batchNo||null, serialNo||null, notes||null, websocketScanId||null]
     );
 
-    // Adjust stock if item exists in catalog
-    let updatedStock = 0;
-    if (resolvedItemId) {
+    // Lookup workflow direction from database if it exists
+    let resolvedDirection = 'NEUTRAL';
+    const wfCheck = await pool.query(
+      'SELECT direction FROM ims_workflows WHERE LOWER(name) = LOWER($1) AND workspace_id = $2 LIMIT 1',
+      [workflow.trim(), req.workspace_id]
+    );
+    if (wfCheck.rows.length > 0) {
+      resolvedDirection = wfCheck.rows[0].direction || 'NEUTRAL';
+    } else {
+      // Fallback to substring matching for built-in or default actions
       const wf = workflow.toUpperCase();
       const inOps = ['RECEIVE', 'IN', 'RETURN', 'RESTOCK'];
       const outOps = ['DISPATCH', 'OUT', 'PICK', 'ISSUE', 'SHIP'];
       if (inOps.some(op => wf.includes(op))) {
+        resolvedDirection = 'IN';
+      } else if (outOps.some(op => wf.includes(op))) {
+        resolvedDirection = 'OUT';
+      }
+    }
+
+    // Adjust stock if item exists in catalog
+    let updatedStock = 0;
+    if (resolvedItemId) {
+      const wf = workflow.toUpperCase();
+      if (resolvedDirection === 'IN') {
         const updateRes = await pool.query('UPDATE ims_items SET stock = stock + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND workspace_id = $3 RETURNING stock', [qty, resolvedItemId, req.workspace_id]);
         updatedStock = Number(updateRes.rows[0]?.stock || 0);
-      } else if (outOps.some(op => wf.includes(op))) {
+      } else if (resolvedDirection === 'OUT') {
         const updateRes = await pool.query('UPDATE ims_items SET stock = GREATEST(stock - $1, 0), updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND workspace_id = $3 RETURNING stock', [qty, resolvedItemId, req.workspace_id]);
         updatedStock = Number(updateRes.rows[0]?.stock || 0);
       } else {

@@ -42,6 +42,7 @@ const IMSSettings = () => {
   // Workflow Builder State
   const [newFlowName, setNewFlowName] = useState('');
   const [newFlowColor, setNewFlowColor] = useState('#3498db');
+  const [newFlowDirection, setNewFlowDirection] = useState('NEUTRAL');
 
   // Other Settings
   const [alerts, setAlerts] = useState({ email: true });
@@ -147,12 +148,13 @@ const IMSSettings = () => {
     try {
       const res = await imsFetch('/api/ims/workflows', {
         method: 'POST',
-        body: JSON.stringify({ name: newFlowName, color: newFlowColor })
+        body: JSON.stringify({ name: newFlowName, color: newFlowColor, direction: newFlowDirection })
       });
       const data = await res.json();
       if(data.success) {
         setWorkflows([...workflows, data.workflow]);
         setNewFlowName('');
+        setNewFlowDirection('NEUTRAL');
         showToast(`Scanner operation "${data.workflow.name}" created successfully.`, 'success');
       } else {
         showToast(data.error || 'Failed to create scanner operation', 'error');
@@ -585,11 +587,19 @@ const IMSSettings = () => {
             </div>
             <div className="builder-desc">Custom action modes loaded dynamically into the Smart Scanner app.</div>
             
-            <div className="builder-form">
+             <div className="builder-form">
               <div className="builder-form-row">
-                <div className="builder-field-group" style={{ flex: 1 }}>
+                <div className="builder-field-group" style={{ flex: 2 }}>
                   <label>Operation Name</label>
                   <input type="text" placeholder="e.g. Return To Vendor" value={newFlowName} onChange={e => setNewFlowName(e.target.value)} className="form-input" disabled={!isAdmin} />
+                </div>
+                <div className="builder-field-group" style={{ flex: 1.5 }}>
+                  <label>Operation Type</label>
+                  <select value={newFlowDirection} onChange={e => setNewFlowDirection(e.target.value)} className="form-select" disabled={!isAdmin}>
+                    <option value="IN">Inward (Increases Stock)</option>
+                    <option value="OUT">Outward (Decreases Stock)</option>
+                    <option value="NEUTRAL">Neutral (No Stock Change)</option>
+                  </select>
                 </div>
                 <div className="builder-field-group" style={{ width: '44px', flexShrink: 0 }}>
                   <label>Color</label>
@@ -611,6 +621,9 @@ const IMSSettings = () => {
                 workflows.map(flow => (
                   <div key={flow.id} className="workflow-pill" style={{borderLeftColor: flow.color}}>
                     <span className="wf-name">{flow.name}</span>
+                    <span className="cat-mode-badge" style={{ marginLeft: '8px', fontSize: '11px', background: 'rgba(0,0,0,0.05)', padding: '2px 6px', borderRadius: '4px' }}>
+                      {flow.direction === 'IN' ? 'Inward' : flow.direction === 'OUT' ? 'Outward' : 'Neutral'}
+                    </span>
                     {isAdmin && <FaTrash className="wf-del" onClick={() => removeWorkflow(flow.id, flow.name)} />}
                   </div>
                 ))
