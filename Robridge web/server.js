@@ -4870,13 +4870,26 @@ app.get('/api/ims/workflows', authenticateToken, requireWorkspace, async (req, r
 app.post('/api/ims/workflows', authenticateToken, requireWorkspace, async (req, res) => {
   try {
     const { name, color } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, error: 'Operation name is required' });
+    }
+
+    // Check for duplicate workflow names in the workspace
+    const nameCheck = await pool.query(
+      'SELECT id FROM ims_workflows WHERE LOWER(name) = LOWER($1) AND workspace_id = $2 LIMIT 1',
+      [name.trim(), req.workspace_id]
+    );
+    if (nameCheck.rows.length > 0) {
+      return res.status(400).json({ success: false, error: 'A scanner operation with this name already exists in this workspace.' });
+    }
+
     const result = await pool.query(
       'INSERT INTO ims_workflows (user_id, workspace_id, name, color) VALUES ($1, $2, $3, $4) RETURNING id',
-      [req.user.id, req.workspace_id, name, color || '#3498db']
+      [req.user.id, req.workspace_id, name.trim(), color || '#3498db']
     );
     const wfId = result.rows[0].id;
-    await logAudit(req.workspace_id, req.user.id, 'create_workflow', 'workflow', wfId, { name }, req);
-    res.json({ success: true, workflow: { id: wfId, name, color } });
+    await logAudit(req.workspace_id, req.user.id, 'create_workflow', 'workflow', wfId, { name: name.trim() }, req);
+    res.json({ success: true, workflow: { id: wfId, name: name.trim(), color } });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to add workflow' });
   }

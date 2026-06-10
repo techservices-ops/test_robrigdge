@@ -140,7 +140,10 @@ const IMSSettings = () => {
 
   const addWorkflow = async () => {
     if (!isAdmin) return;
-    if (!newFlowName) return;
+    if (!newFlowName) {
+      showToast('Operation name is required', 'error');
+      return;
+    }
     try {
       const res = await imsFetch('/api/ims/workflows', {
         method: 'POST',
@@ -150,22 +153,37 @@ const IMSSettings = () => {
       if(data.success) {
         setWorkflows([...workflows, data.workflow]);
         setNewFlowName('');
+        showToast(`Scanner operation "${data.workflow.name}" created successfully.`, 'success');
+      } else {
+        showToast(data.error || 'Failed to create scanner operation', 'error');
       }
-    } catch(err) { console.error(err); }
+    } catch(err) { 
+      console.error(err);
+      showToast('Error creating scanner operation', 'error');
+    }
   };
 
   const removeWorkflow = async (id, name) => {
     if (!isAdmin) return;
     const ok = await confirm({
-      title: `Delete workflow "${name}"?`,
-      message: 'Scans using this workflow will lose their workflow classification.',
-      type: 'danger', confirmLabel: 'Delete Workflow'
+      title: `Delete operation "${name}"?`,
+      message: 'Scans using this operation will lose their workflow classification.',
+      type: 'danger', confirmLabel: 'Delete Operation'
     });
     if (!ok) return;
     try {
-      await imsFetch(`/api/ims/workflows/${id}`, { method: 'DELETE' });
-      setWorkflows(workflows.filter(w => w.id !== id));
-    } catch(err) { console.error(err); }
+      const res = await imsFetch(`/api/ims/workflows/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if(data.success) {
+        setWorkflows(workflows.filter(w => w.id !== id));
+        showToast(`Scanner operation "${name}" deleted successfully.`, 'success');
+      } else {
+        showToast(data.error || 'Failed to delete scanner operation', 'error');
+      }
+    } catch(err) { 
+      console.error(err);
+      showToast('Error deleting scanner operation', 'error');
+    }
   };
 
   const handleRequestUpgrade = async (requestedSize) => {
@@ -593,7 +611,7 @@ const IMSSettings = () => {
                 workflows.map(flow => (
                   <div key={flow.id} className="workflow-pill" style={{borderLeftColor: flow.color}}>
                     <span className="wf-name">{flow.name}</span>
-                    {isAdmin && <FaTrash className="wf-del" onClick={() => removeWorkflow(flow.id)} />}
+                    {isAdmin && <FaTrash className="wf-del" onClick={() => removeWorkflow(flow.id, flow.name)} />}
                   </div>
                 ))
               )}
