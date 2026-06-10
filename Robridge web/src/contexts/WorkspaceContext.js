@@ -17,6 +17,7 @@ export const WorkspaceProvider = ({ children }) => {
     return localStorage.getItem('robridge_workspace_id') || null;
   });
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
+  const [workspacesLoaded, setWorkspacesLoaded] = useState(false);
 
   // Fetch all workspaces the user belongs to
   const fetchWorkspaces = useCallback(async () => {
@@ -59,6 +60,7 @@ export const WorkspaceProvider = ({ children }) => {
       console.error('Error fetching workspaces:', err);
     } finally {
       setLoadingWorkspaces(false);
+      setWorkspacesLoaded(true);
     }
   }, [user]);
 
@@ -69,6 +71,7 @@ export const WorkspaceProvider = ({ children }) => {
     } else {
       setWorkspaces([]);
       setActiveWorkspaceId(null);
+      setWorkspacesLoaded(false);
       localStorage.removeItem('robridge_workspace_id');
     }
   }, [user, fetchWorkspaces]);
@@ -151,6 +154,7 @@ export const WorkspaceProvider = ({ children }) => {
       activeWorkspaceId,
       activeWorkspace,
       loadingWorkspaces,
+      workspacesLoaded,
       switchWorkspace,
       createWorkspace,
       fetchWorkspaces,

@@ -35,9 +35,7 @@ const SignupPage = () => {
                         if (data.user && data.token) {
                             loginWithUser(data.user, data.token);
                         }
-                        setTimeout(() => {
-                            navigate('/onboarding');
-                        }, 1500);
+                        navigate('/onboarding');
                     }
                 } catch (err) {
                     console.error('Polling error:', err);
@@ -103,9 +101,7 @@ const SignupPage = () => {
                     if (result.user && result.token) {
                         loginWithUser(result.user, result.token);
                     }
-                    setTimeout(() => {
-                        navigate('/onboarding');
-                    }, 1500);
+                    navigate('/onboarding');
                 }
             } else {
                 setError(result.message || 'Registration failed. Please try again.');

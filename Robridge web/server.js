@@ -192,6 +192,34 @@ const initDatabase = async () => {
       throw new Error('DATABASE_URL environment variable is not set');
     }
     const client = await pool.connect();
+    
+    // Drop database-level triggers on users table that might automatically create default workspaces on Render
+    try {
+      console.log('🗑️ Aggressively dropping all custom triggers on the users table...');
+      await client.query(`
+        DO $$
+        DECLARE
+            trig RECORD;
+        BEGIN
+            FOR trig IN 
+                SELECT tgname
+                FROM pg_trigger t
+                JOIN pg_class c ON t.tgrelid = c.oid
+                WHERE c.relname = 'users' AND NOT t.tgisinternal
+            LOOP
+                EXECUTE 'DROP TRIGGER IF EXISTS ' || quote_ident(trig.tgname) || ' ON users CASCADE;';
+            END LOOP;
+        END $$;
+      `);
+      console.log('🗑️ Dropping default workspace creation functions...');
+      await client.query('DROP FUNCTION IF EXISTS create_default_workspace() CASCADE;');
+      await client.query('DROP FUNCTION IF EXISTS create_default_workspace CASCADE;');
+      await client.query('DROP FUNCTION IF EXISTS auto_create_workspace() CASCADE;');
+      await client.query('DROP FUNCTION IF EXISTS auto_create_workspace CASCADE;');
+    } catch (triggerErr) {
+      console.error('⚠️ Warning dropping triggers:', triggerErr.message);
+    }
+
     // Auto-migration for Forgot Password and Email Verification columns
     try {
       await client.query(`
@@ -392,6 +420,7 @@ const initDatabase = async () => {
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS item_type VARCHAR(50) DEFAULT 'Raw Material'`);
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS image_url TEXT`);
       } catch (alterErr) { console.log('Notice: Could not alter tables (might be fresh DB)'); }
+      /*
       console.log('Starting user migration (batch mode)...');
       // BATCH: Create default workspaces for ALL users that don't have one — in one query
       await client.query(`
@@ -425,6 +454,7 @@ const initDatabase = async () => {
         `);
       }
       console.log('✅ Migrated existing users to default Workspaces (batch completed instantly)');
+      */
       // Add unique constraint for barcode per master (safe, won't error if exists)
       try {
         await client.query(`
@@ -1096,35 +1126,11 @@ app.get('/api/auth/verify', async (req, res) => {
       });
 
       if (wsCheck.rows.length > 0) {
-        // Workspace ALREADY exists: Skip creation entirely, redirect to dashboard
+        // Workspace ALREADY exists: redirect to dashboard
         return res.redirect(`${frontendUrl}/dashboard?status=already_verified`);
       } else {
-        // No workspace exists: Create exactly ONE workspace in transaction
-        try {
-          await pool.query('BEGIN');
-          
-          const workspaceName = `${user.name || 'User'}'s Workspace`;
-          const wsResult = await pool.query(
-            'INSERT INTO ims_workspaces (name, owner_id) VALUES ($1, $2) RETURNING *',
-            [workspaceName, user.id]
-          );
-          const workspace = wsResult.rows[0];
-
-          // Add user as owner of their new workspace
-          await pool.query(
-            "INSERT INTO ims_workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'owner')",
-            [workspace.id, user.id]
-          );
-
-          await pool.query('COMMIT');
-
-          // Redirect to dashboard with success status
-          return res.redirect(`${frontendUrl}/dashboard?status=success`);
-        } catch (dbErr) {
-          await pool.query('ROLLBACK');
-          console.error('Error creating workspace during verification:', dbErr);
-          return res.redirect(`${frontendUrl}/login?status=error&message=Failed+to+create+workspace`);
-        }
+        // No workspace exists: redirect to the onboarding page to let them create/join a workspace manually
+        return res.redirect(`${frontendUrl}/onboarding?status=success`);
       }
     } catch (err) {
       console.error('Error verifying email:', err);
@@ -1278,7 +1284,7 @@ app.post('/api/workspaces', authenticateToken, async (req, res) => {
   } catch (error) {
     await pool.query('ROLLBACK');
     console.error('Error creating workspace:', error);
-    res.status(500).json({ success: false, error: 'Failed to create workspace' });
+    res.status(500).json({ success: false, error: 'Failed to create workspace: ' + error.message });
   }
 });
 // ──────────────────────────────────────────────────────────────

@@ -59,7 +59,7 @@ const PageLoadingSpinner = () => (
 // Protected Route Component with Role-based Access Control
 function ProtectedRoute({ children, requiredPath }) {
   const { isAuthenticated, hasPageAccess, isLoading } = useAuth();
-  const { activeWorkspace } = useWorkspace();
+  const { workspaces, loadingWorkspaces, workspacesLoaded, activeWorkspace } = useWorkspace();
 
   // Optimistic rendering: If authenticated (optimistically), render children even if loading.
   if (isLoading && !isAuthenticated()) {
@@ -75,6 +75,23 @@ function ProtectedRoute({ children, requiredPath }) {
 
   if (!isAuthenticated()) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Show loading spinner if workspaces are loading or haven't finished loading yet
+  if (requiredPath !== '/onboarding' && (!workspacesLoaded || (loadingWorkspaces && workspaces.length === 0))) {
+    return (
+      <div className="loading-container">
+        <div className="loading-spinner">
+          <div className="spinner"></div>
+          <p>Loading workspaces...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect to onboarding if user has no workspaces
+  if (requiredPath !== '/onboarding' && workspacesLoaded && workspaces.length === 0) {
+    return <Navigate to="/onboarding" replace />;
   }
 
   // Enforce workspace-level role restrictions for standard users
@@ -117,6 +134,7 @@ function ProtectedRoute({ children, requiredPath }) {
 // Main App Content Component
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
+  const { workspaces, loadingWorkspaces, workspacesLoaded } = useWorkspace();
 
   // Show loading spinner only if we don't have a user session yet
   // If we have a user (optimistic load), we render the app immediately while verifying in background
@@ -148,9 +166,64 @@ function AppContent() {
     );
   }
 
-  // Show main application if authenticated
+  // If workspaces haven't finished loading yet (or are loading with 0 current items),
+  // show a full-screen loading spinner to avoid flashing the dashboard or onboarding page.
+  if (!workspacesLoaded || (loadingWorkspaces && workspaces.length === 0)) {
+    return (
+      <div className="loading-container">
+        <div className="loading-spinner">
+          <div className="spinner"></div>
+          <p>Loading workspaces...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Helper component to redirect authenticated users away from login/signup pages cleanly
+  const AuthRedirect = () => {
+    if (!workspacesLoaded || loadingWorkspaces) {
+      return (
+        <div className="loading-container">
+          <div className="loading-spinner">
+            <div className="spinner"></div>
+            <p>Loading workspaces...</p>
+          </div>
+        </div>
+      );
+    }
+    if (workspaces.length === 0) {
+      return <Navigate to="/onboarding" replace />;
+    }
+    return <Navigate to="/" replace />;
+  };
+
+  // If the user has no workspaces, render ONLY the onboarding route to prevent any layout flash
+  if (workspaces.length === 0) {
+    return (
+      <Suspense fallback={<PageLoadingSpinner />}>
+        <Routes>
+          <Route path="/onboarding" element={
+            <ProtectedRoute requiredPath="/onboarding">
+              <WorkspaceOnboarding />
+            </ProtectedRoute>
+          } />
+          {/* Catch-all: redirect any other route to /onboarding */}
+          <Route path="/signup" element={<AuthRedirect />} />
+          <Route path="/login" element={<AuthRedirect />} />
+          <Route path="/verify-email" element={<AuthRedirect />} />
+          <Route path="*" element={<Navigate to="/onboarding" replace />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
+  // Show main application if authenticated and has workspaces
   return (
     <Routes>
+      {/* ── Redirect auth routes for authenticated users to avoid layout flash ── */}
+      <Route path="/signup" element={<AuthRedirect />} />
+      <Route path="/login" element={<AuthRedirect />} />
+      <Route path="/verify-email" element={<AuthRedirect />} />
       {/* ── Onboarding: full-screen, no sidebar ── */}
       <Route path="/onboarding" element={
         <ProtectedRoute requiredPath="/onboarding">
