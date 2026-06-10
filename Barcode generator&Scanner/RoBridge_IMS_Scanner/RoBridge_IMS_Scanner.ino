@@ -1849,10 +1849,27 @@ void loadServerConfig() {
 
 // Function to update server URLs based on custom IP
 void updateServerURLs() {
-  // Hardcoded for local IMS testing
-  expressServerURL = "http://10.168.108.1:3001";
-  aiServerURL = "http://10.168.108.1:8000";
-  debugPrint("Using fixed local IMS server URLs:");
+  if (customServerIP.length() > 0) {
+    if (customServerIP.startsWith("http://") || customServerIP.startsWith("https://")) {
+      expressServerURL = customServerIP;
+      aiServerURL = "http://10.168.108.1:8000"; // Default fallback
+    } else {
+      int colon = customServerIP.indexOf(':');
+      if (colon > 0) {
+        expressServerURL = "http://" + customServerIP;
+        String host = customServerIP.substring(0, colon);
+        aiServerURL = "http://" + host + ":8000";
+      } else {
+        expressServerURL = "http://" + customServerIP + ":3001";
+        aiServerURL = "http://" + customServerIP + ":8000";
+      }
+    }
+  } else {
+    // Default cloud URL fallback
+    expressServerURL = "https://test-robrigdge.onrender.com";
+    aiServerURL = "https://test-robrigdge-ai.onrender.com";
+  }
+  debugPrint("Using dynamic IMS server URLs:");
   debugPrint("Express: " + expressServerURL);
   debugPrint("AI: " + aiServerURL);
 }
@@ -2515,16 +2532,59 @@ void pairDeviceWithUser(String pairingCode) {
   String pairUrl = expressServerURL + "/api/devices/pair";
   debugPrint("Pairing URL: " + pairUrl);
 
+  bool pairSuccess = false;
+
+  // Try HTTP first
   http.begin(pairUrl);
   http.setTimeout(20000);
   http.addHeader("Content-Type", "application/json");
-  // http.addHeader("Authorization", "Bearer " + userToken); // No longer needed for IMS pairing
   http.addHeader("User-Agent", "ESP32-Robridge/2.0");
 
   int httpResponseCode = http.POST(jsonString);
-  debugPrint("Pairing Response Code: " + String(httpResponseCode));
+  debugPrint("HTTP Pairing Response Code: " + String(httpResponseCode));
 
   if (httpResponseCode == 200) {
+    pairSuccess = true;
+    debugPrint("✅ HTTP pairing successful!");
+  } else if (httpResponseCode == 307 || httpResponseCode == 301 ||
+             httpResponseCode == 302) {
+    debugPrint("🔄 HTTP redirect detected, following redirect...");
+    http.end();
+    pairSuccess = false;
+  } else if (httpResponseCode > 0) {
+    pairSuccess = true;
+    debugPrint("✅ HTTP pairing successful!");
+  } else {
+    debugPrint("❌ HTTP pairing failed: " + http.errorToString(httpResponseCode));
+    http.end();
+  }
+
+  // Try HTTPS if HTTP failed
+  if (!pairSuccess &&
+      (httpResponseCode == 307 || httpResponseCode == 301 ||
+       httpResponseCode == 302 || httpResponseCode <= 0)) {
+    debugPrint("Trying HTTPS pairing...");
+    WiFiClientSecure secureClient;
+    secureClient.setInsecure();
+    secureClient.setTimeout(30000);
+
+    http.begin(secureClient, pairUrl);
+    http.setTimeout(30000);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("User-Agent", "ESP32-Robridge/2.0");
+
+    httpResponseCode = http.POST(jsonString);
+    debugPrint("HTTPS Pairing Response Code: " + String(httpResponseCode));
+
+    if (httpResponseCode == 200 || httpResponseCode > 0) {
+      pairSuccess = true;
+      debugPrint("✅ HTTPS pairing successful!");
+    } else {
+      debugPrint("❌ HTTPS pairing failed: " + http.errorToString(httpResponseCode));
+    }
+  }
+
+  if (pairSuccess) {
     String response = http.getString();
     debugPrint("Pairing Response: " + response);
 
@@ -4530,18 +4590,62 @@ void sendBasicScanToRobridge(String barcodeData) {
   debugPrint("Sending basic scan to Robridge: " + jsonString);
 
   HTTPClient http;
+  bool scanSuccess = false;
+
+  // Try HTTP first
   http.begin(serverUrl);
+  http.setTimeout(20000);
   http.addHeader("Content-Type", "application/json");
+  http.addHeader("User-Agent", "ESP32-Robridge/2.0");
 
   int httpResponseCode = http.POST(jsonString);
+  debugPrint("HTTP Basic Scan Response Code: " + String(httpResponseCode));
 
-  if (httpResponseCode > 0) {
-    String response = http.getString();
-    debugPrint("Basic scan response: " + String(httpResponseCode) + " - " +
-               response);
-    lastApiResponse = response;
+  if (httpResponseCode == 200) {
+    scanSuccess = true;
+    debugPrint("✅ HTTP basic scan successful!");
+  } else if (httpResponseCode == 307 || httpResponseCode == 301 ||
+             httpResponseCode == 302) {
+    debugPrint("🔄 HTTP redirect detected, following redirect...");
+    http.end();
+    scanSuccess = false;
+  } else if (httpResponseCode > 0) {
+    scanSuccess = true;
+    debugPrint("✅ HTTP basic scan successful!");
   } else {
-    debugPrint("Basic scan failed: " + String(httpResponseCode));
+    debugPrint("❌ HTTP basic scan failed: " + http.errorToString(httpResponseCode));
+    http.end();
+  }
+
+  // Try HTTPS if HTTP failed
+  if (!scanSuccess &&
+      (httpResponseCode == 307 || httpResponseCode == 301 ||
+       httpResponseCode == 302 || httpResponseCode <= 0)) {
+    debugPrint("Trying HTTPS basic scan...");
+    WiFiClientSecure secureClient;
+    secureClient.setInsecure();
+    secureClient.setTimeout(30000);
+
+    http.begin(secureClient, serverUrl);
+    http.setTimeout(30000);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("User-Agent", "ESP32-Robridge/2.0");
+
+    httpResponseCode = http.POST(jsonString);
+    debugPrint("HTTPS Basic Scan Response Code: " + String(httpResponseCode));
+
+    if (httpResponseCode == 200 || httpResponseCode > 0) {
+      scanSuccess = true;
+      debugPrint("✅ HTTPS basic scan successful!");
+    } else {
+      debugPrint("❌ HTTPS basic scan failed: " + http.errorToString(httpResponseCode));
+    }
+  }
+
+  if (scanSuccess) {
+    String response = http.getString();
+    debugPrint("Basic scan response: " + String(httpResponseCode) + " - " + response);
+    lastApiResponse = response;
   }
 
   http.end();

@@ -53,16 +53,33 @@ try {
   // require('child_process').execSync('npm install nodemailer');
 }
 
+const allowedOrigins = [
+  "https://robridgelabs.com",
+  "https://www.robridgelabs.com",
+  "http://localhost:3000",
+  "http://localhost:8080"
+];
+
+const checkCorsOrigin = (origin, callback) => {
+  if (!origin) return callback(null, true);
+  const isAllowed = allowedOrigins.includes(origin) || 
+                    origin.endsWith(".onrender.com");
+  if (isAllowed) {
+    callback(null, true);
+  } else {
+    callback(new Error('Not allowed by CORS: ' + origin));
+  }
+};
+
 // Initialize Socket.IO with CORS after NODE_ENV is defined
 const io = socketIo(server, {
   cors: {
-    origin: NODE_ENV === 'production'
-      ? ["https://robridgelabs.com", "https://www.robridgelabs.com", "http://localhost:3000", "http://localhost:8080"]
-      : true, // Allow all origins in development for mobile app testing
+    origin: NODE_ENV === 'production' ? checkCorsOrigin : true,
     methods: ["GET", "POST"],
     credentials: true
   }
 });
+
 
 console.log('Server Configuration:');
 console.log(`   PORT: ${PORT}`);
@@ -87,9 +104,7 @@ app.use(helmet({
 
 // CORS
 app.use(cors({
-  origin: NODE_ENV === 'production'
-    ? ["https://robridgelabs.com", "https://www.robridgelabs.com", "http://localhost:3000", "http://localhost:8080"]
-    : true,
+  origin: NODE_ENV === 'production' ? checkCorsOrigin : true,
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "x-workspace-id"]
