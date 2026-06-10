@@ -940,22 +940,7 @@ app.post('/api/auth/login', async (req, res) => {
         error: 'Incorrect password'
       });
     }
-    // Check if Enterprise SSO is enforced for any workspace this user belongs to
-    const ssoCheck = await pool.query(
-      `SELECT w.id, w.name 
-       FROM ims_workspace_members wm
-       JOIN ims_workspaces w ON wm.workspace_id = w.id
-       JOIN ims_settings s ON w.id = s.workspace_id
-       WHERE wm.user_id = $1 AND wm.status = 'active'
-         AND (s.preferences->'security'->>'requireSSO')::boolean = true`,
-      [user.id]
-    );
-    if (ssoCheck.rows.length > 0) {
-      return res.status(403).json({
-        success: false,
-        error: 'Enterprise SSO is enforced for your workspace. Please log in using Okta or Microsoft Entra ID.'
-      });
-    }
+    // SSO check removed
     // Check if email is verified
     if (!user.email_verified) {
       return res.status(403).json({
@@ -1895,6 +1880,14 @@ app.post('/api/esp32/scan/:deviceId', async (req, res) => {
         );
       } else {
         console.log(`⚠️  Device ${deviceId} is not paired to any workspace`);
+        // --- ENFORCE BLOCK UNPAIRED POLICY ---
+        const globalBlockRes = await pool.query(
+          `SELECT preferences FROM ims_settings WHERE (preferences->'security'->>'blockUnpaired')::boolean = true LIMIT 1`
+        );
+        if (globalBlockRes.rows.length > 0) {
+          console.log(`🚫 Rejecting scan from unpaired device ${deviceId} due to Block Unpaired Scans policy.`);
+          return res.status(403).json({ success: false, error: 'Access denied: Scanning device is not paired to any active workspace.' });
+        }
       }
     } catch (pairingError) {
       console.error('Error checking device pairing:', pairingError);
@@ -5386,11 +5379,7 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
     if (!barcode || !workflow) return res.status(400).json({ success: false, error: 'barcode and workflow required' });
     const qty = (quantity === 0 || quantity === '0') ? 0 : (Number(quantity) || 1);
 
-    // --- ENFORCE IMS DYNAMIC SETTINGS ---
-    const settings = await getWorkspaceSettings(req.workspace_id);
-    if (settings?.security?.batchStrict && !batchNo && !serialNo) {
-      return res.status(403).json({ success: false, error: 'Strict Traceability is enabled. Batch No or Serial No is required for this operation.' });
-    }
+
 
     // ── DEDUPLICATION CHECK ──
     // 1. Check if this websocketScanId has already been recorded

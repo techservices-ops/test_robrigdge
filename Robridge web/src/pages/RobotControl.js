@@ -1,13 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   FaMapMarkerAlt,
-  
-  
-  
-  
   FaSync,
-  
-  
   FaBatteryFull,
   FaBatteryThreeQuarters,
   FaBatteryHalf,
@@ -17,11 +11,16 @@ import {
   FaCog,
   FaPlay,
   FaStop,
-  FaExclamationTriangle
+  FaExclamationTriangle,
+  FaLock
 } from 'react-icons/fa';
 import './RobotControl.css';
+import { useWorkspace } from '../contexts/WorkspaceContext';
 
 const RobotControl = () => {
+  const { imsFetch, activeWorkspaceId, activeWorkspace } = useWorkspace();
+  const [restrictRobot, setRestrictRobot] = useState(true);
+
   const [mapData, setMapData] = useState({
     scale: 1,
     centerX: 0,
@@ -42,6 +41,33 @@ const RobotControl = () => {
   });
   const [setConnectionStatus] = useState('disconnected');
   const [emergencyStop, setEmergencyStop] = useState(false);
+
+  // Fetch workspace settings
+  useEffect(() => {
+    if (!activeWorkspaceId) return;
+    const loadSettings = async () => {
+      try {
+        const res = await imsFetch('/api/ims/settings');
+        const data = await res.json();
+        if (data.success && data.settings?.security) {
+          const isRestricted = data.settings.security.restrictRobot !== undefined 
+            ? !!data.settings.security.restrictRobot 
+            : true;
+          setRestrictRobot(isRestricted);
+        } else {
+          setRestrictRobot(true);
+        }
+      } catch (err) {
+        console.error("Error fetching robot settings", err);
+        setRestrictRobot(true);
+      }
+    };
+    loadSettings();
+  }, [activeWorkspaceId, imsFetch]);
+
+  const wsRole = activeWorkspace?.currentUserRole;
+  const isAuthorized = ['owner', 'admin', 'manager'].includes(wsRole);
+  const isLocked = restrictRobot && !isAuthorized;
 
   // Simulate robot movement and telemetry updates
   useEffect(() => {
@@ -282,10 +308,16 @@ const RobotControl = () => {
 
           {/* Control Buttons */}
           <div className="control-section">
+            {isLocked && (
+              <div className="control-restricted-banner">
+                <FaLock />
+                <span>Controls restricted by security policy. Admins, Owners, and Managers only.</span>
+              </div>
+            )}
             <button
               className={`control-btn ${robotStatus === 'connected' ? 'connected' : 'disconnected'}`}
               onClick={robotStatus === 'connected' ? disconnectRobot : connectRobot}
-              disabled={robotStatus === 'connecting'}
+              disabled={robotStatus === 'connecting' || isLocked}
             >
               {robotStatus === 'connecting' ? (
                 <>
@@ -308,7 +340,7 @@ const RobotControl = () => {
             <button
               className={`control-btn ${isRunning ? 'running' : 'stopped'}`}
               onClick={isRunning ? stopRobot : startRobot}
-              disabled={robotStatus !== 'connected' || emergencyStop}
+              disabled={robotStatus !== 'connected' || emergencyStop || isLocked}
             >
               {isRunning ? (
                 <>
@@ -326,7 +358,7 @@ const RobotControl = () => {
             <button
               className="control-btn emergency"
               onClick={emergencyStopRobot}
-              disabled={robotStatus !== 'connected'}
+              disabled={robotStatus !== 'connected' || isLocked}
             >
               <FaExclamationTriangle />
               EMERGENCY STOP

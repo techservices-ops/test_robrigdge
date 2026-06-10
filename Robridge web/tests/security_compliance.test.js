@@ -63,13 +63,13 @@ describe('Security & Audit Compliance API Tests', () => {
       [workspaceId, managerUser.id]
     );
 
-    // 5. Insert initial workspace settings (Manager Approval = false, Immutable Logs = false, requireSSO = false)
+    // 5. Insert initial workspace settings (Manager Approval = false, Immutable Logs = false, blockUnpaired = true, restrictRobot = true)
     await pool.query(
       `INSERT INTO ims_settings (user_id, workspace_id, preferences)
        VALUES ($1, $2, $3)`,
       [adminUser.id, workspaceId, JSON.stringify({
         alerts: { email: true },
-        security: { managerApproval: false, immutableLogs: false, requireSSO: false, supervisorPin: '9999' }
+        security: { managerApproval: false, immutableLogs: false, blockUnpaired: true, restrictRobot: true, supervisorPin: '9999' }
       })]
     );
 
@@ -126,7 +126,7 @@ describe('Security & Audit Compliance API Tests', () => {
       `UPDATE ims_settings SET preferences = $1 WHERE workspace_id = $2`,
       [JSON.stringify({
         alerts: { email: true },
-        security: { managerApproval: true, immutableLogs: false, requireSSO: false, supervisorPin: '9999' }
+        security: { managerApproval: true, immutableLogs: false, blockUnpaired: true, restrictRobot: true, supervisorPin: '9999' }
       }), workspaceId]
     );
 
@@ -178,7 +178,7 @@ describe('Security & Audit Compliance API Tests', () => {
       `UPDATE ims_settings SET preferences = $1 WHERE workspace_id = $2`,
       [JSON.stringify({
         alerts: { email: true },
-        security: { managerApproval: true, immutableLogs: true, requireSSO: false, supervisorPin: '9999' }
+        security: { managerApproval: true, immutableLogs: true, blockUnpaired: true, restrictRobot: true, supervisorPin: '9999' }
       }), workspaceId]
     );
 
@@ -195,7 +195,7 @@ describe('Security & Audit Compliance API Tests', () => {
       `UPDATE ims_settings SET preferences = $1 WHERE workspace_id = $2`,
       [JSON.stringify({
         alerts: { email: true },
-        security: { managerApproval: true, immutableLogs: false, requireSSO: false, supervisorPin: '9999' }
+        security: { managerApproval: true, immutableLogs: false, blockUnpaired: true, restrictRobot: true, supervisorPin: '9999' }
       }), workspaceId]
     );
 
@@ -207,37 +207,40 @@ describe('Security & Audit Compliance API Tests', () => {
     expect(res.statusCode).toEqual(200);
   });
 
-  test('Enterprise SSO restricts password login', async () => {
-    // A. Enable SSO
+  test('Block Unpaired Scans policy restricts scans from unpaired devices', async () => {
+    const testDeviceId = 'unpaired-test-device-999';
+
+    // A. Enable Block Unpaired Scans
     await pool.query(
       `UPDATE ims_settings SET preferences = $1 WHERE workspace_id = $2`,
       [JSON.stringify({
         alerts: { email: true },
-        security: { managerApproval: true, immutableLogs: false, requireSSO: true, supervisorPin: '9999' }
+        security: { managerApproval: true, immutableLogs: false, blockUnpaired: true, restrictRobot: true, supervisorPin: '9999' }
       }), workspaceId]
     );
 
-    // B. Attempt password login -> should be blocked
+    // B. Attempt scan from unpaired device -> should be blocked with 403 Forbidden
     let res = await request(app)
-      .post('/api/auth/login')
-      .send({ email: 'test-compliance-manager@robridge.com', password: 'TestPassword123!' });
+      .post(`/api/esp32/scan/${testDeviceId}`)
+      .send({ barcodeData: '999999999', scanType: 'inventory', timestamp: Date.now() });
     expect(res.statusCode).toEqual(403);
-    expect(res.body.error).toContain('Enterprise SSO is enforced');
+    expect(res.body.error).toContain('Access denied: Scanning device is not paired to any active workspace.');
 
-    // C. Disable SSO
+    // C. Disable Block Unpaired Scans
     await pool.query(
       `UPDATE ims_settings SET preferences = $1 WHERE workspace_id = $2`,
       [JSON.stringify({
         alerts: { email: true },
-        security: { managerApproval: true, immutableLogs: false, requireSSO: false, supervisorPin: '9999' }
+        security: { managerApproval: true, immutableLogs: false, blockUnpaired: false, restrictRobot: true, supervisorPin: '9999' }
       }), workspaceId]
     );
 
-    // D. Attempt password login -> should succeed
+    // D. Attempt scan from unpaired device -> should succeed with 200 OK
     res = await request(app)
-      .post('/api/auth/login')
-      .send({ email: 'test-compliance-manager@robridge.com', password: 'TestPassword123!' });
+      .post(`/api/esp32/scan/${testDeviceId}`)
+      .send({ barcodeData: '999999999', scanType: 'inventory', timestamp: Date.now() });
     expect(res.statusCode).toEqual(200);
+    expect(res.body.success).toEqual(true);
   });
 
   test('Audit logging covers critical operations', async () => {

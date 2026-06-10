@@ -45,7 +45,7 @@ const IMSSettings = () => {
 
   // Other Settings
   const [alerts, setAlerts] = useState({ email: true });
-  const [security, setSecurity] = useState({ batchStrict: true, managerApproval: false, immutableLogs: true, requireSSO: false, supervisorPin: '1234' });
+  const [security, setSecurity] = useState({ restrictRobot: true, blockUnpaired: true, immutableLogs: true, managerApproval: false, supervisorPin: '1234' });
   const [aiSettings, setAiSettings] = useState({ autoReorder: true, predictiveBuffer: true, dynamicThresholds: true, advisoryMode: false });
   const [scannerPrefs, setScannerPrefs] = useState({ autoLog: true, sound: true, vibration: true });
 
@@ -502,10 +502,10 @@ const IMSSettings = () => {
           </div>
           <div className="alert-toggles">
             {[
-              { key: 'batchStrict', label: 'Strict Traceability', desc: 'Prevent stock changes without valid Batch/Serial inputs' },
-              { key: 'managerApproval', label: 'Manager Overrides', desc: 'Require supervisor PIN for manual quantity adjustments' },
+              { key: 'blockUnpaired', label: 'Block Unpaired Scans', desc: 'Prevent scanning events from un-paired ESP32/Mobile devices' },
+              { key: 'restrictRobot', label: 'Restricted Robot Control', desc: 'Limit robot console movement and start/stop controls to workspace Admins, Owners, and Managers' },
               { key: 'immutableLogs', label: 'Immutable Audit Trail', desc: 'Lock scan history and catalog from deletion (FDA / ISO compliance)' },
-              { key: 'requireSSO', label: 'Enterprise SSO', desc: 'Enforce Microsoft Entra ID / Okta login for portal access' },
+              { key: 'managerApproval', label: 'Manager Overrides', desc: 'Require supervisor PIN for manual quantity adjustments' },
             ].map(a => (
               <div key={a.key} className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setSecurity, a.key)} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
                 <div className="toggle-info">
