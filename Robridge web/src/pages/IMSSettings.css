@@ -15,6 +15,12 @@
   align-items: start;
 }
 
+.settings-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
 .settings-card {
   background: var(--bg-primary);
   border-radius: var(--radius-lg);
@@ -573,13 +579,13 @@
   font-size: 28px;
   font-weight: 700;
   margin: 0 0 6px 0;
-  color: var(--text-primary);
+  color: #ffffff;
   letter-spacing: -0.5px;
 }
 
 .ims-header-left p {
   font-size: 14px;
-  color: var(--text-secondary);
+  color: rgba(255, 255, 255, 0.9);
   margin: 0;
 }
 

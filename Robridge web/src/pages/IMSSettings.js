@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   FaBell, FaToggleOn, FaToggleOff, 
   FaSave, FaCheckCircle, FaLock, FaBrain, 
-  FaRobot, FaPlug, FaMoneyBillWave, FaChartLine, 
+  FaChartLine, 
   FaPlus, FaTrash, FaLayerGroup, FaExchangeAlt,
   FaCloud, FaHourglassHalf
 } from 'react-icons/fa';
@@ -354,230 +354,234 @@ const IMSSettings = () => {
       </div>
 
       <div className="settings-grid">
-        
-        {/* ── ALERTS & NOTIFICATIONS ── */}
-        <div className="settings-card alerts-card">
-          <div className="settings-card-header">
-            <FaBell className="settings-card-icon" />
-            <h2>Alert Distribution</h2>
-          </div>
-          <div className="alert-toggles">
-            {[
-              { key: 'email', label: 'Email Notifications', desc: 'Send daily digests and critical alerts to Admins' }
-            ].map(a => (
-              <div key={a.key} className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAlerts, a.key)} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
-                <div className="toggle-info">
-                  <div className="toggle-label">{a.label}</div>
-                  <div className="toggle-desc">{a.desc}</div>
-                </div>
-                {alerts[a.key] ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── AUTONOMOUS AI ENGINE ── */}
-        <div className="settings-card ai-card">
-          <div className="settings-card-header">
-            <FaBrain className="settings-card-icon ai-icon" />
-            <h2>Autonomous AI Engine</h2>
-            <span className="ai-badge">Brain Config</span>
-          </div>
-          
-          <div className="alert-toggles">
-            <div className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAiSettings, 'aiClassify')} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
-              <div className="toggle-info">
-                <div className="toggle-label">AI Product Classification</div>
-                <div className="toggle-desc">Use Gemini/AI to identify and categorize items from ESP32 scanner images</div>
-              </div>
-              {aiSettings.aiClassify ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
+        {/* Left Column: Alerts, Category Builder, Compliance */}
+        <div className="settings-column">
+          {/* ── ALERTS & NOTIFICATIONS ── */}
+          <div className="settings-card alerts-card">
+            <div className="settings-card-header">
+              <FaBell className="settings-card-icon" />
+              <h2>Alert Distribution</h2>
             </div>
-            <div className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAiSettings, 'predictiveStock')} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
-              <div className="toggle-info">
-                <div className="toggle-label">Predictive Stock Forecast</div>
-                <div className="toggle-desc">AI automatically shifts minimum inventory levels based on scan velocity</div>
-              </div>
-              {aiSettings.predictiveStock ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
-            </div>
-          </div>
-
-          <div className="settings-slider-group">
-            <div className="slider-header">
-              <span><FaChartLine /> Predictive Stock Buffer</span>
-              <strong>+{bufferPct}%</strong>
-            </div>
-            <input type="range" min="0" max="50" step="5" value={bufferPct} onChange={(e) => setBufferPct(Number(e.target.value))} className="slider-input" disabled={!isAdmin} />
-          </div>
-        </div>
-
-        {/* ── DYNAMIC CATEGORY BUILDER ── */}
-        <div className="settings-card category-builder-card">
-          <div className="settings-card-header">
-            <FaLayerGroup className="settings-card-icon" style={{color: '#f39c12'}} />
-            <h2>Master Category Builder</h2>
-          </div>
-          <div className="builder-desc">Defined categories are synced to Catalog Master and enforce rotational behaviour (FEFO/FIFO).</div>
-          
-          <div className="builder-form">
-            <div className="builder-form-row">
-              <div className="builder-field-group" style={{ flex: 2 }}>
-                <label>Category Name</label>
-                <input type="text" placeholder="e.g. Chemicals" value={newCatName} onChange={e => setNewCatName(e.target.value)} className="form-input" disabled={!isAdmin} />
-              </div>
-              <div className="builder-field-group" style={{ flex: 1.2 }}>
-                <label>Rotation Mode</label>
-                <select value={newCatMode} onChange={e => setNewCatMode(e.target.value)} className="form-select" disabled={!isAdmin}>
-                  <option value="FIFO">FIFO (First In First Out)</option>
-                  <option value="FEFO">FEFO (First Expire First Out)</option>
-                  <option value="LIFO">LIFO (Last In First Out)</option>
-                </select>
-              </div>
-            </div>
-            <div className="builder-form-row">
-              <div className="builder-field-group" style={{ flex: 1 }}>
-                <label>Alert Threshold</label>
-                <input type="number" placeholder="Alert Qty" value={newCatAlert} onChange={e => setNewCatAlert(e.target.value)} className="form-input" disabled={!isAdmin} />
-              </div>
-              <div className="builder-field-group" style={{ flex: 1 }}>
-                <label>Reorder Point</label>
-                <input type="number" placeholder="Reorder Qty" value={newCatReorder} onChange={e => setNewCatReorder(e.target.value)} className="form-input" disabled={!isAdmin} />
-              </div>
-              <div className="builder-field-group" style={{ width: '44px', flexShrink: 0 }}>
-                <label>Color</label>
-                <input type="color" value={newCatColor} onChange={e => setNewCatColor(e.target.value)} className="color-picker" title="Tag Color" disabled={!isAdmin} style={{ height: '38px', width: '44px', padding: '2px' }} />
-              </div>
-              <div className="builder-field-group" style={{ flexShrink: 0 }}>
-                <label>&nbsp;</label>
-                <button className="btn btn-secondary btn-icon-only" onClick={addCategory} disabled={!isAdmin} style={{ height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaPlus /></button>
-              </div>
-            </div>
-          </div>
-
-          <div className="builder-list">
-            {categories.length === 0 ? (
-              <div className="no-data-placeholder">
-                No categories configured. Build one above.
-              </div>
-            ) : (
-              categories.map(cat => (
-                <div key={cat.id} className="builder-row">
-                  <span className="builder-color-dot" style={{background: cat.color}}></span>
-                  <div className="builder-info">
-                    <strong>{cat.name}</strong> <span className="cat-mode-badge">{cat.mode}</span>
-                    <div className="cat-limits">Alert: {cat.alertAt} · Reorder: {cat.reorderAt}</div>
+            <div className="alert-toggles">
+              {[
+                { key: 'email', label: 'Email Notifications', desc: 'Send daily digests and critical alerts to Admins' }
+              ].map(a => (
+                <div key={a.key} className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAlerts, a.key)} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
+                  <div className="toggle-info">
+                    <div className="toggle-label">{a.label}</div>
+                    <div className="toggle-desc">{a.desc}</div>
                   </div>
-                  {isAdmin && <button className="btn-icon danger" onClick={() => removeCategory(cat.id, cat.name)}><FaTrash /></button>}
+                  {alerts[a.key] ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* ── DYNAMIC SCANNER WORKFLOWS ── */}
-        <div className="settings-card workflow-builder-card">
-          <div className="settings-card-header">
-            <FaExchangeAlt className="settings-card-icon" style={{color: '#3498db'}} />
-            <h2>Scanner Operations Definition</h2>
-          </div>
-          <div className="builder-desc">Custom action modes loaded dynamically into the Smart Scanner app.</div>
-          
-          <div className="builder-form">
-            <div className="builder-form-row">
-              <div className="builder-field-group" style={{ flex: 1 }}>
-                <label>Operation Name</label>
-                <input type="text" placeholder="e.g. Return To Vendor" value={newFlowName} onChange={e => setNewFlowName(e.target.value)} className="form-input" disabled={!isAdmin} />
-              </div>
-              <div className="builder-field-group" style={{ width: '44px', flexShrink: 0 }}>
-                <label>Color</label>
-                <input type="color" value={newFlowColor} onChange={e => setNewFlowColor(e.target.value)} className="color-picker" disabled={!isAdmin} style={{ height: '38px', width: '44px', padding: '2px' }} />
-              </div>
-              <div className="builder-field-group" style={{ flexShrink: 0 }}>
-                <label>&nbsp;</label>
-                <button className="btn btn-secondary btn-icon-only" onClick={addWorkflow} disabled={!isAdmin} style={{ height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaPlus /></button>
-              </div>
+              ))}
             </div>
           </div>
 
-          <div className="workflows-grid">
-            {workflows.length === 0 ? (
-              <div className="no-data-placeholder" style={{ width: '100%' }}>
-                No scanner operations defined. Add one above.
-              </div>
-            ) : (
-              workflows.map(flow => (
-                <div key={flow.id} className="workflow-pill" style={{borderLeftColor: flow.color}}>
-                  <span className="wf-name">{flow.name}</span>
-                  {isAdmin && <FaTrash className="wf-del" onClick={() => removeWorkflow(flow.id)} />}
+          {/* ── DYNAMIC CATEGORY BUILDER ── */}
+          <div className="settings-card category-builder-card">
+            <div className="settings-card-header">
+              <FaLayerGroup className="settings-card-icon" style={{color: '#f39c12'}} />
+              <h2>Master Category Builder</h2>
+            </div>
+            <div className="builder-desc">Defined categories are synced to Catalog Master and enforce rotational behaviour (FEFO/FIFO).</div>
+            
+            <div className="builder-form">
+              <div className="builder-form-row">
+                <div className="builder-field-group" style={{ flex: 2 }}>
+                  <label>Category Name</label>
+                  <input type="text" placeholder="e.g. Chemicals" value={newCatName} onChange={e => setNewCatName(e.target.value)} className="form-input" disabled={!isAdmin} />
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* ── SECURITY & AUDIT COMPLIANCE ── */}
-        <div className="settings-card compliance-card">
-          <div className="settings-card-header">
-            <FaLock className="settings-card-icon" style={{ color: '#e74c3c' }} />
-            <h2>Security & Audit Compliance</h2>
-          </div>
-          <div className="alert-toggles">
-            {[
-              { key: 'blockUnpaired', label: 'Block Unpaired Scans', desc: 'Prevent scanning events from un-paired ESP32/Mobile devices' },
-              { key: 'restrictRobot', label: 'Restricted Robot Control', desc: 'Limit robot console movement and start/stop controls to workspace Admins, Owners, and Managers' },
-              { key: 'immutableLogs', label: 'Immutable Audit Trail', desc: 'Lock scan history and catalog from deletion (FDA / ISO compliance)' },
-              { key: 'managerApproval', label: 'Manager Overrides', desc: 'Require supervisor PIN for manual quantity adjustments' },
-            ].map(a => (
-              <div key={a.key} className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setSecurity, a.key)} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
-                <div className="toggle-info">
-                  <div className="toggle-label">{a.label}</div>
-                  <div className="toggle-desc">{a.desc}</div>
+                <div className="builder-field-group" style={{ flex: 1.2 }}>
+                  <label>Rotation Mode</label>
+                  <select value={newCatMode} onChange={e => setNewCatMode(e.target.value)} className="form-select" disabled={!isAdmin}>
+                    <option value="FIFO">FIFO (First In First Out)</option>
+                    <option value="FEFO">FEFO (First Expire First Out)</option>
+                    <option value="LIFO">LIFO (Last In First Out)</option>
+                  </select>
                 </div>
-                {security[a.key] ? <FaToggleOn className="toggle-icon on-red" /> : <FaToggleOff className="toggle-icon off" />}
               </div>
-            ))}
+              <div className="builder-form-row">
+                <div className="builder-field-group" style={{ flex: 1 }}>
+                  <label>Alert Threshold</label>
+                  <input type="number" placeholder="Alert Qty" value={newCatAlert} onChange={e => setNewCatAlert(e.target.value)} className="form-input" disabled={!isAdmin} />
+                </div>
+                <div className="builder-field-group" style={{ flex: 1 }}>
+                  <label>Reorder Point</label>
+                  <input type="number" placeholder="Reorder Qty" value={newCatReorder} onChange={e => setNewCatReorder(e.target.value)} className="form-input" disabled={!isAdmin} />
+                </div>
+                <div className="builder-field-group" style={{ width: '44px', flexShrink: 0 }}>
+                  <label>Color</label>
+                  <input type="color" value={newCatColor} onChange={e => setNewCatColor(e.target.value)} className="color-picker" title="Tag Color" disabled={!isAdmin} style={{ height: '38px', width: '44px', padding: '2px' }} />
+                </div>
+                <div className="builder-field-group" style={{ flexShrink: 0 }}>
+                  <label>&nbsp;</label>
+                  <button className="btn btn-secondary btn-icon-only" onClick={addCategory} disabled={!isAdmin} style={{ height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaPlus /></button>
+                </div>
+              </div>
+            </div>
 
-            {/* Configurable Supervisor PIN for Manager Overrides */}
-            {security.managerApproval && (
-              <div style={{
-                padding: '12px var(--spacing-md)',
-                background: 'var(--bg-secondary)',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--border-light)',
-                margin: '8px var(--spacing-md) 12px var(--spacing-md)'
-              }}>
-                <label style={{
-                  fontSize: '12.5px',
-                  fontWeight: 'var(--font-semibold)',
-                  color: 'var(--text-secondary)',
-                  display: 'block',
-                  marginBottom: '6px'
+            <div className="builder-list">
+              {categories.length === 0 ? (
+                <div className="no-data-placeholder">
+                  No categories configured. Build one above.
+                </div>
+              ) : (
+                categories.map(cat => (
+                  <div key={cat.id} className="builder-row">
+                    <span className="builder-color-dot" style={{background: cat.color}}></span>
+                    <div className="builder-info">
+                      <strong>{cat.name}</strong> <span className="cat-mode-badge">{cat.mode}</span>
+                      <div className="cat-limits">Alert: {cat.alertAt} · Reorder: {cat.reorderAt}</div>
+                    </div>
+                    {isAdmin && <button className="btn-icon danger" onClick={() => removeCategory(cat.id, cat.name)}><FaTrash /></button>}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* ── SECURITY & AUDIT COMPLIANCE ── */}
+          <div className="settings-card compliance-card">
+            <div className="settings-card-header">
+              <FaLock className="settings-card-icon" style={{ color: '#e74c3c' }} />
+              <h2>Security & Audit Compliance</h2>
+            </div>
+            <div className="alert-toggles">
+              {[
+                { key: 'blockUnpaired', label: 'Block Unpaired Scans', desc: 'Prevent scanning events from un-paired ESP32/Mobile devices' },
+                { key: 'restrictRobot', label: 'Restricted Robot Control', desc: 'Limit robot console movement and start/stop controls to workspace Admins, Owners, and Managers' },
+                { key: 'immutableLogs', label: 'Immutable Audit Trail', desc: 'Lock scan history and catalog from deletion (FDA / ISO compliance)' },
+                { key: 'managerApproval', label: 'Manager Overrides', desc: 'Require supervisor PIN for manual quantity adjustments' },
+              ].map(a => (
+                <div key={a.key} className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setSecurity, a.key)} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
+                  <div className="toggle-info">
+                    <div className="toggle-label">{a.label}</div>
+                    <div className="toggle-desc">{a.desc}</div>
+                  </div>
+                  {security[a.key] ? <FaToggleOn className="toggle-icon on-red" /> : <FaToggleOff className="toggle-icon off" />}
+                </div>
+              ))}
+
+              {/* Configurable Supervisor PIN for Manager Overrides */}
+              {security.managerApproval && (
+                <div style={{
+                  padding: '12px var(--spacing-md)',
+                  background: 'var(--bg-secondary)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-light)',
+                  margin: '8px var(--spacing-md) 12px var(--spacing-md)'
                 }}>
-                  Set Supervisor Override PIN
-                </label>
-                <input 
-                  type="password" 
-                  maxLength="6"
-                  placeholder="e.g. 1234"
-                  value={security.supervisorPin || ''}
-                  onChange={(e) => setSecurity(prev => ({ ...prev, supervisorPin: e.target.value.replace(/\D/g, '') }))}
-                  disabled={!isAdmin}
-                  style={{
-                    padding: '8px 12px',
-                    fontSize: '14px',
-                    border: '1px solid var(--border-medium)',
-                    borderRadius: 'var(--radius-sm)',
-                    width: '140px',
-                    letterSpacing: '4px',
-                    textAlign: 'center',
-                    background: 'var(--bg-primary)',
-                    color: 'var(--text-primary)'
-                  }}
-                />
-              </div>
-            )}
+                  <label style={{
+                    fontSize: '12.5px',
+                    fontWeight: 'var(--font-semibold)',
+                    color: 'var(--text-secondary)',
+                    display: 'block',
+                    marginBottom: '6px'
+                  }}>
+                    Set Supervisor Override PIN
+                  </label>
+                  <input 
+                    type="password" 
+                    maxLength="6"
+                    placeholder="e.g. 1234"
+                    value={security.supervisorPin || ''}
+                    onChange={(e) => setSecurity(prev => ({ ...prev, supervisorPin: e.target.value.replace(/\D/g, '') }))}
+                    disabled={!isAdmin}
+                    style={{
+                      padding: '8px 12px',
+                      fontSize: '14px',
+                      border: '1px solid var(--border-medium)',
+                      borderRadius: 'var(--radius-sm)',
+                      width: '140px',
+                      letterSpacing: '4px',
+                      textAlign: 'center',
+                      background: 'var(--bg-primary)',
+                      color: 'var(--text-primary)'
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
+        {/* Right Column: AI Engine, Scanner Operations */}
+        <div className="settings-column">
+          {/* ── AUTONOMOUS AI ENGINE ── */}
+          <div className="settings-card ai-card">
+            <div className="settings-card-header">
+              <FaBrain className="settings-card-icon ai-icon" />
+              <h2>Autonomous AI Engine</h2>
+              <span className="ai-badge">Brain Config</span>
+            </div>
+            
+            <div className="alert-toggles">
+              <div className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAiSettings, 'aiClassify')} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
+                <div className="toggle-info">
+                  <div className="toggle-label">AI Product Classification</div>
+                  <div className="toggle-desc">Use Gemini/AI to identify and categorize items from ESP32 scanner images</div>
+                </div>
+                {aiSettings.aiClassify ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
+              </div>
+              <div className="alert-toggle-row" onClick={() => isAdmin && handleToggle(setAiSettings, 'predictiveStock')} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
+                <div className="toggle-info">
+                  <div className="toggle-label">Predictive Stock Forecast</div>
+                  <div className="toggle-desc">AI automatically shifts minimum inventory levels based on scan velocity</div>
+                </div>
+                {aiSettings.predictiveStock ? <FaToggleOn className="toggle-icon on" /> : <FaToggleOff className="toggle-icon off" />}
+              </div>
+            </div>
+
+            <div className="settings-slider-group">
+              <div className="slider-header">
+                <span><FaChartLine /> Predictive Stock Buffer</span>
+                <strong>+{bufferPct}%</strong>
+              </div>
+              <input type="range" min="0" max="50" step="5" value={bufferPct} onChange={(e) => setBufferPct(Number(e.target.value))} className="slider-input" disabled={!isAdmin} />
+            </div>
+          </div>
+
+          {/* ── DYNAMIC SCANNER WORKFLOWS ── */}
+          <div className="settings-card workflow-builder-card">
+            <div className="settings-card-header">
+              <FaExchangeAlt className="settings-card-icon" style={{color: '#3498db'}} />
+              <h2>Scanner Operations Definition</h2>
+            </div>
+            <div className="builder-desc">Custom action modes loaded dynamically into the Smart Scanner app.</div>
+            
+            <div className="builder-form">
+              <div className="builder-form-row">
+                <div className="builder-field-group" style={{ flex: 1 }}>
+                  <label>Operation Name</label>
+                  <input type="text" placeholder="e.g. Return To Vendor" value={newFlowName} onChange={e => setNewFlowName(e.target.value)} className="form-input" disabled={!isAdmin} />
+                </div>
+                <div className="builder-field-group" style={{ width: '44px', flexShrink: 0 }}>
+                  <label>Color</label>
+                  <input type="color" value={newFlowColor} onChange={e => setNewFlowColor(e.target.value)} className="color-picker" disabled={!isAdmin} style={{ height: '38px', width: '44px', padding: '2px' }} />
+                </div>
+                <div className="builder-field-group" style={{ flexShrink: 0 }}>
+                  <label>&nbsp;</label>
+                  <button className="btn btn-secondary btn-icon-only" onClick={addWorkflow} disabled={!isAdmin} style={{ height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaPlus /></button>
+                </div>
+              </div>
+            </div>
+
+            <div className="workflows-grid">
+              {workflows.length === 0 ? (
+                <div className="no-data-placeholder" style={{ width: '100%' }}>
+                  No scanner operations defined. Add one above.
+                </div>
+              ) : (
+                workflows.map(flow => (
+                  <div key={flow.id} className="workflow-pill" style={{borderLeftColor: flow.color}}>
+                    <span className="wf-name">{flow.name}</span>
+                    {isAdmin && <FaTrash className="wf-del" onClick={() => removeWorkflow(flow.id)} />}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       {saved && (
