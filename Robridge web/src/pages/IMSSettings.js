@@ -4,7 +4,8 @@ import {
   FaSave, FaCheckCircle, FaLock, FaBrain, 
   FaChartLine, 
   FaPlus, FaTrash, FaLayerGroup,
-  FaCloud, FaHourglassHalf
+  FaCloud, FaHourglassHalf,
+  FaChevronDown, FaChevronUp, FaQuestionCircle
 } from 'react-icons/fa';
 import './IMSSettings.css';
 import { useWorkspace } from '../contexts/WorkspaceContext';
@@ -47,6 +48,7 @@ const IMSSettings = () => {
 
   const [bufferPct, setBufferPct] = useState(15);
   const [saved, setSaved] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   // Fetch data on mount
   useEffect(() => {
@@ -332,6 +334,81 @@ const IMSSettings = () => {
             </div>
           )}
         </div>
+      </div>
+
+      {/* ── SETTINGS GUIDE (COLLAPSIBLE) ── */}
+      <div className="settings-guide-card">
+        <div className="settings-guide-header" onClick={() => setShowGuide(!showGuide)}>
+          <div className="settings-guide-title">
+            <FaQuestionCircle className="settings-guide-icon" />
+            <div>
+              <h2>IMS Control & Settings Guide</h2>
+              <p>Learn how to configure your warehouse parameters, automation thresholds, and security policies.</p>
+            </div>
+          </div>
+          <button className="settings-guide-toggle-btn">
+            {showGuide ? (
+              <>Hide Guide <FaChevronUp /></>
+            ) : (
+              <>Show Guide <FaChevronDown /></>
+            )}
+          </button>
+        </div>
+
+        {showGuide && (
+          <div className="settings-guide-content">
+            <div className="guide-section">
+              <div className="guide-section-header" style={{ color: 'var(--primary-blue)' }}>
+                <FaCloud className="icon" /> Storage Plan
+              </div>
+              <p>
+                Adjust the capacity slider to scale your workspace database size. Base storage is 1 GB (Free). Upgrade up to 100 GB for expanded scan history, documents, and product image storage ($5 per additional GB/month).
+              </p>
+            </div>
+
+            <div className="guide-section">
+              <div className="guide-section-header" style={{ color: 'var(--primary-orange)' }}>
+                <FaBell className="icon" /> Alert Distribution
+              </div>
+              <p>
+                Configure automated notifications. Enabling <strong>Email Notifications</strong> sends critical daily summaries and low-stock alerts directly to system administrators and inventory controllers.
+              </p>
+            </div>
+
+            <div className="guide-section">
+              <div className="guide-section-header" style={{ color: '#f39c12' }}>
+                <FaLayerGroup className="icon" /> Category Builder
+              </div>
+              <p>
+                Establish workspace categories. Select a rotation style for inventory items (<strong>FIFO</strong>, <strong>FEFO</strong>, or <strong>LIFO</strong>) and assign global alert points and automated reorder triggers.
+              </p>
+            </div>
+
+            <div className="guide-section">
+              <div className="guide-section-header" style={{ color: '#9b59b6' }}>
+                <FaBrain className="icon" /> Autonomous AI Engine
+              </div>
+              <p>
+                Manage AI-driven systems. Use Gemini-based <strong>Product Classification</strong> to categorize scans from ESP32 camera feeds, and activate <strong>Predictive Stock Forecast</strong> to dynamically adjust stock buffers based on scan velocity.
+              </p>
+            </div>
+
+            <div className="guide-section">
+              <div className="guide-section-header" style={{ color: '#e74c3c' }}>
+                <FaLock className="icon" /> Security & Audit
+              </div>
+              <p>
+                Secure operations and enforce audit compliance:
+              </p>
+              <ul style={{ margin: '6px 0 0 0', paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <li style={{ fontSize: '12px', color: 'var(--text-secondary)' }}><strong>Block Unpaired Scans:</strong> Restricts sensor data to authorized workspace scanners.</li>
+                <li style={{ fontSize: '12px', color: 'var(--text-secondary)' }}><strong>Restricted Robot:</strong> Locks AMR movement to Admins & Managers.</li>
+                <li style={{ fontSize: '12px', color: 'var(--text-secondary)' }}><strong>Immutable Audit:</strong> Locks deletion of logs for ISO/FDA compliance.</li>
+                <li style={{ fontSize: '12px', color: 'var(--text-secondary)' }}><strong>Overrides:</strong> Requires supervisor PIN to adjust stock counts manually.</li>
+              </ul>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="settings-grid">
