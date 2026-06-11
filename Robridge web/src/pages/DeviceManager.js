@@ -117,6 +117,8 @@ const DeviceManager = () => {
         };
     }, [socket]);
 
+    const lastProcessedScanRef = React.useRef(null);
+
     // Update display time for latest scan
     useEffect(() => {
         if (latestScan) {
@@ -125,11 +127,13 @@ const DeviceManager = () => {
             const isValid = date.getFullYear() > 2020;
             setDisplayTime(isValid ? date.toLocaleString() : new Date().toLocaleString());
             
-            // Increment global count on new scan
-            setGlobalTotalScans(prev => prev + 1);
-            setLatestScan(null);
+            // Increment global count on new scan only once per scan object
+            if (latestScan !== lastProcessedScanRef.current) {
+                setGlobalTotalScans(prev => prev + 1);
+                lastProcessedScanRef.current = latestScan;
+            }
         }
-    }, [latestScan, showDetails, setLatestScan]);
+    }, [latestScan]);
 
     // Auto-regenerate WiFi QR code when credentials change
     useEffect(() => {
@@ -179,7 +183,9 @@ const DeviceManager = () => {
 
     // Merge paired devices with live connection status
     const mergedDevices = pairedDevices.map(paired => {
-        const liveDevice = esp32Devices.find(live => live.deviceId === paired.device_id);
+        const liveDevice = esp32Devices.find(live => 
+            String(live.deviceId).toLowerCase() === String(paired.device_id).toLowerCase()
+        );
         return {
             id: paired.id,
             deviceId: paired.device_id,

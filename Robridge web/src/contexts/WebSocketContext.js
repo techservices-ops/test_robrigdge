@@ -113,6 +113,16 @@ export const WebSocketProvider = ({ children }) => {
     } catch (e) {
       console.error('Error clearing sessionStorage:', e);
     }
+
+    if (scanData.deviceId) {
+      setEsp32Devices(prev => {
+        const exists = prev.find(d => String(d.deviceId).toLowerCase() === String(scanData.deviceId).toLowerCase());
+        if (exists) {
+          return prev.map(d => String(d.deviceId).toLowerCase() === String(scanData.deviceId).toLowerCase() ? { ...d, status: 'connected', lastSeen: new Date().toISOString() } : d);
+        }
+        return prev;
+      });
+    }
   };
 
   // Connect & Authenticate function
@@ -179,9 +189,13 @@ export const WebSocketProvider = ({ children }) => {
           const token = localStorage.getItem('robridge_token');
           if (!token) return;
 
+          const workspaceId = localStorage.getItem('robridge_workspace_id');
+          const headers = { 'Authorization': `Bearer ${token}` };
+          if (workspaceId) headers['x-workspace-id'] = workspaceId;
+
           const [dbData, liveData] = await Promise.all([
-            fetch(`${serverURL}/api/devices`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()).catch(() => ({ success: false })),
-            fetch(`${serverURL}/api/esp32/devices`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()).catch(() => ({ success: false }))
+            fetch(`${serverURL}/api/devices`, { headers }).then(r => r.json()).catch(() => ({ success: false })),
+            fetch(`${serverURL}/api/esp32/devices`, { headers }).then(r => r.json()).catch(() => ({ success: false }))
           ]);
 
           if (dbData.success) {
@@ -197,11 +211,11 @@ export const WebSocketProvider = ({ children }) => {
 
             setEsp32Devices(prev => {
               const mergedDevices = dbData.devices.map((dbDev, index) => {
-                const liveDev = liveData.success && liveData.devices ? liveData.devices.find(d => d.deviceId === dbDev.device_id) : null;
+                const liveDev = liveData.success && liveData.devices ? liveData.devices.find(d => String(d.deviceId).toLowerCase() === String(dbDev.device_id).toLowerCase()) : null;
                 const pingData = liveStatuses[index];
                 
                 // Prioritize the lastSeen from the current React state if it's newer (updated via WebSocket)
-                const existing = prev.find(p => p.deviceId === dbDev.device_id);
+                const existing = prev.find(p => String(p.deviceId).toLowerCase() === String(dbDev.device_id).toLowerCase());
                 const existingLastSeen = existing && existing.lastSeen ? new Date(existing.lastSeen) : new Date(0);
                 
                 // Fix timezone issue: Postgres NOW() returns timestamp without timezone. Force UTC parsing.
@@ -221,8 +235,8 @@ export const WebSocketProvider = ({ children }) => {
                 
                 const bestLastSeen = existingLastSeen > fetchedLastSeen ? existingLastSeen : fetchedLastSeen;
                 
-                // Also give a 5-minute grace period for 'connected' status
-                const isRecentlySeen = bestLastSeen > new Date(Date.now() - 5 * 60 * 1000);
+                // Also give a 15-second grace period for 'connected' status
+                const isRecentlySeen = bestLastSeen > new Date(Date.now() - 15 * 1000);
 
                 return { 
                   ...dbDev, 
@@ -246,7 +260,7 @@ export const WebSocketProvider = ({ children }) => {
 
       // Clear existing polling to prevent duplicates
       if (socketRef.current.devicePollingInterval) clearInterval(socketRef.current.devicePollingInterval);
-      socketRef.current.devicePollingInterval = setInterval(fetchDevices, 30000); // Poll every 30s to prevent 429 rate limit errors
+      socketRef.current.devicePollingInterval = setInterval(fetchDevices, 3000); // Poll every 3s for fast UI updates
     });
 
     socketRef.current.on('disconnect', (reason) => {
@@ -278,9 +292,9 @@ export const WebSocketProvider = ({ children }) => {
     // socketRef.current.on('esp32_scan_processed', (data) => processScanData(data, 'esp32_scan_processed'));
     socketRef.current.on('esp32_device_connected', (device) => {
       setEsp32Devices(prev => {
-        const exists = prev.find(d => d.deviceId === device.deviceId);
-        if (exists) return prev.map(d => d.deviceId === device.deviceId ? { ...d, ...device, status: 'connected' } : d);
-        return [...prev, { ...device, status: 'connected' }];
+        const exists = prev.find(d => String(d.deviceId).toLowerCase() === String(device.deviceId).toLowerCase());
+        if (exists) return prev.map(d => String(d.deviceId).toLowerCase() === String(device.deviceId).toLowerCase() ? { ...d, ...device, status: 'connected', lastSeen: new Date().toISOString() } : d);
+        return [...prev, { ...device, status: 'connected', lastSeen: new Date().toISOString() }];
       });
     });
 
