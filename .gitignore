@@ -51,6 +51,7 @@ jspm_packages/
 
 # dotenv environment variables file
 .env
+env.env
 
 # Python
 __pycache__/
@@ -78,4 +79,3 @@ barcodes/
 *.png
 *.jpg
 *.jpeg
-
