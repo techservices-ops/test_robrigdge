@@ -1643,12 +1643,38 @@ app.patch('/api/workspaces/members/:userId/role', authenticateToken, requireWork
 // Remove a member from workspace
 app.delete('/api/workspaces/members/:userId', authenticateToken, requireWorkspace, async (req, res) => {
   try {
-    if (req.workspace_role !== 'owner' && req.workspace_role !== 'admin') {
-      return res.status(403).json({ success: false, error: 'Only admins can remove members' });
+    const requesterRole = req.workspace_role;
+    const targetUserId = req.params.userId;
+
+    // Fetch target user's role
+    const targetResult = await pool.query(
+      'SELECT role FROM ims_workspace_members WHERE workspace_id=$1 AND user_id=$2',
+      [req.workspace_id, targetUserId]
+    );
+
+    if (targetResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Member not found in workspace' });
     }
+
+    const targetRole = targetResult.rows[0].role;
+
+    // RBAC logic for removing members
+    let canRemove = false;
+    if (requesterRole === 'owner') {
+      canRemove = true;
+    } else if (requesterRole === 'admin') {
+      canRemove = targetRole !== 'owner';
+    } else if (requesterRole === 'manager') {
+      canRemove = ['user', 'member', 'viewer'].includes(targetRole);
+    }
+
+    if (!canRemove) {
+      return res.status(403).json({ success: false, error: 'You do not have permission to remove this member' });
+    }
+
     await pool.query(
       'DELETE FROM ims_workspace_members WHERE workspace_id=$1 AND user_id=$2',
-      [req.workspace_id, req.params.userId]
+      [req.workspace_id, targetUserId]
     );
     res.json({ success: true });
   } catch (error) {
@@ -2668,15 +2694,17 @@ app.get('/api/esp32/devices', authenticateToken, async (req, res) => {
     const userDevices = pairedDevices.map(dbDevice => {
       // Try to get live device data from memory
       const liveDevice = esp32Devices.get(dbDevice.device_id);
-      // Calculate status based on last_seen
-      const lastSeen = new Date(dbDevice.last_seen);
-      const timeDiff = (now - lastSeen) / 1000; // seconds
+      
+      // Calculate status based on last_seen (prioritize live memory over DB)
+      const effectiveLastSeen = liveDevice ? new Date(liveDevice.lastSeen) : new Date(dbDevice.last_seen);
+      const timeDiff = (now - effectiveLastSeen) / 1000; // seconds
       const isConnected = timeDiff <= 300; // 5 minute timeout
+      
       // Merge database and live data
       return {
         deviceId: dbDevice.device_id,
         deviceName: dbDevice.device_name || `Device ${dbDevice.device_id}`,
-        lastSeen: dbDevice.last_seen,
+        lastSeen: effectiveLastSeen.toISOString(),
         status: isConnected ? 'connected' : 'disconnected',
         ipAddress: liveDevice?.ipAddress || (isConnected ? 'Active' : 'Offline'),
         firmwareVersion: liveDevice?.firmwareVersion || 'Unknown',
@@ -7189,18 +7217,32 @@ app.get('/api/ims/reports/stock-summary', authenticateToken, requireWorkspace, a
 
 app.get('/api/ims/reports/movement', authenticateToken, requireWorkspace, async (req, res) => {
   try {
-    const { days } = req.query;
-    const d = Number(days) || 30;
-    const result = await pool.query(
-      `SELECT barcode, item_name, workflow,
+    const { from, to, days } = req.query;
+    let q = `SELECT barcode, item_name, workflow,
          SUM(quantity)::int as total_qty,
          COUNT(*)::int as event_count,
          MAX(scanned_at) as last_event
        FROM ims_scan_events
-       WHERE workspace_id=$1 AND scanned_at >= NOW() - INTERVAL '${d} days'
-       GROUP BY barcode, item_name, workflow ORDER BY total_qty DESC LIMIT 100`,
-      [req.workspace_id]
-    );
+       WHERE workspace_id=$1`;
+    const params = [req.workspace_id];
+
+    if (from) {
+      q += ` AND scanned_at >= $${params.length + 1}`;
+      params.push(from);
+    } else if (days) {
+      const d = Number(days) || 30;
+      q += ` AND scanned_at >= NOW() - INTERVAL '${d} days'`;
+    }
+
+    if (to) {
+      // Add 1 day to 'to' date to include the entire day
+      q += ` AND scanned_at < ($${params.length + 1}::date + INTERVAL '1 day')`;
+      params.push(to);
+    }
+
+    q += ` GROUP BY barcode, item_name, workflow ORDER BY total_qty DESC LIMIT 100`;
+
+    const result = await pool.query(q, params);
     res.json({ success: true, movements: result.rows });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });

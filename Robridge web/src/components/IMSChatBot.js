@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { FaBrain, FaTimes, FaPaperPlane, FaRobot } from 'react-icons/fa';
 import './IMSChatBot.css';
 
 import { useWorkspace } from '../contexts/WorkspaceContext';
+import { useAuth } from '../contexts/AuthContext';
 
 // ── Suggested quick prompts ───────────────────────────────────────────────────
 const SUGGESTIONS = [
@@ -14,8 +15,10 @@ const SUGGESTIONS = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 const IMSChatBot = () => {
-  const { imsFetch, activeWorkspaceId } = useWorkspace();
-  const [catalogContext, setCatalogContext] = useState("");
+  const { imsFetch } = useWorkspace();
+  const { getToken } = useAuth();
+  const { activeWorkspace } = useWorkspace();
+  const [, setCatalogContext] = useState("");
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
@@ -30,15 +33,20 @@ const IMSChatBot = () => {
   const messagesEndRef = useRef(null);
 
   // Fetches latest catalog data
-  const getLatestCatalogContext = async () => {
+  const getLatestCatalogContext = useCallback(async () => {
     try {
-      const mastersRes = await imsFetch('/api/ims/masters');
+      const token = await getToken();
+      const mastersRes = await imsFetch('/api/ims/masters', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       const mastersData = await mastersRes.json();
       
       if (mastersData.success && mastersData.masters.length > 0) {
         let allItems = [];
         for (const master of mastersData.masters) {
-          const itemsRes = await imsFetch(`/api/ims/masters/${master.id}/items`);
+          const itemsRes = await imsFetch(`/api/ims/masters/${master.id}/items`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
           const itemsData = await itemsRes.json();
           if (itemsData.success) {
             allItems = [...allItems, ...itemsData.items];
@@ -60,13 +68,13 @@ const IMSChatBot = () => {
       console.error("Failed to load catalog context for AI:", err);
       return "Error fetching catalog.";
     }
-  };
+  }, [imsFetch, getToken]);
 
   useEffect(() => {
-    if (!isOpen || !activeWorkspaceId) return;
+    if (!isOpen || !activeWorkspace?.id) return;
     // Initial fetch to populate context when chatbot opens
     getLatestCatalogContext().then(ctx => setCatalogContext(ctx));
-  }, [isOpen, activeWorkspaceId, imsFetch]);
+  }, [isOpen, messages.length, activeWorkspace, getLatestCatalogContext]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

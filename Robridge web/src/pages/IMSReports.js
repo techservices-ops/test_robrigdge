@@ -41,7 +41,11 @@ export default function IMSReports() {
         const d = await r.json();
         if (d.success) setData(prev => ({ ...prev, stock: d.items, stockTotals: d.totals }));
       } else if (active === 'movement') {
-        const r = await imsFetch(`/api/ims/reports/movement?days=${filters.days}`);
+        const params = new URLSearchParams();
+        if (filters.from) params.set('from', filters.from);
+        if (filters.to) params.set('to', filters.to);
+        if (filters.days && !filters.from && !filters.to) params.set('days', filters.days);
+        const r = await imsFetch(`/api/ims/reports/movement?${params}`);
         const d = await r.json();
         if (d.success) setData(prev => ({ ...prev, movement: d.movements }));
       } else if (active === 'lowstock') {
@@ -75,7 +79,7 @@ export default function IMSReports() {
   const exportStock = () => exportXLSX(data.stock.map(i => ({
     Barcode: i.barcode, Name: i.name, Category: i.category,
     Stock: i.stock, Unit: i.unit, Supplier: i.supplier,
-    'Unit Cost': i.cost, 'Total Value': i.total_value, 'Last Movement': i.last_movement?.split('T')[0]
+    'Last Movement': i.last_movement?.split('T')[0]
   })), 'StockSummary');
 
   return (
@@ -131,23 +135,19 @@ export default function IMSReports() {
       )}
 
       {tab === 'movement' && (
-        <div className="movement-filter-bar">
-          <span className="movement-filter-label">Date Range</span>
-          <div className="movement-filter-row">
-            <select
-              className="movement-filter-select"
-              value={filters.days}
-              onChange={e => setFilters(f => ({ ...f, days: e.target.value }))}
-            >
-              <option value={7}>Last 7 days</option>
-              <option value={30}>Last 30 days</option>
-              <option value={90}>Last 90 days</option>
-              <option value={365}>Last 12 months</option>
-            </select>
-            <button className="btn btn-primary movement-apply-btn" onClick={() => load('movement')}>
-              <FaFilter /> Apply
-            </button>
+        <div style={{ background: '#fff', borderRadius: 12, padding: '14px 16px', marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+          <div className="form-group" style={{ flex: 1, minWidth: 140 }}>
+            <label className="form-label">From Date</label>
+            <input type="date" className="form-input" value={filters.from} onChange={e => setFilters(f => ({ ...f, from: e.target.value, days: '' }))} />
           </div>
+          <div className="form-group" style={{ flex: 1, minWidth: 140 }}>
+            <label className="form-label">To Date</label>
+            <input type="date" className="form-input" value={filters.to} onChange={e => setFilters(f => ({ ...f, to: e.target.value, days: '' }))} />
+          </div>
+
+          <button className="btn btn-primary" style={{ height: '40px', padding: '0 18px', whiteSpace: 'nowrap', flexShrink: 0, marginBottom: '16px' }} onClick={() => load('movement')}>
+            <FaFilter /> Apply
+          </button>
         </div>
       )}
 
@@ -161,8 +161,7 @@ export default function IMSReports() {
             <div style={{ display: 'flex', gap: 24, padding: '16px 20px', borderBottom: '1px solid #eee', background: '#fafbfc' }}>
               {[
                 { label: 'Total SKUs', val: data.stockTotals.skus, color: '#3498db' },
-                { label: 'Total Units', val: data.stockTotals.total_units, color: '#27ae60' },
-                { label: 'Total Value', val: '₹' + Number(data.stockTotals.total_value).toLocaleString(), color: '#e67e22' },
+                { label: 'Total Units', val: data.stockTotals.total_units, color: '#27ae60' }
               ].map((k, i) => (
                 <div key={i}><div style={{ fontWeight: 700, fontSize: 22, color: k.color }}>{k.val}</div><div style={{ fontSize: 12, color: '#888' }}>{k.label}</div></div>
               ))}
@@ -193,9 +192,9 @@ export default function IMSReports() {
           {/* Stock Summary Table */}
           {tab === 'stock' && (
             <table className="table">
-              <thead><tr><th>Barcode</th><th>Name</th><th>Category</th><th>Stock</th><th>Unit</th><th>Supplier</th><th>Unit Cost</th><th>Total Value</th></tr></thead>
+              <thead><tr><th>Barcode</th><th>Name</th><th>Category</th><th>Stock</th><th>Unit</th><th>Supplier</th></tr></thead>
               <tbody>
-                {data.stock.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: '#aaa', padding: 30 }}>No items in catalog.</td></tr>}
+                {data.stock.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: '#aaa', padding: 30 }}>No items in catalog.</td></tr>}
                 {data.stock.map((i, idx) => (
                   <tr key={idx}>
                     <td><code style={{ fontSize: 12 }}>{i.barcode}</code></td>
@@ -204,8 +203,6 @@ export default function IMSReports() {
                     <td style={{ fontWeight: 700, color: i.stock === 0 ? '#e74c3c' : '#27ae60' }}>{i.stock}</td>
                     <td>{i.unit}</td>
                     <td style={{ fontSize: 12, color: '#888' }}>{i.supplier || '—'}</td>
-                    <td>{i.cost ? '₹' + i.cost : '—'}</td>
-                    <td style={{ fontWeight: 600 }}>{i.cost ? '₹' + Number(i.total_value).toLocaleString() : '—'}</td>
                   </tr>
                 ))}
               </tbody>
