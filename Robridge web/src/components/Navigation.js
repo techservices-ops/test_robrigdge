@@ -73,7 +73,7 @@ const Navigation = () => {
     { path: '/image-processing', icon: FaImage, label: 'Vision AI', roles: [ROLES.ADMIN, ROLES.FULL_ACCESS] },
     { path: '/device-manager', icon: FaCogs, label: 'Device Manager', roles: [ROLES.ADMIN, ROLES.EXPO_USER, ROLES.FULL_ACCESS] },
     { path: '/robot-control', icon: FaRobot, label: 'Robots & Racks', roles: [ROLES.ADMIN, ROLES.FULL_ACCESS] },
-    { path: '/profile', icon: FaUserCircle, label: 'Workspace Profile', roles: [ROLES.EXPO_USER, ROLES.ADMIN, ROLES.FULL_ACCESS] },
+    { path: '/profile', icon: FaUserCircle, label: 'User Profile', roles: [ROLES.EXPO_USER, ROLES.ADMIN, ROLES.FULL_ACCESS] },
     { path: '/ims-users', icon: FaUsers, label: 'Team & Access', roles: [ROLES.ADMIN, ROLES.EXPO_USER, ROLES.FULL_ACCESS] },
     { path: '/ims-settings', icon: FaCog, label: 'IMS Settings', roles: [ROLES.ADMIN, ROLES.EXPO_USER, ROLES.FULL_ACCESS] },
   ];

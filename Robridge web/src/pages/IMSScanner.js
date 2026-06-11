@@ -73,6 +73,7 @@ const IMSScanner = () => {
           const rawTs = e.scanned_at || '';
           const utcDate = new Date(rawTs.includes('Z') || rawTs.includes('+') ? rawTs : rawTs.replace(' ', 'T') + 'Z');
           return {
+            id: e.id,
             barcode: e.barcode, product: e.item_name || 'Unknown', action: e.workflow,
             qty: e.quantity, unit: e.unit || '', time: utcDate.toLocaleTimeString(),
             trace: [e.batch_no ? `B:${e.batch_no}` : '', e.serial_no ? `S:${e.serial_no}` : ''].filter(Boolean).join(' | ')
@@ -416,7 +417,30 @@ const IMSScanner = () => {
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
-
+  const handleRevertScan = async (id) => {
+    if (!window.confirm('Are you sure you want to revert this scan event? This will delete the log entry and adjust the product stock accordingly.')) {
+      return;
+    }
+    try {
+      const res = await imsFetch(`/api/ims/scanner/events/${id}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) {
+        showToast(`Server error (${res.status}): Please restart your npm dev server.`, 'error');
+        return;
+      }
+      const data = await res.json();
+      if (data.success) {
+        showToast('Scan reverted successfully', 'success');
+        fetchEvents();
+      } else {
+        showToast(data.error || 'Failed to revert scan', 'error');
+      }
+    } catch (e) {
+      console.error('Error reverting scan:', e);
+      showToast('Failed to revert scan due to network error', 'error');
+    }
+  };
 
   const filteredLog = scanLog.filter(entry => {
     const matchesSearch = 
@@ -815,7 +839,11 @@ const IMSScanner = () => {
                             <td style={{ fontSize: '12px', color: '#7f8c8d' }}>{entry.trace || '-'}</td>
                             <td style={{ fontSize: '13px' }}>Admin (Aisle 4)</td>
                             <td style={{ textAlign: 'right' }}>
-                               <button className="icon-btn delete-btn" title="Revert Scan">
+                               <button 
+                                  className="icon-btn delete-btn" 
+                                  title="Revert Scan"
+                                  onClick={() => handleRevertScan(entry.id)}
+                               >
                                   <FaTimes />
                                </button>
                             </td>

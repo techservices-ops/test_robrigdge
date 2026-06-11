@@ -5270,12 +5270,14 @@ app.post('/api/ims/masters/:masterId/items', authenticateToken, requireWorkspace
           if (locCheck.rows.length > 0) {
             const locationId = locCheck.rows[0].id;
             const locQty = Number(loc.qty) || Number(stock) || 0;
-            await pool.query(
-              `INSERT INTO ims_location_stock (location_id, workspace_id, barcode, item_name, qty)
-               VALUES ($1,$2,$3,$4,$5)
-               ON CONFLICT (location_id, barcode) DO UPDATE SET qty = $5, updated_at = CURRENT_TIMESTAMP`,
-              [locationId, req.workspace_id, barcode, name, locQty]
-            );
+            if (locQty > 0) {
+              await pool.query(
+                `INSERT INTO ims_location_stock (location_id, workspace_id, barcode, item_name, qty)
+                 VALUES ($1,$2,$3,$4,$5)
+                 ON CONFLICT (location_id, barcode) DO UPDATE SET qty = $5, updated_at = CURRENT_TIMESTAMP`,
+                [locationId, req.workspace_id, barcode, name, locQty]
+              );
+            }
           }
         }
       }
@@ -5369,12 +5371,14 @@ app.put('/api/ims/masters/:masterId/items/:itemId', authenticateToken, requireWo
           if (locCheck.rows.length > 0) {
             const locationId = locCheck.rows[0].id;
             const locQty = Number(loc.qty) || newStock || 0;
-            await pool.query(
-              `INSERT INTO ims_location_stock (location_id, workspace_id, barcode, item_name, qty)
-               VALUES ($1,$2,$3,$4,$5)
-               ON CONFLICT (location_id, barcode) DO UPDATE SET qty = $5, updated_at = CURRENT_TIMESTAMP`,
-              [locationId, req.workspace_id, barcode, name, locQty]
-            );
+            if (locQty > 0) {
+              await pool.query(
+                `INSERT INTO ims_location_stock (location_id, workspace_id, barcode, item_name, qty)
+                 VALUES ($1,$2,$3,$4,$5)
+                 ON CONFLICT (location_id, barcode) DO UPDATE SET qty = $5, updated_at = CURRENT_TIMESTAMP`,
+                [locationId, req.workspace_id, barcode, name, locQty]
+              );
+            }
           }
         }
       }
@@ -5690,18 +5694,26 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
         );
 
         if (req.body.locationId) {
-          // Zero out stock at other locations for this item in this workspace to prevent duplicate stock
+          // Delete stock at other locations for this item in this workspace to prevent duplicate stock
           await pool.query(
-            'UPDATE ims_location_stock SET qty = 0, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = $1 AND barcode = $2 AND location_id <> $3',
+            'DELETE FROM ims_location_stock WHERE workspace_id = $1 AND barcode = $2 AND location_id <> $3',
             [req.workspace_id, barcode, req.body.locationId]
           );
-          // Insert or update stock at the target location
-          await pool.query(
-            `INSERT INTO ims_location_stock (location_id, workspace_id, barcode, item_name, qty)
-             VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT (location_id, barcode) DO UPDATE SET qty = $5, updated_at = CURRENT_TIMESTAMP`,
-            [req.body.locationId, req.workspace_id, barcode, itemName || null, updatedStock]
-          );
+          if (updatedStock > 0) {
+            // Insert or update stock at the target location
+            await pool.query(
+              `INSERT INTO ims_location_stock (location_id, workspace_id, barcode, item_name, qty)
+               VALUES ($1, $2, $3, $4, $5)
+               ON CONFLICT (location_id, barcode) DO UPDATE SET qty = $5, updated_at = CURRENT_TIMESTAMP`,
+              [req.body.locationId, req.workspace_id, barcode, itemName || null, updatedStock]
+            );
+          } else {
+            // Delete stock at the target location since qty is 0 or less
+            await pool.query(
+              'DELETE FROM ims_location_stock WHERE location_id = $1 AND barcode = $2',
+              [req.body.locationId, barcode]
+            );
+          }
         }
       }
     }
@@ -5735,6 +5747,70 @@ app.get('/api/ims/scanner/events', authenticateToken, requireWorkspace, async (r
     res.status(500).json({ success: false, error: 'Failed to fetch scan events' });
   }
 });
+
+// Revert (Delete) a scan event and restore item stock
+app.delete('/api/ims/scanner/events/:id', authenticateToken, requireWorkspace, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const eventId = parseInt(req.params.id);
+    if (isNaN(eventId)) {
+      return res.status(400).json({ success: false, error: 'Invalid event ID' });
+    }
+
+    // 1. Fetch the scan event
+    const eventRes = await client.query(
+      'SELECT * FROM ims_scan_events WHERE id = $1 AND workspace_id = $2',
+      [eventId, req.workspace_id]
+    );
+
+    if (eventRes.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Scan event not found' });
+    }
+
+    const event = eventRes.rows[0];
+    const { barcode, item_id, workflow, quantity } = event;
+    const qty = Number(quantity) || 0;
+
+    await client.query('BEGIN');
+
+    // 2. Adjust item catalog stock if applicable
+    if (item_id && qty > 0) {
+      const wf = (workflow || '').toUpperCase();
+      const inOps = ['RECEIVE', 'IN', 'RETURN', 'RESTOCK'];
+      const outOps = ['DISPATCH', 'OUT', 'PICK', 'ISSUE', 'SHIP'];
+
+      if (inOps.some(op => wf.includes(op))) {
+        // Revert inward: subtract stock
+        await client.query(
+          'UPDATE ims_items SET stock = GREATEST(stock - $1, 0), updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND workspace_id = $3',
+          [qty, item_id, req.workspace_id]
+        );
+      } else if (outOps.some(op => wf.includes(op))) {
+        // Revert outward: add stock
+        await client.query(
+          'UPDATE ims_items SET stock = stock + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND workspace_id = $3',
+          [qty, item_id, req.workspace_id]
+        );
+      }
+    }
+
+    // 3. Delete the scan event from the log
+    await client.query(
+      'DELETE FROM ims_scan_events WHERE id = $1 AND workspace_id = $2',
+      [eventId, req.workspace_id]
+    );
+
+    await client.query('COMMIT');
+    res.json({ success: true, message: 'Scan event reverted successfully' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Revert scan error:', error);
+    res.status(500).json({ success: false, error: 'Failed to revert scan event' });
+  } finally {
+    client.release();
+  }
+});
+
 
 // ==========================================
 // RFID AND MOBILE SCANNING
@@ -6427,8 +6503,8 @@ app.get('/api/ims/locations', authenticateToken, requireWorkspace, async (req, r
   try {
     const result = await pool.query(
       `SELECT l.*, 
-        (SELECT COUNT(*)::int FROM ims_location_stock s WHERE s.location_id=l.id) as sku_count,
-        (SELECT COALESCE(SUM(qty),0)::int FROM ims_location_stock s WHERE s.location_id=l.id) as total_qty
+        (SELECT COUNT(*)::int FROM ims_location_stock s WHERE s.location_id=l.id AND s.qty > 0) as sku_count,
+        (SELECT COALESCE(SUM(qty),0)::int FROM ims_location_stock s WHERE s.location_id=l.id AND s.qty > 0) as total_qty
        FROM ims_locations l WHERE l.workspace_id=$1 ORDER BY l.name`,
       [req.workspace_id]
     );
@@ -6439,9 +6515,16 @@ app.get('/api/ims/locations', authenticateToken, requireWorkspace, async (req, r
 app.get('/api/ims/locations/:id/stock', authenticateToken, requireWorkspace, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT s.*, i.name as item_name, i.category FROM ims_location_stock s
-       LEFT JOIN ims_items i ON i.barcode=s.barcode AND i.workspace_id=$1
-       WHERE s.location_id=$2 ORDER BY s.updated_at DESC`,
+      `SELECT s.*, i.name as item_name, i.category 
+       FROM ims_location_stock s
+       LEFT JOIN (
+         SELECT DISTINCT ON (barcode) barcode, name, category 
+         FROM ims_items 
+         WHERE workspace_id = $1
+         ORDER BY barcode, updated_at DESC
+       ) i ON i.barcode = s.barcode
+       WHERE s.location_id = $2 AND s.qty > 0 
+       ORDER BY s.updated_at DESC`,
       [req.workspace_id, req.params.id]
     );
     res.json({ success: true, stock: result.rows });
@@ -6487,6 +6570,7 @@ app.post('/api/ims/locations/transfer', authenticateToken, requireWorkspace, asy
     // Deduct from source (if specified)
     if (fromLocationId) {
       await client.query(`UPDATE ims_location_stock SET qty=GREATEST(qty-$1,0),updated_at=CURRENT_TIMESTAMP WHERE location_id=$2 AND barcode=$3`, [qty, fromLocationId, barcode]);
+      await client.query(`DELETE FROM ims_location_stock WHERE location_id=$1 AND barcode=$2 AND qty <= 0`, [fromLocationId, barcode]);
     }
     // Add to destination (upsert)
     await client.query(

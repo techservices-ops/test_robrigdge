@@ -5,7 +5,7 @@
 
 .app-main-content {
   flex: 1;
-  padding: 24px;
+  padding: 24px 24px 100px 24px; /* Added bottom padding to clear floating chatbot button */
   background-color: #ffffff;
   overflow-y: auto;
   margin-left: 280px;
@@ -21,7 +21,7 @@ body.sidebar-collapsed .app-main-content {
 /* Responsive design */
 @media (max-width: 768px) {
   .app-main-content {
-    padding: 16px;
+    padding: 16px 16px 100px 16px; /* Added bottom padding to clear floating chatbot button */
     margin-left: 0;
   }
 

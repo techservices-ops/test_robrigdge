@@ -36,9 +36,47 @@ export default function IMSLocations() {
   // ── Transfer modal ────────────────────────────────────────────────────────
   const [showTransfer, setShowTransfer]   = useState(false);
   const [transfer, setTransfer]           = useState({ barcode: '', itemName: '', fromLocationId: '', toLocationId: '', qty: '' });
-  const [txMaster, setTxMaster]           = useState('');
-  const [txItems, setTxItems]             = useState([]);
-  const [txItemsLoading, setTxItemsLoading] = useState(false);
+  const [sourceStock, setSourceStock]               = useState([]);
+  const [sourceStockLoading, setSourceStockLoading] = useState(false);
+  const [maxAvailableQty, setMaxAvailableQty]       = useState(null);
+
+  const loadSourceStock = async (zoneId) => {
+    setSourceStockLoading(true);
+    try {
+      const r = await imsFetch(`/api/ims/locations/${zoneId}/stock`);
+      const d = await r.json();
+      if (d.success) {
+        setSourceStock((d.stock || []).filter(s => s.qty > 0));
+      } else {
+        setSourceStock([]);
+      }
+    } catch (e) {
+      setSourceStock([]);
+    } finally {
+      setSourceStockLoading(false);
+    }
+  };
+
+  const handleFromZoneChange = async (zoneId) => {
+    setTransfer(t => ({ ...t, fromLocationId: zoneId, barcode: '', itemName: '', qty: '' }));
+    setMaxAvailableQty(null);
+    if (!zoneId) {
+      setSourceStock([]);
+      return;
+    }
+    loadSourceStock(zoneId);
+  };
+
+  const handleSourceStockItemChange = (barcode) => {
+    const item = sourceStock.find(s => s.barcode === barcode);
+    if (item) {
+      setTransfer(t => ({ ...t, barcode: item.barcode, itemName: item.item_name }));
+      setMaxAvailableQty(item.qty);
+    } else {
+      setTransfer(t => ({ ...t, barcode: '', itemName: '' }));
+      setMaxAvailableQty(null);
+    }
+  };
 
   // ── Bulk assign modal ─────────────────────────────────────────────────────
   const [showBulkAssign, setShowBulkAssign] = useState(false);
@@ -98,11 +136,24 @@ export default function IMSLocations() {
 
   // Refresh zone detail after transfer/assign
   const refreshZone = async (loc) => {
-    loadLocations();
-    if (loc) {
-      const r = await imsFetch(`/api/ims/locations/${loc.id}/stock`);
-      const d = await r.json();
-      if (d.success) setZoneStock(d.stock);
+    if (!loc) {
+      loadLocations();
+      return;
+    }
+    try {
+      const rLocs = await imsFetch('/api/ims/locations');
+      const dLocs = await rLocs.json();
+      if (dLocs.success) {
+        setLocations(dLocs.locations);
+        const updated = dLocs.locations.find(l => l.id === loc.id);
+        if (updated) setSelected(updated);
+      }
+      const rStock = await imsFetch(`/api/ims/locations/${loc.id}/stock`);
+      const dStock = await rStock.json();
+      if (dStock.success) setZoneStock(dStock.stock);
+    } catch (e) {
+      console.error('Failed to refresh zone:', e);
+      loadLocations();
     }
   };
 
@@ -143,17 +194,24 @@ export default function IMSLocations() {
   };
 
   // ── Open transfer modal ────────────────────────────────────────────────────
-  const openTransfer = (toLocationId = '') => {
-    loadMasters();
-    setTxMaster('');
-    setTxItems([]);
-    setTransfer({ barcode: '', itemName: '', fromLocationId: '', toLocationId: toLocationId, qty: '' });
+  const openTransfer = (fromId = '', toId = '') => {
+    setSourceStock([]);
+    setSourceStockLoading(false);
+    setMaxAvailableQty(null);
+    setTransfer({ barcode: '', itemName: '', fromLocationId: fromId, toLocationId: toId, qty: '' });
     setShowTransfer(true);
+    if (fromId) {
+      loadSourceStock(fromId);
+    }
   };
 
   // ── Execute transfer ───────────────────────────────────────────────────────
   const doTransfer = async () => {
-    if (!transfer.barcode || !transfer.toLocationId || !transfer.qty) return;
+    if (!transfer.fromLocationId || !transfer.barcode || !transfer.toLocationId || !transfer.qty || Number(transfer.qty) <= 0) return;
+    if (maxAvailableQty !== null && Number(transfer.qty) > maxAvailableQty) {
+      showToast(`Transfer quantity cannot exceed available quantity (${maxAvailableQty})`, 'error');
+      return;
+    }
     const r = await imsFetch('/api/ims/locations/transfer', {
       method: 'POST',
       body: JSON.stringify(transfer)
@@ -163,8 +221,8 @@ export default function IMSLocations() {
       showToast('Stock transferred successfully', 'success');
 
       setShowTransfer(false);
-      setTxMaster('');
-      setTxItems([]);
+      setSourceStock([]);
+      setMaxAvailableQty(null);
       setTransfer({ barcode: '', itemName: '', fromLocationId: '', toLocationId: '', qty: '' });
       refreshZone(selected);
     } else {
@@ -216,6 +274,13 @@ export default function IMSLocations() {
 
   const selectedCount = Object.values(bulkSelected).filter(v => v.checked).length;
 
+  const hasInvalidBulkQty = Object.entries(bulkSelected).some(([id, value]) => {
+    if (!value.checked) return false;
+    const item = bulkItems.find(i => String(i.id) === String(id));
+    if (!item) return false;
+    return item.stock !== null && item.stock !== undefined && Number(value.qty) > Number(item.stock);
+  });
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="ims-locations-page">
@@ -231,17 +296,9 @@ export default function IMSLocations() {
         <div className="ims-header-right ims-flex-gap-10">
           <button className="btn btn-secondary" onClick={loadLocations}><FaSync /> Refresh</button>
           {!isReadOnly && (
-            <>
-              <button
-                className="btn btn-secondary btn-purple-outline"
-                onClick={() => openTransfer('')}
-              >
-                <FaExchangeAlt /> Transfer Stock
-              </button>
-              <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-                <FaPlus /> Add Zone
-              </button>
-            </>
+            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+              <FaPlus /> Add Zone
+            </button>
           )}
         </div>
       </div>
@@ -404,9 +461,15 @@ export default function IMSLocations() {
                   </button>
                   <button
                     className="btn btn-secondary btn-purple-outline"
-                    onClick={() => openTransfer(String(selected.id))}
+                    onClick={() => openTransfer('', String(selected.id))}
                   >
-                    <FaExchangeAlt /> Transfer Stock Here
+                    <FaExchangeAlt /> Transfer Stock In
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-purple-outline"
+                    onClick={() => openTransfer(String(selected.id), '')}
+                  >
+                    <FaExchangeAlt /> Transfer Stock Out
                   </button>
                 </div>
               ) : (
@@ -481,126 +544,183 @@ export default function IMSLocations() {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-           TRANSFER STOCK MODAL  (catalog item picker)
+           TRANSFER STOCK MODAL  (optimized flow)
       ══════════════════════════════════════════════════════════════════════ */}
-      {showTransfer && (
-        <div className="ims-modal-overlay" onClick={() => setShowTransfer(false)}>
-          <div className="ims-modal" style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <h2>Transfer Stock Between Zones</h2>
-                <p>Pick an item from your catalog, then choose source and destination zones</p>
-              </div>
-              <button className="modal-close" onClick={() => setShowTransfer(false)}><FaTimes /></button>
-            </div>
-            <div className="modal-body ims-modal-body-no-padding">
+      {/* ══════════════════════════════════════════════════════════════════════
+           TRANSFER STOCK MODAL  (optimized flow)
+      ══════════════════════════════════════════════════════════════════════ */}
+      {showTransfer && (() => {
+        const fromZoneName = locations.find(l => String(l.id) === String(transfer.fromLocationId))?.name || 'Select source zone';
+        const toZoneName = locations.find(l => String(l.id) === String(transfer.toLocationId))?.name || 'Select destination';
+        const isQtyInvalid = transfer.fromLocationId && maxAvailableQty !== null && Number(transfer.qty) > maxAvailableQty;
+        const isTransferDisabled = !transfer.fromLocationId || !transfer.barcode || !transfer.toLocationId || !transfer.qty || Number(transfer.qty) <= 0 || isQtyInvalid;
 
-              {/* Step 1 — Pick item from catalog */}
-              <div className="ims-step-box">
+        const isSourceLocked = !!transfer.fromLocationId && transfer.fromLocationId === String(selected?.id);
+        const isDestLocked = !!transfer.toLocationId && transfer.toLocationId === String(selected?.id);
+
+        return (
+          <div className="ims-modal-overlay" onClick={() => setShowTransfer(false)}>
+            <div className="ims-modal" style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <div>
+                  <h2>Transfer Stock Between Zones</h2>
+                  <p>Establish a transfer route, select an item, and set quantity</p>
+                </div>
+                <button className="modal-close" onClick={() => setShowTransfer(false)}><FaTimes /></button>
+              </div>
+              <div className="modal-body ims-modal-body-no-padding">
+
+                {/* Step 1 — Set Route */}
                 <div className="ims-step-title">
-                  Step 1 — Pick Item from Catalog
+                  Step 1 — Set Transfer Route
                 </div>
                 <div className="modal-row">
-                  <div className="form-group">
-                    <label className="form-label">Master Catalog</label>
-                    <select
-                      className="form-select"
-                      value={txMaster}
-                      onChange={e => {
-                        setTxMaster(e.target.value);
-                        setTransfer(t => ({ ...t, barcode: '', itemName: '' }));
-                        loadMasterItems(e.target.value, setTxItems, setTxItemsLoading);
-                      }}
-                    >
-                      <option value="">— Select catalog —</option>
-                      {catalogMasters.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </select>
+                  {isSourceLocked ? (
+                    <div className="form-group">
+                      <label className="form-label">From Zone (Source) *</label>
+                      <div className="form-input ims-locked-input" style={{ background: '#f1f5f9', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, height: 38 }}>
+                        <FaMapMarkerAlt /> {fromZoneName} (Current)
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="form-group">
+                      <label className="form-label">From Zone (Source) *</label>
+                      <select
+                        className="form-select"
+                        value={transfer.fromLocationId}
+                        onChange={e => handleFromZoneChange(e.target.value)}
+                      >
+                        <option value="">— Select source zone —</option>
+                        {locations
+                          .filter(l => String(l.id) !== String(transfer.toLocationId))
+                          .map(l => <option key={l.id} value={l.id}>{l.name} ({l.type})</option>)}
+                      </select>
+                    </div>
+                  )}
+
+                  {isDestLocked ? (
+                    <div className="form-group">
+                      <label className="form-label">To Zone (Destination) *</label>
+                      <div className="form-input ims-locked-input" style={{ background: '#f1f5f9', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, height: 38 }}>
+                        <FaMapMarkerAlt /> {toZoneName} (Current)
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="form-group">
+                      <label className="form-label">To Zone (Destination) *</label>
+                      <select
+                        className="form-select"
+                        value={transfer.toLocationId}
+                        onChange={e => setTransfer(t => ({ ...t, toLocationId: e.target.value }))}
+                      >
+                        <option value="">— Select destination —</option>
+                        {locations
+                          .filter(l => String(l.id) !== String(transfer.fromLocationId))
+                          .map(l => <option key={l.id} value={l.id}>{l.name} ({l.type})</option>)}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Route Visualizer */}
+                <div className="ims-route-visualizer">
+                  <div className="ims-route-node source">
+                    <div className="ims-route-node-label">Source Zone</div>
+                    <div className="ims-route-node-val">{fromZoneName}</div>
                   </div>
-                  <div className="form-group ims-flex-2">
-                    <label className="form-label">
-                      Item {txItemsLoading && <FaSpinner className="ims-spinner-small" />}
-                    </label>
-                    <select
-                      className="form-select"
-                      value={transfer.barcode}
-                      disabled={!txMaster || txItems.length === 0}
-                      onChange={e => {
-                        const item = txItems.find(i => i.barcode === e.target.value);
-                        setTransfer(t => ({ ...t, barcode: e.target.value, itemName: item?.name || '' }));
-                      }}
-                    >
-                      <option value="">— Select item —</option>
-                      {txItems.map(i => (
-                        <option key={i.id} value={i.barcode}>
-                          {i.name}  ({i.barcode})
-                        </option>
-                      ))}
-                    </select>
+                  <div className="ims-route-connector">
+                    <FaExchangeAlt />
+                  </div>
+                  <div className="ims-route-node dest">
+                    <div className="ims-route-node-label">Destination Zone</div>
+                    <div className="ims-route-node-val">{toZoneName}</div>
                   </div>
                 </div>
 
-                {/* Confirmation row */}
-                {transfer.barcode && (
-                  <div className="ims-confirm-box-green">
-                    <FaCheck style={{ marginRight: 6 }} />
-                    <strong>{transfer.itemName}</strong>
-                    &nbsp;·&nbsp;<code className="ims-code-green">{transfer.barcode}</code>
+                {/* Step 2 — Pick Item & Qty */}
+                <div className="ims-step-title-small-margin">
+                  Step 2 — Select Item &amp; Quantity
+                </div>
+
+                {transfer.fromLocationId ? (
+                  sourceStockLoading ? (
+                    <div className="ims-loading-box-modal" style={{ padding: '15px 0' }}>
+                      <FaSpinner className="ims-spinner-small" /> Loading stock items...
+                    </div>
+                  ) : sourceStock.length === 0 ? (
+                    <div style={{ color: '#e74c3c', background: '#fdf2f2', padding: '12px 16px', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>
+                      No items with stock available in <strong>{fromZoneName}</strong>. Please select a different source zone.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="modal-row">
+                        <div className="form-group ims-flex-2">
+                          <label className="form-label">Item from Source Stock *</label>
+                          <select
+                            className="form-select"
+                            value={transfer.barcode}
+                            onChange={e => handleSourceStockItemChange(e.target.value)}
+                          >
+                            <option value="">— Select item from source stock —</option>
+                            {sourceStock.map(s => (
+                              <option key={s.barcode} value={s.barcode}>
+                                {s.item_name} ({s.barcode}) — Qty: {s.qty}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group ims-width-110">
+                          <label className="form-label">Qty *</label>
+                          <input
+                            className="form-input"
+                            type="number" min="1"
+                            placeholder="0"
+                            value={transfer.qty}
+                            onChange={e => setTransfer(t => ({ ...t, qty: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+
+                      {transfer.barcode && (
+                        <div className="ims-confirm-box-green" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                          <div>
+                            <FaCheck style={{ marginRight: 6 }} />
+                            <strong>{transfer.itemName}</strong>&nbsp;·&nbsp;<code>{transfer.barcode}</code>
+                          </div>
+                          <div style={{ fontWeight: 600 }}>
+                            Available in zone: {maxAvailableQty} units
+                          </div>
+                        </div>
+                      )}
+
+                      {isQtyInvalid && (
+                        <div className="ims-validation-warning" style={{ color: '#e74c3c', fontSize: 13, fontWeight: 500, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span>⚠️ Warning:</span>
+                          Quantity exceeds available stock of {maxAvailableQty} units in source zone.
+                        </div>
+                      )}
+                    </>
+                  )
+                ) : (
+                  <div style={{ color: '#888', background: '#f8f9fa', padding: '16px', borderRadius: 8, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
+                    Please select a source zone in Step 1 to load its available stock items.
                   </div>
                 )}
               </div>
-
-              {/* Step 2 — From / To / Qty */}
-              <div className="ims-step-title-small-margin">
-                Step 2 — Set Transfer Details
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setShowTransfer(false)}>Cancel</button>
+                <button
+                  className="btn btn-primary"
+                  onClick={doTransfer}
+                  disabled={isTransferDisabled}
+                >
+                  <FaExchangeAlt /> Transfer
+                </button>
               </div>
-              <div className="modal-row">
-                <div className="form-group">
-                  <label className="form-label">From Zone <span className="ims-label-optional">(optional)</span></label>
-                  <select
-                    className="form-select"
-                    value={transfer.fromLocationId}
-                    onChange={e => setTransfer(t => ({ ...t, fromLocationId: e.target.value }))}
-                  >
-                    <option value="">— No source zone —</option>
-                    {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">To Zone *</label>
-                  <select
-                    className="form-select"
-                    value={transfer.toLocationId}
-                    onChange={e => setTransfer(t => ({ ...t, toLocationId: e.target.value }))}
-                  >
-                    <option value="">— Select destination —</option>
-                    {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                  </select>
-                </div>
-                <div className="form-group ims-width-110">
-                  <label className="form-label">Qty *</label>
-                  <input
-                    className="form-input"
-                    type="number" min="1"
-                    placeholder="1"
-                    value={transfer.qty}
-                    onChange={e => setTransfer(t => ({ ...t, qty: e.target.value }))}
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowTransfer(false)}>Cancel</button>
-              <button
-                className="btn btn-primary"
-                onClick={doTransfer}
-                disabled={!transfer.barcode || !transfer.toLocationId || !transfer.qty}
-              >
-                <FaExchangeAlt /> Transfer
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ══════════════════════════════════════════════════════════════════════
            BULK ASSIGN MODAL  (multi-select items → zone)
@@ -655,7 +775,8 @@ export default function IMSLocations() {
                   {/* Scrollable item rows */}
                   <div className="ims-scrollable-list">
                     {bulkItems.map(item => {
-                      const sel = bulkSelected[item.id] || { checked: false, qty: 1 };
+                      const sel = bulkSelected[item.id] || { checked: false };
+                      const isRowQtyInvalid = sel.checked && item.stock !== null && item.stock !== undefined && Number(sel.qty) > Number(item.stock);
                       return (
                         <div
                           key={item.id}
@@ -668,7 +789,7 @@ export default function IMSLocations() {
                                 checked: !sel.checked,
                                 barcode: item.barcode,
                                 name: item.name,
-                                qty: sel.qty || 1
+                                qty: !sel.checked ? 1 : ''
                               }
                             }));
                           }}
@@ -693,6 +814,11 @@ export default function IMSLocations() {
                               &nbsp;·&nbsp;{item.category || 'General'}
                               &nbsp;·&nbsp;Current stock: <strong>{item.stock ?? '—'}</strong>
                             </div>
+                            {isRowQtyInvalid && (
+                              <div style={{ color: '#e74c3c', fontSize: 11, marginTop: 4, fontWeight: 500 }}>
+                                ⚠️ Cannot exceed catalog stock of {item.stock}
+                              </div>
+                            )}
                           </div>
 
                           {/* Qty input — stop propagation so clicking qty doesn't toggle checkbox */}
@@ -704,8 +830,11 @@ export default function IMSLocations() {
                             <input
                               type="number"
                               min="1"
-                              value={sel.qty || 1}
+                              placeholder="0"
+                              max={item.stock !== null && item.stock !== undefined ? item.stock : undefined}
+                              value={sel.qty !== undefined && sel.qty !== null ? sel.qty : ''}
                               onChange={e => {
+                                const val = e.target.value;
                                 setBulkSelected(prev => ({
                                   ...prev,
                                   [item.id]: {
@@ -713,11 +842,11 @@ export default function IMSLocations() {
                                     checked: true,
                                     barcode: item.barcode,
                                     name: item.name,
-                                    qty: Number(e.target.value) || 1
+                                    qty: val === '' ? '' : Number(val)
                                   }
                                 }));
                               }}
-                              className="ims-qty-input-small"
+                              className={`ims-qty-input-small ${isRowQtyInvalid ? 'ims-input-error' : ''}`}
                               disabled={!sel.checked}
                             />
                           </div>
@@ -748,7 +877,7 @@ export default function IMSLocations() {
               <button
                 className="btn btn-primary"
                 onClick={doBulkAssign}
-                disabled={bulkSaving || selectedCount === 0}
+                disabled={bulkSaving || selectedCount === 0 || hasInvalidBulkQty}
               >
                 {bulkSaving ? <FaSpinner /> : <FaCheck />}
                 &nbsp;{bulkSaving ? 'Assigning...' : `Assign ${selectedCount} Item${selectedCount !== 1 ? 's' : ''}`}
