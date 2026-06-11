@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   FaShieldAlt, FaKey,
   FaSearch, FaTrash, FaLink, FaCopy,
-  FaCheck, FaTimes, FaEnvelope, FaUserCircle, FaChevronDown,
+  FaCheck, FaTimes, FaEnvelope, FaUserCircle,
   FaSyncAlt, FaUnlockAlt, FaClock
 } from 'react-icons/fa';
 import './IMSUsers.css';
@@ -51,10 +51,6 @@ const IMSUsers = () => {
   const [newInviteLink, setNewInviteLink] = useState('');
   const [copied, setCopied] = useState(false);
 
-  // Role editor state
-  const [editingRole, setEditingRole] = useState(null); // userId
-  const [editRoleValue, setEditRoleValue] = useState('');
-  const [savingRole, setSavingRole] = useState(false);
 
   // Role config modal
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -121,26 +117,6 @@ const IMSUsers = () => {
     }
   };
 
-  const handleRoleChange = async (userId, newRole) => {
-    setSavingRole(true);
-    try {
-      const res = await imsFetch(`/api/workspaces/members/${userId}/role`, {
-        method: 'PATCH',
-        body: JSON.stringify({ role: newRole })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMembers(prev => prev.map(m => m.id === userId ? { ...m, role: newRole } : m));
-        showToast('Role updated', 'success');
-      } else {
-        showToast(data.error || 'Failed to update role', 'error');
-      }
-    } catch {
-      showToast('Failed to update role', 'error');
-    }
-    setEditingRole(null);
-    setSavingRole(false);
-  };
 
   const handleRemoveMember = async (userId, name) => {
     if (!window.confirm(`Remove ${name} from this workspace?`)) return;
@@ -264,41 +240,14 @@ const IMSUsers = () => {
                     </div>
 
                     <div className="member-role-section">
-                      {editingRole === member.id ? (
-                        <div className="member-role-editor">
-                          <select
-                            value={editRoleValue}
-                            onChange={e => setEditRoleValue(e.target.value)}
-                            autoFocus
-                          >
-                            {UNIQUE_ROLES_FOR_UI.filter(r => r.value !== 'admin').map(r => (
-                              <option key={r.value} value={r.value}>{r.label}</option>
-                            ))}
-                          </select>
-                          <button className="role-save-btn" onClick={() => handleRoleChange(member.id, editRoleValue)} disabled={savingRole}>
-                            <FaCheck />
-                          </button>
-                          <button className="role-cancel-btn" onClick={() => setEditingRole(null)}>
-                            <FaTimes />
-                          </button>
-                        </div>
-                      ) : (
-                        <div
-                          className="member-role-badge"
-                          style={{ background: roleInfo.color + '15', color: roleInfo.color }}
-                          onClick={() => {
-                            if (isAdmin && !isYou) {
-                              setEditingRole(member.id);
-                              setEditRoleValue(member.role);
-                            }
-                          }}
-                          title={isAdmin && !isYou ? 'Click to change role' : roleInfo.desc}
-                        >
-                          {member.role === 'owner' && <FaKey style={{ fontSize: 10 }} />}
-                          {roleInfo.label}
-                          {isAdmin && !isYou && <FaChevronDown style={{ fontSize: 9, marginLeft: 4, opacity: 0.6 }} />}
-                        </div>
-                      )}
+                      <div
+                        className="member-role-badge"
+                        style={{ background: roleInfo.color + '15', color: roleInfo.color }}
+                        title={roleInfo.desc}
+                      >
+                        {member.role === 'owner' && <FaKey style={{ fontSize: 10 }} />}
+                        {roleInfo.label}
+                      </div>
                     </div>
 
                     <div className="member-status">
