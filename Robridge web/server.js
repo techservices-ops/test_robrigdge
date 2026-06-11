@@ -6647,6 +6647,210 @@ app.post('/api/ims/grn/verify-scan', authenticateToken, requireWorkspace, async 
     res.status(500).json({ success: false, error: e.message });
   }
 });
+
+// ==========================================
+// UNIFIED ONBOARDING ENDPOINT (SCANNER / GRN / MASTER CATALOG)
+// ==========================================
+app.post('/api/ims/scanner/onboard', authenticateToken, requireWorkspace, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const wsId = parseInt(req.workspace_id);
+    const userId = req.user.id;
+    const { 
+      barcode, name, category, baseUnit, trackingMode, qty, 
+      masterId, newMasterName, newMasterDescription,
+      grnId, newGrnSupplier, newGrnPoRef 
+    } = req.body;
+
+    if (!barcode || !name) {
+      return res.status(400).json({ success: false, error: 'Barcode and name are required' });
+    }
+
+    const scanQty = Math.max(1, Number(qty) || 1);
+
+    await client.query('BEGIN');
+
+    // 1. Resolve Master Catalog ID
+    let resolvedMasterId = masterId;
+    if (masterId === 'NEW') {
+      if (!newMasterName) {
+        throw new Error('New master catalog name is required when creating a new master');
+      }
+      const newMasterRes = await client.query(
+        `INSERT INTO ims_masters (workspace_id, name, description)
+         VALUES ($1, $2, $3) RETURNING id`,
+        [wsId, newMasterName, newMasterDescription || '']
+      );
+      resolvedMasterId = newMasterRes.rows[0].id;
+    } else if (!resolvedMasterId) {
+      // Fallback: get the first existing master catalog
+      const existingMaster = await client.query(
+        'SELECT id FROM ims_masters WHERE workspace_id = $1 ORDER BY created_at ASC LIMIT 1',
+        [wsId]
+      );
+      if (existingMaster.rows.length > 0) {
+        resolvedMasterId = existingMaster.rows[0].id;
+      } else {
+        // If no master catalog exists, create a default one
+        const defaultMaster = await client.query(
+          `INSERT INTO ims_masters (workspace_id, name, description)
+           VALUES ($1, 'Default General Catalog', 'Automatically created during onboarding') RETURNING id`,
+          [wsId]
+        );
+        resolvedMasterId = defaultMaster.rows[0].id;
+      }
+    }
+
+    // 2. Create/Resolve Item in Master Catalog
+    const catCheck = await client.query(
+      'SELECT mode, alert_at FROM ims_categories WHERE LOWER(name) = LOWER($1) AND workspace_id = $2 LIMIT 1',
+      [category ? category.trim() : 'General', wsId]
+    );
+    const resolvedTracking = trackingMode || (catCheck.rows[0]?.mode || 'FIFO');
+    const resolvedAlertAt = catCheck.rows[0]?.alert_at || 10;
+
+    const itemResult = await client.query(
+      `INSERT INTO ims_items 
+        (master_id, user_id, workspace_id, barcode, name, category, base_unit, stock, tracking_mode, alert_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8, $9)
+       ON CONFLICT (master_id, barcode)
+       DO UPDATE SET name = EXCLUDED.name, category = EXCLUDED.category, base_unit = EXCLUDED.base_unit, tracking_mode = EXCLUDED.tracking_mode
+       RETURNING id, name, barcode, base_unit`,
+      [resolvedMasterId, userId, wsId, barcode, name, category || 'General', baseUnit || 'Unit', resolvedTracking, resolvedAlertAt]
+    );
+    const catalogItem = itemResult.rows[0];
+
+    // 3. Resolve GRN
+    let resolvedGrnId = grnId;
+    let grnDocNo = '';
+    let grnSupplierName = '';
+
+    if (grnId === 'NEW') {
+      const supplier = newGrnSupplier || 'Auto-Onboarded';
+      const docNo = 'GRN-' + Date.now().toString().slice(-8);
+      const newGrnRes = await client.query(
+        `INSERT INTO ims_grn (workspace_id, user_id, doc_no, type, supplier, po_ref, status)
+         VALUES ($1, $2, $3, 'INWARD', $4, $5, 'PENDING') RETURNING id, doc_no, supplier`,
+        [wsId, userId, docNo, supplier, newGrnPoRef || '']
+      );
+      resolvedGrnId = newGrnRes.rows[0].id;
+      grnDocNo = newGrnRes.rows[0].doc_no;
+      grnSupplierName = newGrnRes.rows[0].supplier;
+    } else if (!resolvedGrnId) {
+      // Find the most recent pending Inward GRN
+      const recentGrn = await client.query(
+        `SELECT id, doc_no, supplier FROM ims_grn 
+         WHERE workspace_id = $1 AND type = 'INWARD' AND status = 'PENDING' 
+         ORDER BY created_at DESC LIMIT 1`,
+        [wsId]
+      );
+      if (recentGrn.rows.length > 0) {
+        resolvedGrnId = recentGrn.rows[0].id;
+        grnDocNo = recentGrn.rows[0].doc_no;
+        grnSupplierName = recentGrn.rows[0].supplier;
+      } else {
+        // Create a new default auto-onboarded GRN
+        const docNo = 'GRN-' + Date.now().toString().slice(-8);
+        const autoGrn = await client.query(
+          `INSERT INTO ims_grn (workspace_id, user_id, doc_no, type, supplier, notes, status)
+           VALUES ($1, $2, $3, 'INWARD', 'Auto-Onboarded', 'Created automatically during scanner onboarding', 'PENDING')
+           RETURNING id, doc_no, supplier`,
+          [wsId, userId, docNo]
+        );
+        resolvedGrnId = autoGrn.rows[0].id;
+        grnDocNo = autoGrn.rows[0].doc_no;
+        grnSupplierName = autoGrn.rows[0].supplier;
+      }
+    } else {
+      // Retrieve existing GRN details
+      const grnDetails = await client.query(
+        'SELECT doc_no, supplier FROM ims_grn WHERE id = $1 AND workspace_id = $2 LIMIT 1',
+        [resolvedGrnId, wsId]
+      );
+      if (grnDetails.rows.length > 0) {
+        grnDocNo = grnDetails.rows[0].doc_no;
+        grnSupplierName = grnDetails.rows[0].supplier;
+      }
+    }
+
+    // 4. Add/Update Item in GRN
+    const grnItemCheck = await client.query(
+      'SELECT id, ordered_qty, received_qty FROM ims_grn_items WHERE grn_id = $1 AND LOWER(barcode) = LOWER($2) LIMIT 1',
+      [resolvedGrnId, barcode]
+    );
+
+    let grnItemId = null;
+    let newReceivedQty = scanQty;
+    let newOrderedQty = scanQty;
+
+    if (grnItemCheck.rows.length > 0) {
+      grnItemId = grnItemCheck.rows[0].id;
+      newReceivedQty = Number(grnItemCheck.rows[0].received_qty || 0) + scanQty;
+      newOrderedQty = Math.max(Number(grnItemCheck.rows[0].ordered_qty || 0), newReceivedQty);
+
+      await client.query(
+        'UPDATE ims_grn_items SET received_qty = $1, ordered_qty = $2 WHERE id = $3',
+        [newReceivedQty, newOrderedQty, grnItemId]
+      );
+    } else {
+      const insertGrnItem = await client.query(
+        `INSERT INTO ims_grn_items (grn_id, barcode, name, ordered_qty, received_qty, unit, condition)
+         VALUES ($1, $2, $3, $4, $5, $6, 'Good') RETURNING id`,
+        [resolvedGrnId, barcode, name, scanQty, scanQty, baseUnit || 'pcs']
+      );
+      grnItemId = insertGrnItem.rows[0].id;
+    }
+
+    // 5. Record scan event
+    await client.query(
+      `INSERT INTO ims_scan_events (user_id, workspace_id, barcode, item_name, workflow, quantity, notes) 
+       VALUES ($1, $2, $3, $4, 'RECEIVE', $5, $6)`,
+      [userId, wsId, barcode, name, scanQty, 'GRN:' + grnDocNo]
+    );
+
+    await client.query('COMMIT');
+
+    // 6. Broadcast Real-time WebSocket event
+    const fullyReceived = newReceivedQty >= newOrderedQty;
+    io.to(`workspace_${wsId}`).emit('grn_item_updated', {
+      grnId: resolvedGrnId,
+      itemId: grnItemId,
+      barcode,
+      name,
+      receivedQty: newReceivedQty,
+      orderedQty: newOrderedQty,
+      fullyReceived,
+      docNo: grnDocNo
+    });
+
+    res.json({
+      success: true,
+      message: 'Product onboarded and GRN updated successfully',
+      item: {
+        id: catalogItem.id,
+        name: catalogItem.name,
+        barcode: catalogItem.barcode,
+        receivedQty: newReceivedQty,
+        orderedQty: newOrderedQty,
+        unit: baseUnit || 'pcs',
+        fullyReceived
+      },
+      grn: {
+        id: resolvedGrnId,
+        docNo: grnDocNo,
+        supplier: grnSupplierName
+      }
+    });
+
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('Unified scanner onboarding error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 // ==========================================
 // WORK ORDERS — SCAN-TO-VERIFY
 // ==========================================
