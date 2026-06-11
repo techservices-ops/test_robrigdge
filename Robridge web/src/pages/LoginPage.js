@@ -55,7 +55,14 @@ const LoginPage = () => {
         // Navigate immediately to prevent flash
         navigate('/');
       } else {
-        setError(result.message || 'Login failed. Please try again.');
+        if (result.requiresVerification) {
+          setError('Email not verified. Redirecting to verification page...');
+          setTimeout(() => {
+            navigate(`/verify-email?email=${encodeURIComponent(result.email || formData.email)}`);
+          }, 1500);
+        } else {
+          setError(result.message || 'Login failed. Please try again.');
+        }
       }
 
     } catch (err) {

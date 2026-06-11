@@ -15,6 +15,7 @@ async function testDataIsolation() {
         console.log('📋 Step 1: Clearing existing test data...');
         await pool.query('DELETE FROM barcodes');
         await pool.query('DELETE FROM saved_scans');
+        await pool.query('DELETE FROM temporary_scans');
         await pool.query('DELETE FROM user_devices');
         await pool.query("DELETE FROM users WHERE email LIKE '%test%'");
         console.log('✅ Test data cleared\n');

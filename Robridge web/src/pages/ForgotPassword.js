@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { FaEnvelope, FaPaperPlane, FaArrowLeft } from 'react-icons/fa';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getServerURL } from '../config/api';
 import './LoginPage.css'; // Re-use login styles
 
 const ForgotPassword = () => {
+    const navigate = useNavigate();
     const [email, setEmail] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [message, setMessage] = useState('');
@@ -31,7 +32,10 @@ const ForgotPassword = () => {
             const data = await response.json();
 
             if (data.success) {
-                setMessage(data.message);
+                setMessage(data.message + '. Redirecting to reset password screen...');
+                setTimeout(() => {
+                    navigate(`/reset-password?email=${encodeURIComponent(email)}`);
+                }, 1500);
             } else {
                 setError(data.error || 'Failed to send reset link.');
             }
@@ -55,7 +59,7 @@ const ForgotPassword = () => {
                     }}
                 />
                 <h1 className="login-title">Reset Password</h1>
-                <p className="login-subtitle">Enter your email to receive a reset link</p>
+                <p className="login-subtitle">Enter your email to receive a reset code</p>
             </div>
 
             <form className="login-form" onSubmit={handleSubmit}>
@@ -89,7 +93,7 @@ const ForgotPassword = () => {
                     ) : (
                         <>
                             <FaPaperPlane style={{ marginRight: '8px' }} />
-                            Send Reset Link
+                            Send Reset Code
                         </>
                     )}
                 </button>

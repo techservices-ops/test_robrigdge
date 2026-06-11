@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { FaEye, FaEyeSlash, FaLock, FaEnvelope, FaUserPlus, FaUser } from 'react-icons/fa';
 import { useAuth } from '../contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
-import { getServerURL } from '../config/api';
 import './LoginPage.css'; // Reuse login styles
 
 const SignupPage = () => {
@@ -17,35 +16,10 @@ const SignupPage = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [isWaitingVerification, setIsWaitingVerification] = useState(false);
-    const [registeredEmail, setRegisteredEmail] = useState('');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
-    useEffect(() => {
-        let intervalId;
-        if (isWaitingVerification && registeredEmail) {
-            intervalId = setInterval(async () => {
-                try {
-                    const response = await fetch(`${getServerURL()}/api/auth/check-verification?email=${encodeURIComponent(registeredEmail)}`);
-                    const data = await response.json();
-                    if (data.verified) {
-                        clearInterval(intervalId);
-                        setSuccess('Verification completed! Redirecting to setup...');
-                        if (data.user && data.token) {
-                            loginWithUser(data.user, data.token);
-                        }
-                        navigate('/onboarding');
-                    }
-                } catch (err) {
-                    console.error('Polling error:', err);
-                }
-            }, 3000);
-        }
-        return () => {
-            if (intervalId) clearInterval(intervalId);
-        };
-    }, [isWaitingVerification, registeredEmail, loginWithUser, navigate]);
+    // No background polling needed for OTP verification flow
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -93,9 +67,10 @@ const SignupPage = () => {
 
             if (result.success) {
                 if (result.requiresVerification) {
-                    setRegisteredEmail(result.email);
-                    setIsWaitingVerification(true);
-                    setSuccess(result.message);
+                    setSuccess('Registration successful! Redirecting to verification...');
+                    setTimeout(() => {
+                        navigate(`/verify-email?email=${encodeURIComponent(result.email)}`);
+                    }, 1000);
                 } else {
                     setSuccess('Registration successful! Redirecting to setup...');
                     if (result.user && result.token) {
@@ -115,26 +90,7 @@ const SignupPage = () => {
         }
     };
 
-    if (isWaitingVerification) {
-        return (
-            <div className="login-content" style={{ width: '100%', maxWidth: '450px', padding: '40px 20px', textAlign: 'center' }}>
-                <div className="login-header">
-                    <img src={`${process.env.PUBLIC_URL}/static/media/robridge-logo.png`} alt="Robridge Logo" className="logo-image" />
-                    <h1 className="login-title">Verify Email</h1>
-                </div>
-                <div className="spinner" style={{ margin: '20px auto', width: '50px', height: '50px', borderWidth: '4px', borderColor: '#e0e0e0', borderTopColor: '#007bff' }}></div>
-                <p style={{ color: '#333', marginTop: '20px', fontWeight: 'bold' }}>
-                    Verification email sent to {registeredEmail}
-                </p>
-                <p style={{ color: '#666', marginTop: '10px' }}>
-                    Please check your inbox and click the verification link. Waiting for verification...
-                </p>
-                {success && success.includes('completed') && (
-                    <div className="success-message" style={{ marginTop: '20px' }}>{success}</div>
-                )}
-            </div>
-        );
-    }
+    // Render signup form (wait state is handled on the dedicated VerifyEmail route)
 
     return (
         <div className="login-content" style={{ width: '100%', maxWidth: '450px', padding: '20px' }}>

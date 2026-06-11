@@ -244,9 +244,18 @@ const IMSScanner = () => {
                   if (res?.success) showToast(`${scanStage === 'RECEIVE' ? 'Received' : 'Dispatched'} 1 unit of ${lookupData.item.name}`, 'success');
                   else showToast(`Backend error: ${res?.error || 'Failed to record'}`, 'error');
                 } else {
-                  const res = await recordScanEvent(lookupData.item, scanStage, 1, '', '', '', 'Standalone Log', websocketScanId);
-                  if (res?.success) showToast(`${scanStage === 'RECEIVE' ? 'Received' : 'Dispatched'} 1 unit of ${lookupData.item.name} (Standalone)`, 'success');
-                  else showToast(`Backend error: ${res?.error || 'Failed to record'}`, 'error');
+                  const hasMaster = lookupData.item.masterId !== null;
+                  const logNotes = hasMaster ? 'Auto-Logged' : 'Standalone Log';
+                  const res = await recordScanEvent(lookupData.item, scanStage, 1, '', '', '', logNotes, websocketScanId);
+                  if (hasMaster) {
+                    setScanMatch(null);
+                    setScanResult('known');
+                    if (res?.success) showToast(`${scanStage === 'RECEIVE' ? 'Received' : 'Dispatched'} 1 unit of ${lookupData.item.name}`, 'success');
+                    else showToast(`Backend error: ${res?.error || 'Failed to record'}`, 'error');
+                  } else {
+                    if (res?.success) showToast(`${scanStage === 'RECEIVE' ? 'Received' : 'Dispatched'} 1 unit of ${lookupData.item.name} (Standalone)`, 'success');
+                    else showToast(`Backend error: ${res?.error || 'Failed to record'}`, 'error');
+                  }
                 }
               }
             }
@@ -294,9 +303,18 @@ const IMSScanner = () => {
                   if (res?.success) showToast(`Moved ${lookupData.item.name} to ${selectedLocation.name}`, 'success');
                   else showToast(`Backend error: ${res?.error || 'Failed to record'}`, 'error');
                 } else {
-                  const res = await recordScanEvent(lookupData.item, scanStage, 0, '', '', '', 'Standalone Log', websocketScanId, selectedLocation.name, selectedLocation.id);
-                  if (res?.success) showToast(`Moved ${lookupData.item.name} to ${selectedLocation.name} (Standalone)`, 'success');
-                  else showToast(`Backend error: ${res?.error || 'Failed to record'}`, 'error');
+                  const hasMaster = lookupData.item.masterId !== null;
+                  const logNotes = hasMaster ? 'Auto-Logged' : 'Standalone Log';
+                  const res = await recordScanEvent(lookupData.item, scanStage, 0, '', '', '', logNotes, websocketScanId, selectedLocation.name, selectedLocation.id);
+                  if (hasMaster) {
+                    setScanMatch(null);
+                    setScanResult('known');
+                    if (res?.success) showToast(`Moved ${lookupData.item.name} to ${selectedLocation.name}`, 'success');
+                    else showToast(`Backend error: ${res?.error || 'Failed to record'}`, 'error');
+                  } else {
+                    if (res?.success) showToast(`Moved ${lookupData.item.name} to ${selectedLocation.name} (Standalone)`, 'success');
+                    else showToast(`Backend error: ${res?.error || 'Failed to record'}`, 'error');
+                  }
                 }
               }
             }
@@ -618,18 +636,16 @@ const IMSScanner = () => {
             </div>
           )}
 
-      <div className={`scan-zone ${scanning ? 'scanning' : ''} ${scanResult === 'known' ? 'found' : ''} ${scanResult === 'unknown' ? 'notfound' : ''}`}>
+      <div className={`scan-zone ${scanning ? 'scanning' : ''} ${['known', 'scan_match', 'confirmed', 'onboarded'].includes(scanResult) ? 'found' : ''} ${['unknown', 'error', 'scan_nomatch'].includes(scanResult) ? 'notfound' : ''}`}>
             <div className="scan-icon-wrap">
               {scanning ? (
                 <div className="scan-spinner"></div>
-              ) : scanResult === 'known' ? (
+              ) : ['known', 'scan_match', 'confirmed', 'onboarded'].includes(scanResult) ? (
                 <FaCheckCircle className="scan-status-icon ok" />
               ) : scanResult === 'pending_confirm' ? (
                 <FaExclamationCircle className="scan-status-icon warn" style={{ color: '#f39c12' }} />
-              ) : scanResult === 'unknown' ? (
+              ) : ['unknown', 'error', 'scan_nomatch'].includes(scanResult) ? (
                 <FaExclamationCircle className="scan-status-icon warn" />
-              ) : scanResult === 'onboarded' ? (
-                <FaCheckCircle className="scan-status-icon ok" />
               ) : (
                 <FaBarcode className="scan-idle-icon" />
               )}
@@ -637,10 +653,13 @@ const IMSScanner = () => {
             <div className="scan-label">
               {scanning ? 'Scanning...' :
                 scanResult === 'known' ? 'Item Auto-Logged ✓' :
+                scanResult === 'scan_match' ? 'Verification Successful ✓' :
+                scanResult === 'scan_nomatch' ? 'Verification Failed — Logged as Standalone' :
                 scanResult === 'pending_confirm' ? 'Needs Confirmation' :
                 scanResult === 'unknown' ? 'Unknown Barcode' :
                 scanResult === 'onboarded' ? 'Item Onboarded! ✓' :
                 scanResult === 'confirmed' ? `${scanStage} Confirmed ✓` :
+                scanResult === 'error' ? 'Scan Error' :
                 `Ready to Scan for ${scanStage}`}
             </div>
             <input
