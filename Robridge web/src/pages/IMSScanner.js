@@ -238,8 +238,6 @@ const IMSScanner = () => {
     setScanResult(null);
     setFoundItem(null);
     setScanMatch(null);
-    setBatchNo('');
-    setSerialNo('');
 
     try {
       // ── GRN / Dispatch verify-scan mode ──────────────────────────
@@ -266,13 +264,13 @@ const IMSScanner = () => {
               } else {
                 if (data.matched) {
                   const prefix = scanStage === 'DISPATCH' ? 'DN:' : 'GRN:';
-                  const res = await recordScanEvent(lookupData.item, scanStage, 1, '', '', '', prefix + data.grn.docNo, websocketScanId);
+                  const res = await recordScanEvent(lookupData.item, scanStage, 1, batchNo, serialNo, '', prefix + data.grn.docNo, websocketScanId);
                   if (res?.success) showToast(`${scanStage === 'RECEIVE' ? 'Received' : 'Dispatched'} 1 unit of ${lookupData.item.name}`, 'success');
                   else showToast(`Backend error: ${res?.error || 'Failed to record'}`, 'error');
                 } else {
                   const hasMaster = lookupData.item.masterId !== null;
                   const logNotes = hasMaster ? 'Auto-Logged' : 'Standalone Log';
-                  const res = await recordScanEvent(lookupData.item, scanStage, 1, '', '', '', logNotes, websocketScanId);
+                  const res = await recordScanEvent(lookupData.item, scanStage, 1, batchNo, serialNo, '', logNotes, websocketScanId);
                   if (hasMaster) {
                     setScanMatch(null);
                     setScanResult('known');
@@ -325,13 +323,13 @@ const IMSScanner = () => {
                 showToast('Please select a target location for Putaway.', 'error');
               } else {
                 if (data.matched) {
-                  const res = await recordScanEvent(lookupData.item, scanStage, 0, '', '', '', 'WO:' + data.wo.woNumber, websocketScanId, selectedLocation.name, selectedLocation.id);
+                  const res = await recordScanEvent(lookupData.item, scanStage, 0, batchNo, serialNo, '', 'WO:' + data.wo.woNumber, websocketScanId, selectedLocation.name, selectedLocation.id);
                   if (res?.success) showToast(`Moved ${lookupData.item.name} to ${selectedLocation.name}`, 'success');
                   else showToast(`Backend error: ${res?.error || 'Failed to record'}`, 'error');
                 } else {
                   const hasMaster = lookupData.item.masterId !== null;
                   const logNotes = hasMaster ? 'Auto-Logged' : 'Standalone Log';
-                  const res = await recordScanEvent(lookupData.item, scanStage, 0, '', '', '', logNotes, websocketScanId, selectedLocation.name, selectedLocation.id);
+                  const res = await recordScanEvent(lookupData.item, scanStage, 0, batchNo, serialNo, '', logNotes, websocketScanId, selectedLocation.name, selectedLocation.id);
                   if (hasMaster) {
                     setScanMatch(null);
                     setScanResult('known');
@@ -378,7 +376,7 @@ const IMSScanner = () => {
 
         if (scanStage === 'RECEIVE') {
           setScanResult('known');
-          await recordScanEvent(item, 'RECEIVE', 1, '', '', '', '', websocketScanId);
+          await recordScanEvent(item, 'RECEIVE', 1, batchNo, serialNo, '', '', websocketScanId);
           showToast(`Received 1 unit of ${item.name}`, 'success');
         } else if (scanStage === 'DISPATCH') {
           if (item.stock <= 0) {
@@ -386,7 +384,7 @@ const IMSScanner = () => {
             showToast(`Cannot dispatch ${item.name}. Stock is already 0.`, 'error');
           } else {
             setScanResult('known');
-            await recordScanEvent(item, 'DISPATCH', 1, '', '', '', '', websocketScanId);
+            await recordScanEvent(item, 'DISPATCH', 1, batchNo, serialNo, '', '', websocketScanId);
             showToast(`Dispatched 1 unit of ${item.name}`, 'success');
           }
         } else if (scanStage === 'PUTAWAY') {
@@ -395,7 +393,7 @@ const IMSScanner = () => {
             showToast('Please select a target location for Putaway.', 'error');
           } else {
             setScanResult('confirmed');
-            await recordScanEvent(item, 'PUTAWAY', 0, '', '', '', '', websocketScanId, selectedLocation.name, selectedLocation.id);
+            await recordScanEvent(item, 'PUTAWAY', 0, batchNo, serialNo, '', '', websocketScanId, selectedLocation.name, selectedLocation.id);
             showToast(`Moved ${item.name} to ${selectedLocation.name}`, 'success');
           }
         } else {
@@ -758,6 +756,28 @@ const IMSScanner = () => {
                 scanResult === 'confirmed' ? `${scanStage} Confirmed ✓` :
                 scanResult === 'error' ? 'Scan Error' :
                 `Ready to Scan for ${scanStage}`}
+            </div>
+            <div className="traceability-inputs">
+              <div className="trace-input-group">
+                <label className="trace-input-label">Batch / Lot No</label>
+                <input
+                  className="trace-input-field"
+                  type="text"
+                  placeholder="e.g. B-01"
+                  value={batchNo}
+                  onChange={e => setBatchNo(e.target.value)}
+                />
+              </div>
+              <div className="trace-input-group">
+                <label className="trace-input-label">Serial No</label>
+                <input
+                  className="trace-input-field"
+                  type="text"
+                  placeholder="e.g. S-109"
+                  value={serialNo}
+                  onChange={e => setSerialNo(e.target.value)}
+                />
+              </div>
             </div>
             <input
               ref={inputRef}
