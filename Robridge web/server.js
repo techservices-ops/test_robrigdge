@@ -1461,9 +1461,24 @@ app.patch('/api/workspaces/members/:userId/role', authenticateToken, requireWork
 // Remove a member from workspace
 app.delete('/api/workspaces/members/:userId', authenticateToken, requireWorkspace, async (req, res) => {
   try {
-    if (req.workspace_role !== 'owner' && req.workspace_role !== 'admin') {
-      return res.status(403).json({ success: false, error: 'Only admins can remove members' });
+    if (req.workspace_role !== 'owner' && req.workspace_role !== 'admin' && req.workspace_role !== 'manager') {
+      return res.status(403).json({ success: false, error: 'Only admins and managers can remove members' });
     }
+
+    if (req.workspace_role === 'manager') {
+      const targetCheck = await pool.query(
+        'SELECT role FROM ims_workspace_members WHERE workspace_id = $1 AND user_id = $2',
+        [req.workspace_id, req.params.userId]
+      );
+      if (targetCheck.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Member not found' });
+      }
+      const targetRole = targetCheck.rows[0].role;
+      if (['owner', 'admin', 'manager'].includes(targetRole)) {
+        return res.status(403).json({ success: false, error: 'Managers cannot remove owners, admins, or other managers' });
+      }
+    }
+
     await pool.query(
       'DELETE FROM ims_workspace_members WHERE workspace_id=$1 AND user_id=$2',
       [req.workspace_id, req.params.userId]
