@@ -6677,9 +6677,9 @@ app.post('/api/ims/scanner/onboard', authenticateToken, requireWorkspace, async 
         throw new Error('New master catalog name is required when creating a new master');
       }
       const newMasterRes = await client.query(
-        `INSERT INTO ims_masters (workspace_id, name, description)
-         VALUES ($1, $2, $3) RETURNING id`,
-        [wsId, newMasterName, newMasterDescription || '']
+        `INSERT INTO ims_masters (workspace_id, user_id, name, description)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [wsId, userId, newMasterName, newMasterDescription || '']
       );
       resolvedMasterId = newMasterRes.rows[0].id;
     } else if (!resolvedMasterId) {
@@ -6693,9 +6693,9 @@ app.post('/api/ims/scanner/onboard', authenticateToken, requireWorkspace, async 
       } else {
         // If no master catalog exists, create a default one
         const defaultMaster = await client.query(
-          `INSERT INTO ims_masters (workspace_id, name, description)
-           VALUES ($1, 'Default General Catalog', 'Automatically created during onboarding') RETURNING id`,
-          [wsId]
+          `INSERT INTO ims_masters (workspace_id, user_id, name, description)
+           VALUES ($1, $2, 'Default General Catalog', 'Automatically created during onboarding') RETURNING id`,
+          [wsId, userId]
         );
         resolvedMasterId = defaultMaster.rows[0].id;
       }
