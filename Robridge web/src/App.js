@@ -197,27 +197,7 @@ function AppContent() {
     return <Navigate to="/" replace />;
   };
 
-  // If the user has no workspaces, render ONLY the onboarding route to prevent any layout flash
-  if (workspaces.length === 0) {
-    return (
-      <Suspense fallback={<PageLoadingSpinner />}>
-        <Routes>
-          <Route path="/onboarding" element={
-            <ProtectedRoute requiredPath="/onboarding">
-              <WorkspaceOnboarding />
-            </ProtectedRoute>
-          } />
-          {/* Catch-all: redirect any other route to /onboarding */}
-          <Route path="/signup" element={<AuthRedirect />} />
-          <Route path="/login" element={<AuthRedirect />} />
-          <Route path="/verify-email" element={<AuthRedirect />} />
-          <Route path="*" element={<Navigate to="/onboarding" replace />} />
-        </Routes>
-      </Suspense>
-    );
-  }
-
-  // Show main application if authenticated and has workspaces
+  // Show main application if authenticated
   return (
     <Routes>
       {/* ── Redirect auth routes for authenticated users to avoid layout flash ── */}
@@ -226,48 +206,54 @@ function AppContent() {
       <Route path="/verify-email" element={<AuthRedirect />} />
       {/* ── Onboarding: full-screen, no sidebar ── */}
       <Route path="/onboarding" element={
-        <ProtectedRoute requiredPath="/onboarding">
-          <WorkspaceOnboarding />
-        </ProtectedRoute>
+        <Suspense fallback={<PageLoadingSpinner />}>
+          <ProtectedRoute requiredPath="/onboarding">
+            <WorkspaceOnboarding />
+          </ProtectedRoute>
+        </Suspense>
       } />
 
-      {/* ── All other pages: inside the App shell with sidebar ── */}
+      {/* ── All other pages: inside the App shell with sidebar, or redirect to onboarding if no workspaces ── */}
       <Route path="*" element={
-        <div className="App">
-          <Navigation />
-          <main className="app-main-content">
-            <Suspense fallback={<PageLoadingSpinner />}>
-              <Routes>
-                <Route path="/" element={<ProtectedRoute requiredPath="/"><IMSDashboard /></ProtectedRoute>} />
-                <Route path="/dashboard" element={<ProtectedRoute requiredPath="/"><IMSDashboard /></ProtectedRoute>} />
-                <Route path="/generator" element={<ProtectedRoute requiredPath="/generator"><BarcodeGenerator /></ProtectedRoute>} />
-                <Route path="/image-processing" element={<ProtectedRoute requiredPath="/image-processing"><ImageProcessing /></ProtectedRoute>} />
-                <Route path="/robot-control" element={<ProtectedRoute requiredPath="/robot-control"><RobotControl /></ProtectedRoute>} />
-                <Route path="/rack-status" element={<ProtectedRoute requiredPath="/rack-status"><RackStatus /></ProtectedRoute>} />
-                <Route path="/rack-management" element={<ProtectedRoute requiredPath="/rack-management"><RackManagement /></ProtectedRoute>} />
-                <Route path="/product-management" element={<ProtectedRoute requiredPath="/product-management"><ProductManagement /></ProtectedRoute>} />
-                <Route path="/device-connected" element={<ProtectedRoute requiredPath="/device-connected"><DeviceConnected /></ProtectedRoute>} />
-                <Route path="/profile" element={<ProtectedRoute requiredPath="/profile"><Profile /></ProtectedRoute>} />
-                <Route path="/settings" element={<ProtectedRoute requiredPath="/settings"><Settings /></ProtectedRoute>} />
-                <Route path="/devices" element={<ProtectedRoute requiredPath="/devices"><DevicesPage /></ProtectedRoute>} />
-                <Route path="/device-manager" element={<ProtectedRoute requiredPath="/device-manager"><DeviceManager /></ProtectedRoute>} />
-                <Route path="/ims-catalog" element={<ProtectedRoute requiredPath="/ims-catalog"><IMSCatalog /></ProtectedRoute>} />
-                <Route path="/ims-scanner" element={<ProtectedRoute requiredPath="/ims-scanner"><IMSScanner /></ProtectedRoute>} />
-                <Route path="/ims-settings" element={<ProtectedRoute requiredPath="/ims-settings"><IMSSettings /></ProtectedRoute>} />
-                <Route path="/ims-users" element={<ProtectedRoute requiredPath="/ims-users"><IMSUsers /></ProtectedRoute>} />
-                <Route path="/ims-workorders" element={<ProtectedRoute requiredPath="/ims-workorders"><IMSWorkOrders /></ProtectedRoute>} />
-                <Route path="/ims-production" element={<ProtectedRoute requiredPath="/ims-production"><IMSProduction /></ProtectedRoute>} />
-                <Route path="/ims-locations" element={<ProtectedRoute requiredPath="/ims-locations"><IMSLocations /></ProtectedRoute>} />
-                <Route path="/ims-grn" element={<ProtectedRoute requiredPath="/ims-grn"><IMSGrn /></ProtectedRoute>} />
-                <Route path="/ims-reports" element={<ProtectedRoute requiredPath="/ims-reports"><IMSReports /></ProtectedRoute>} />
-                <Route path="/ims-erp" element={<ProtectedRoute requiredPath="/ims-erp"><IMSErp /></ProtectedRoute>} />
-                <Route path="/ims-components" element={<ProtectedRoute requiredPath="/ims-components"><IMSComponentReplacement /></ProtectedRoute>} />
-                <Route path="/login" element={<LoginPage />} />
-              </Routes>
-            </Suspense>
-          </main>
-          <IMSChatBot />
-        </div>
+        workspaces.length === 0 ? (
+          <Navigate to="/onboarding" replace />
+        ) : (
+          <div className="App">
+            <Navigation />
+            <main className="app-main-content">
+              <Suspense fallback={<PageLoadingSpinner />}>
+                <Routes>
+                  <Route path="/" element={<ProtectedRoute requiredPath="/"><IMSDashboard /></ProtectedRoute>} />
+                  <Route path="/dashboard" element={<ProtectedRoute requiredPath="/"><IMSDashboard /></ProtectedRoute>} />
+                  <Route path="/generator" element={<ProtectedRoute requiredPath="/generator"><BarcodeGenerator /></ProtectedRoute>} />
+                  <Route path="/image-processing" element={<ProtectedRoute requiredPath="/image-processing"><ImageProcessing /></ProtectedRoute>} />
+                  <Route path="/robot-control" element={<ProtectedRoute requiredPath="/robot-control"><RobotControl /></ProtectedRoute>} />
+                  <Route path="/rack-status" element={<ProtectedRoute requiredPath="/rack-status"><RackStatus /></ProtectedRoute>} />
+                  <Route path="/rack-management" element={<ProtectedRoute requiredPath="/rack-management"><RackManagement /></ProtectedRoute>} />
+                  <Route path="/product-management" element={<ProtectedRoute requiredPath="/product-management"><ProductManagement /></ProtectedRoute>} />
+                  <Route path="/device-connected" element={<ProtectedRoute requiredPath="/device-connected"><DeviceConnected /></ProtectedRoute>} />
+                  <Route path="/profile" element={<ProtectedRoute requiredPath="/profile"><Profile /></ProtectedRoute>} />
+                  <Route path="/settings" element={<ProtectedRoute requiredPath="/settings"><Settings /></ProtectedRoute>} />
+                  <Route path="/devices" element={<ProtectedRoute requiredPath="/devices"><DevicesPage /></ProtectedRoute>} />
+                  <Route path="/device-manager" element={<ProtectedRoute requiredPath="/device-manager"><DeviceManager /></ProtectedRoute>} />
+                  <Route path="/ims-catalog" element={<ProtectedRoute requiredPath="/ims-catalog"><IMSCatalog /></ProtectedRoute>} />
+                  <Route path="/ims-scanner" element={<ProtectedRoute requiredPath="/ims-scanner"><IMSScanner /></ProtectedRoute>} />
+                  <Route path="/ims-settings" element={<ProtectedRoute requiredPath="/ims-settings"><IMSSettings /></ProtectedRoute>} />
+                  <Route path="/ims-users" element={<ProtectedRoute requiredPath="/ims-users"><IMSUsers /></ProtectedRoute>} />
+                  <Route path="/ims-workorders" element={<ProtectedRoute requiredPath="/ims-workorders"><IMSWorkOrders /></ProtectedRoute>} />
+                  <Route path="/ims-production" element={<ProtectedRoute requiredPath="/ims-production"><IMSProduction /></ProtectedRoute>} />
+                  <Route path="/ims-locations" element={<ProtectedRoute requiredPath="/ims-locations"><IMSLocations /></ProtectedRoute>} />
+                  <Route path="/ims-grn" element={<ProtectedRoute requiredPath="/ims-grn"><IMSGrn /></ProtectedRoute>} />
+                  <Route path="/ims-reports" element={<ProtectedRoute requiredPath="/ims-reports"><IMSReports /></ProtectedRoute>} />
+                  <Route path="/ims-erp" element={<ProtectedRoute requiredPath="/ims-erp"><IMSErp /></ProtectedRoute>} />
+                  <Route path="/ims-components" element={<ProtectedRoute requiredPath="/ims-components"><IMSComponentReplacement /></ProtectedRoute>} />
+                  <Route path="/login" element={<LoginPage />} />
+                </Routes>
+              </Suspense>
+            </main>
+            <IMSChatBot />
+          </div>
+        )
       } />
     </Routes>
   );
