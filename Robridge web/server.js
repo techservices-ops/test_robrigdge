@@ -7044,11 +7044,50 @@ app.post('/api/ims/production/scan', authenticateToken, requireWorkspace, async 
 
     await client.query('BEGIN');
 
+    // Resolve resolvedWoId (cast empty string to null)
+    const resolvedWoId = woId && woId !== '' ? parseInt(woId) : null;
+
     const result = await client.query(
       `INSERT INTO ims_production_events (workspace_id, user_id, wo_id, barcode, item_name, stage_id, stage_name, outcome, qty, batch_no, notes)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-      [req.workspace_id, req.user.id, woId || null, barcode, itemName || barcode, stageId, stageName || '', outcome, Number(qty) || 1, batchNo || null, notes || null]
+      [req.workspace_id, req.user.id, resolvedWoId, barcode, itemName || barcode, stageId, stageName || '', outcome, Number(qty) || 1, batchNo || null, notes || null]
     );
+
+    const scanQty = Number(qty) || 1;
+
+    // If linked to a Work Order, and outcome is FORWARD, check if it's the finished product and increment built_qty
+    if (resolvedWoId && outcome === 'FORWARD') {
+      const woRes = await client.query(
+        'SELECT product_barcode, target_qty, built_qty, product_name, wo_number FROM ims_workorders WHERE id = $1 AND workspace_id = $2 LIMIT 1',
+        [resolvedWoId, req.workspace_id]
+      );
+      if (woRes.rows.length > 0) {
+        const wo = woRes.rows[0];
+        // Compare product barcode case-insensitively
+        if (wo.product_barcode && wo.product_barcode.toLowerCase() === barcode.toLowerCase()) {
+          const updatedWO = await client.query(
+            `UPDATE ims_workorders 
+             SET built_qty = built_qty + $1, updated_at = CURRENT_TIMESTAMP 
+             WHERE id = $2 AND workspace_id = $3 
+             RETURNING built_qty`,
+            [scanQty, resolvedWoId, req.workspace_id]
+          );
+          if (updatedWO.rows.length > 0) {
+            const newBuiltQty = updatedWO.rows[0].built_qty;
+            // Broadcast live socket update
+            io.to(`workspace_${req.workspace_id}`).emit('workorder_updated', {
+              woId: resolvedWoId,
+              woNumber: wo.wo_number,
+              barcode: barcode,
+              productName: wo.product_name,
+              builtQty: newBuiltQty,
+              targetQty: wo.target_qty,
+              fullyBuilt: newBuiltQty >= wo.target_qty
+            });
+          }
+        }
+      }
+    }
 
     // BOM Auto-Execution on FORWARD
     if (outcome === 'FORWARD') {
@@ -7056,7 +7095,7 @@ app.post('/api/ims/production/scan', authenticateToken, requireWorkspace, async 
       if (itemRes.rows.length > 0 && itemRes.rows[0].bom) {
         let bom = [];
         try { bom = typeof itemRes.rows[0].bom === 'string' ? JSON.parse(itemRes.rows[0].bom) : itemRes.rows[0].bom; } catch (e) { }
-        const multiplier = Number(qty) || 1;
+        const multiplier = scanQty;
 
         for (const comp of bom) {
           if (!comp.sku || !comp.needed) continue;

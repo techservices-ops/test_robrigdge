@@ -16,15 +16,16 @@ const OUTCOMES = [
 
 export default function IMSProduction() {
   const { imsFetch, activeWorkspaceId, activeWorkspace } = useWorkspace();
-  const { latestScan, scanBuffer } = useWebSocket();
+  const { socket, latestScan } = useWebSocket();
   const showToast = useToast();
   const isReadOnly = ['user', 'member', 'viewer'].includes(activeWorkspace?.currentUserRole);
   const [stages, setStages] = useState([]);
   const [events, setEvents] = useState([]);
   const [summary, setSummary] = useState([]);
+  const [workorders, setWorkorders] = useState([]);
   const [selectedStage, setSelectedStage] = useState(null);
   const [, setLoading] = useState(false);
-  const [scan, setScan] = useState({ barcode: localStorage.getItem('ims_last_scanned_barcode') || '', itemName: '', outcome: 'FORWARD', qty: 0, batchNo: '', notes: '', woId: '' });
+  const [scan, setScan] = useState({ barcode: localStorage.getItem('ims_last_scanned_barcode') || '', itemName: '', outcome: 'FORWARD', qty: 1, batchNo: '', notes: '', woId: '' });
   const [saving, setSaving] = useState(false);
 
   const lastSeenScanId = React.useRef(latestScan?.id);
@@ -36,23 +37,52 @@ export default function IMSProduction() {
       setScan(s => ({ ...s, barcode }));
       localStorage.setItem('ims_last_scanned_barcode', barcode);
     }
-  }, [latestScan?.id]);
+  }, [latestScan]);
 
   const load = useCallback(async () => {
     if (!activeWorkspaceId) return;
     setLoading(true);
-    const [sR, eR, sumR] = await Promise.all([
-      imsFetch('/api/ims/production/stages').then(r => r.json()),
-      imsFetch('/api/ims/production/events').then(r => r.json()),
-      imsFetch('/api/ims/production/summary').then(r => r.json()),
-    ]);
-    if (sR.success) { setStages(sR.stages); if (!selectedStage && sR.stages.length) setSelectedStage(sR.stages[0]); }
-    if (eR.success) setEvents(eR.events);
-    if (sumR.success) setSummary(sumR.summary);
-    setLoading(false);
-  }, [activeWorkspaceId, imsFetch]);
+    try {
+      const [sR, eR, sumR, woR] = await Promise.all([
+        imsFetch('/api/ims/production/stages').then(r => r.json()),
+        imsFetch('/api/ims/production/events').then(r => r.json()),
+        imsFetch('/api/ims/production/summary').then(r => r.json()),
+        imsFetch('/api/ims/workorders?limit=100').then(r => r.json()),
+      ]);
+      if (sR.success) { setStages(sR.stages); if (!selectedStage && sR.stages.length) setSelectedStage(sR.stages[0]); }
+      if (eR.success) setEvents(eR.events);
+      if (sumR.success) setSummary(sumR.summary);
+      if (woR.success) setWorkorders(woR.workorders || []);
+    } catch (e) {
+      console.error('Error loading production data:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeWorkspaceId, imsFetch, selectedStage]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Handle real-time WebSocket updates for Work Orders
+  useEffect(() => {
+    if (!socket) return;
+    const handleWOUpdate = (data) => {
+      setWorkorders(prev => prev.map(wo => wo.id === data.woId ? { ...wo, built_qty: data.builtQty } : wo));
+      showToast(`Work Order ${data.woNumber} progress: ${data.builtQty}/${data.targetQty}`, 'info');
+    };
+    socket.on('workorder_updated', handleWOUpdate);
+    return () => socket.off('workorder_updated', handleWOUpdate);
+  }, [socket, showToast]);
+
+  // Resolve item name and validate if it belongs to selected Work Order
+  useEffect(() => {
+    if (!scan.barcode) return;
+    if (scan.woId) {
+      const wo = workorders.find(w => w.id.toString() === scan.woId);
+      if (wo && wo.product_barcode && wo.product_barcode.toLowerCase() === scan.barcode.toLowerCase()) {
+        setScan(s => ({ ...s, itemName: wo.product_name }));
+      }
+    }
+  }, [scan.barcode, scan.woId, workorders]);
 
   const recordScan = async () => {
     if (!scan.barcode || !selectedStage) return;
@@ -63,7 +93,8 @@ export default function IMSProduction() {
       const d = await r.json();
       if (d.success) {
         showToast(`${scan.outcome} recorded at ${selectedStage.name}`, 'success');
-        setScan(s => ({ ...s, barcode: '', batchNo: '', notes: '' }));
+        // Preserve selected woId after scan for continuous throughput
+        setScan(s => ({ ...s, barcode: '', itemName: '', qty: 1, batchNo: '', notes: '' }));
         load();
       } else { showToast(d.error, 'error'); }
     } finally { setSaving(false); }
@@ -134,6 +165,61 @@ export default function IMSProduction() {
         {/* Scan Panel */}
         <div className="ims-panel ims-scan-panel">
           <h3 className="ims-panel-title"><FaBarcode /> Scan at: <span className="ims-highlight">{selectedStage?.name || 'Select a stage'}</span></h3>
+
+          {/* Work Order Association */}
+          <div className="form-group ims-form-group">
+            <label className="form-label ims-form-label">Associate Work Order</label>
+            <select className="form-input ims-form-input" value={scan.woId} onChange={e => {
+              const selectedWoId = e.target.value;
+              const wo = workorders.find(w => w.id.toString() === selectedWoId);
+              setScan(s => ({ 
+                ...s, 
+                woId: selectedWoId,
+                itemName: wo ? wo.product_name : '' 
+              }));
+            }} disabled={isReadOnly}>
+              <option value="">None (Standalone Scan)</option>
+              {workorders.filter(w => w.status !== 'COMPLETE' && w.status !== 'CANCELLED').map(w => (
+                <option key={w.id} value={w.id}>{w.wo_number} - {w.product_name} ({w.built_qty}/{w.target_qty})</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Work Order Progress Info */}
+          {scan.woId && (() => {
+            const wo = workorders.find(w => w.id.toString() === scan.woId);
+            if (!wo) return null;
+            const pct = wo.target_qty > 0 ? Math.round((wo.built_qty / wo.target_qty) * 100) : 0;
+            const isFinishedProduct = wo.product_barcode && scan.barcode && wo.product_barcode.toLowerCase() === scan.barcode.toLowerCase();
+            return (
+              <div className="ims-wo-summary-card">
+                <div className="ims-wo-summary-title">
+                  <strong>{wo.wo_number}</strong>: {wo.product_name}
+                </div>
+                <div className="ims-wo-summary-details">
+                  <span>Target: {wo.target_qty} units</span>
+                  <span>Built: {wo.built_qty} units</span>
+                </div>
+                <div className="ims-wo-summary-progress">
+                  <div className="ims-wo-summary-progress-bar" style={{ width: `${Math.min(100, pct)}%` }}></div>
+                </div>
+                <div className="ims-wo-summary-pct">{pct}% Completed</div>
+                {scan.barcode && (
+                  <div className="ims-wo-barcode-validation" style={{
+                    background: isFinishedProduct ? 'rgba(39, 174, 96, 0.1)' : 'rgba(230, 126, 34, 0.1)',
+                    color: isFinishedProduct ? '#27ae60' : '#d35400',
+                    border: `1px solid ${isFinishedProduct ? '#27ae60' : '#f39c12'}`
+                  }}>
+                    {isFinishedProduct ? (
+                      <span>✓ Finished Product (Will increment built quantity on FORWARD)</span>
+                    ) : (
+                      <span>ℹ Component / Subassembly Scan</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="form-group ims-form-group">
             <label className="form-label ims-form-label">Barcode *</label>
