@@ -74,7 +74,7 @@ export const AuthProvider = ({ children }) => {
             const userData = {
               ...data.user,
               isAuthenticated: true,
-              allowedPages: PAGE_ACCESS[data.user.role] || []
+              allowedPages: PAGE_ACCESS[data.user.role] || PAGE_ACCESS['expo_user']
             };
             setUser(userData);
             localStorage.setItem('robridge_user', JSON.stringify(userData));
@@ -146,7 +146,7 @@ export const AuthProvider = ({ children }) => {
           ...data.user,
           loginTime: new Date().toISOString(),
           isAuthenticated: true,
-          allowedPages: PAGE_ACCESS[data.user.role] || []
+          allowedPages: PAGE_ACCESS[data.user.role] || PAGE_ACCESS['expo_user']
         };
 
         localStorage.setItem('robridge_user', JSON.stringify(userInfo));
@@ -162,7 +162,9 @@ export const AuthProvider = ({ children }) => {
       } else {
         return {
           success: false,
-          message: data.error || 'Login failed. Please check your credentials.'
+          message: data.error || 'Login failed. Please check your credentials.',
+          requiresVerification: data.requiresVerification || false,
+          email: data.email
         };
       }
     } catch (error) {
@@ -247,11 +249,8 @@ export const AuthProvider = ({ children }) => {
     if (!user) {
       return false;
     }
-    const currentAllowed = PAGE_ACCESS[user.role];
-    if (currentAllowed) {
-      return currentAllowed.includes(path);
-    }
-    return user.allowedPages ? user.allowedPages.includes(path) : false;
+    const currentAllowed = PAGE_ACCESS[user.role] || PAGE_ACCESS['expo_user'];
+    return currentAllowed.includes(path);
   };
 
   const getUserRole = () => {
@@ -275,7 +274,7 @@ export const AuthProvider = ({ children }) => {
       ...userData,
       loginTime: new Date().toISOString(),
       isAuthenticated: true,
-      allowedPages: PAGE_ACCESS[userData.role] || []
+      allowedPages: PAGE_ACCESS[userData.role] || PAGE_ACCESS['expo_user']
     };
     localStorage.setItem('robridge_user', JSON.stringify(userInfo));
     if (token) localStorage.setItem('robridge_token', token);

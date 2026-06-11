@@ -796,45 +796,40 @@ app.post('/api/auth/register', async (req, res) => {
     }
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
-    // Generate email verification token
-    const verificationToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    // Generate 6-digit OTP code
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+
     // Insert user (email_verified = false by default)
     const result = await pool.query(
-      `INSERT INTO users (email, password_hash, name, role, email_verification_token, email_verified) 
-       VALUES ($1, $2, $3, $4, $5, FALSE) 
+      `INSERT INTO users (email, password_hash, name, role, email_verification_token, email_verified, otp_code, otp_expires) 
+       VALUES ($1, $2, $3, $4, NULL, FALSE, $5, $6) 
        RETURNING id, email, name, role, created_at`,
-      [email.toLowerCase(), passwordHash, name || email.split('@')[0], role, verificationToken]
+      [email.toLowerCase(), passwordHash, name || email.split('@')[0], role, otpCode, otpExpires]
     );
     const user = result.rows[0];
 
     // Send verification email
-    const origin = req.headers.origin;
-    const host = req.get('host');
-    const protocol = req.protocol;
-    let clientUrl = origin || process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
-      ? `${protocol}://${host}/bvs`
-      : 'http://localhost:3000');
-
-    // Normalize clientUrl: ensure it has /bvs subdirectory prefix if in production and not localhost/127.0.0.1
-    const isLocalhost = clientUrl.includes('localhost') || clientUrl.includes('127.0.0.1');
-    if (process.env.NODE_ENV === 'production' && !isLocalhost && !clientUrl.endsWith('/bvs') && !clientUrl.includes('/bvs/')) {
-      clientUrl = clientUrl.replace(/\/$/, '') + '/bvs';
-    }
-
-    const verificationLink = `${clientUrl}/verify-email?token=${verificationToken}`;
     const mailOptions = {
       from: `"RoBridge Support" <${process.env.EMAIL_USER}>`,
       to: user.email,
       subject: 'Verify Your RoBridge Account',
       html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-          <h2 style="color: #007bff;">Welcome to RoBridge!</h2>
-          <p>Hi ${user.name},</p>
-          <p>Thank you for registering. Please verify your email address to activate your account.</p>
-          <a href="${verificationLink}" style="background-color: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">Verify Email</a>
-          <p>Or copy this link: ${verificationLink}</p>
-          <p>This link will expire in 24 hours.</p>
-          <p>Best regards,<br>RoBridge Team</p>
+        <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+          <div style="text-align: center; border-bottom: 1px solid #f0f0f0; padding-bottom: 20px;">
+            <h2 style="color: #007bff; margin: 0;">Welcome to RoBridge!</h2>
+          </div>
+          <div style="padding: 20px 0;">
+            <p>Hi <strong>${user.name}</strong>,</p>
+            <p>Thank you for registering. Please use the following 6-digit One-Time Password (OTP) to verify your email address and activate your account:</p>
+            <div style="font-size: 32px; font-weight: 800; letter-spacing: 5px; color: #28a745; background: #f8f9fa; padding: 15px; text-align: center; border-radius: 8px; border: 1px dashed #28a745; width: 200px; margin: 25px auto;">
+              ${otpCode}
+            </div>
+            <p style="color: #666; font-size: 14px; text-align: center;">This code is valid for <strong>10 minutes</strong>. Do not share this code with anyone.</p>
+          </div>
+          <div style="border-top: 1px solid #f0f0f0; padding-top: 20px; font-size: 12px; color: #999; text-align: center;">
+            <p>Best regards,<br><strong>RoBridge Team</strong></p>
+          </div>
         </div>
       `
     };
@@ -844,15 +839,15 @@ app.post('/api/auth/register', async (req, res) => {
         console.log(`📧 Verification email sent to ${user.email}`);
       } catch (emailError) {
         console.error('⚠️ Failed to send verification email, but user was created:', emailError.message);
-        console.log(`⚠️ Fallback Verification link: ${verificationLink}`);
+        console.log(`⚠️ Fallback Verification OTP: ${otpCode}`);
       }
     } else {
-      console.log(`⚠️ Email service unavailable. Verification link: ${verificationLink}`);
+      console.log(`⚠️ Email service unavailable. Verification OTP: ${otpCode}`);
     }
 
     res.json({
       success: true,
-      message: 'Registration successful! Please check your email to verify your account.',
+      message: 'Registration successful! An OTP code has been sent to your email.',
       email: user.email,
       requiresVerification: true
     });
@@ -997,7 +992,9 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user.email_verified) {
       return res.status(403).json({
         success: false,
-        error: 'Please verify your email before logging in. Check your inbox for the verification link.'
+        error: 'Please verify your email before logging in.',
+        requiresVerification: true,
+        email: user.email
       });
     }
     // Check if user is active
@@ -1064,6 +1061,195 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/logout', (req, res) => {
   res.clearCookie('token');
   res.json({ success: true });
+});
+
+// Verify OTP endpoint
+app.post('/api/auth/verify-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res.status(400).json({ success: false, error: 'Email and OTP code are required' });
+    }
+
+    // Find user
+    const result = await pool.query(
+      'SELECT id, email, name, role, email_verified, otp_code, otp_expires FROM users WHERE email = $1',
+      [email.toLowerCase().trim()]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const user = result.rows[0];
+
+    if (user.email_verified) {
+      // Generate JWT token
+      const jwtToken = jwt.sign(
+        { id: user.id, email: user.email, role: user.role },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      res.cookie('token', jwtToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000
+      });
+
+      // Check workspace
+      const wsCheck = await pool.query(
+        'SELECT id FROM ims_workspaces WHERE owner_id = $1 LIMIT 1',
+        [user.id]
+      );
+
+      return res.json({
+        success: true,
+        message: 'Email already verified.',
+        token: jwtToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          workspaceId: null
+        },
+        hasWorkspace: wsCheck.rows.length > 0
+      });
+    }
+
+    if (!user.otp_code || user.otp_code !== otp.trim()) {
+      return res.status(400).json({ success: false, error: 'Invalid verification code' });
+    }
+
+    if (Number(user.otp_expires) < Date.now()) {
+      return res.status(400).json({ success: false, error: 'Verification code has expired. Please request a new one.' });
+    }
+
+    // Verify email
+    await pool.query(
+      'UPDATE users SET email_verified = TRUE, email_verification_token = NULL, otp_code = NULL, otp_expires = NULL WHERE id = $1',
+      [user.id]
+    );
+
+    // Check if workspace exists
+    const wsCheck = await pool.query(
+      'SELECT id FROM ims_workspaces WHERE owner_id = $1 LIMIT 1',
+      [user.id]
+    );
+
+    // Generate JWT token
+    const jwtToken = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.cookie('token', jwtToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    res.json({
+      success: true,
+      message: 'Email verified successfully!',
+      token: jwtToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        workspaceId: null
+      },
+      hasWorkspace: wsCheck.rows.length > 0
+    });
+
+  } catch (error) {
+    console.error('Error verifying OTP:', error);
+    res.status(500).json({ success: false, error: 'Failed to verify OTP' });
+  }
+});
+
+// Resend OTP endpoint
+app.post('/api/auth/resend-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email is required' });
+    }
+
+    const result = await pool.query(
+      'SELECT id, email, name, email_verified FROM users WHERE email = $1',
+      [email.toLowerCase().trim()]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const user = result.rows[0];
+
+    if (user.email_verified) {
+      return res.status(400).json({ success: false, error: 'Email is already verified' });
+    }
+
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = Date.now() + 10 * 60 * 1000;
+
+    await pool.query(
+      'UPDATE users SET otp_code = $1, otp_expires = $2 WHERE id = $3',
+      [otpCode, otpExpires, user.id]
+    );
+
+    // Send email
+    const mailOptions = {
+      from: `"RoBridge Support" <${process.env.EMAIL_USER}>`,
+      to: user.email,
+      subject: 'New Verification Code - RoBridge',
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+          <div style="text-align: center; border-bottom: 1px solid #f0f0f0; padding-bottom: 20px;">
+            <h2 style="color: #007bff; margin: 0;">RoBridge Verification</h2>
+          </div>
+          <div style="padding: 20px 0;">
+            <p>Hi <strong>${user.name}</strong>,</p>
+            <p>Your request for a new email verification code has been processed. Please use the following 6-digit OTP code:</p>
+            <div style="font-size: 32px; font-weight: 800; letter-spacing: 5px; color: #28a745; background: #f8f9fa; padding: 15px; text-align: center; border-radius: 8px; border: 1px dashed #28a745; width: 200px; margin: 25px auto;">
+              ${otpCode}
+            </div>
+            <p style="color: #666; font-size: 14px; text-align: center;">This code is valid for <strong>10 minutes</strong>. Do not share this code with anyone.</p>
+          </div>
+          <div style="border-top: 1px solid #f0f0f0; padding-top: 20px; font-size: 12px; color: #999; text-align: center;">
+            <p>Best regards,<br><strong>RoBridge Team</strong></p>
+          </div>
+        </div>
+      `
+    };
+
+    if (nodemailer && transporter && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+      try {
+        await transporter.sendMail(mailOptions);
+        console.log(`📧 Resent verification email to ${user.email}`);
+      } catch (emailError) {
+        console.error('⚠️ Failed to resend verification email:', emailError.message);
+        console.log(`⚠️ Fallback OTP: ${otpCode}`);
+      }
+    } else {
+      console.log(`⚠️ Email service unavailable. Resend OTP: ${otpCode}`);
+    }
+
+    res.json({
+      success: true,
+      message: 'A new verification code has been sent to your email.'
+    });
+
+  } catch (error) {
+    console.error('Error resending OTP:', error);
+    res.status(500).json({ success: false, error: 'Failed to resend verification code' });
+  }
 });
 // Verify Token & Email Verification GET Endpoint (Combined)
 app.get('/api/auth/verify', async (req, res) => {
@@ -1700,7 +1886,7 @@ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
     });
   }
 });
-// Forgot Password - Request Reset Link
+// Forgot Password - Request Reset OTP
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
@@ -1710,93 +1896,101 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     // Check if user exists
     const result = await pool.query('SELECT id, email, name FROM users WHERE email = $1', [email.toLowerCase()]);
     if (result.rows.length === 0) {
-      // Security best practice: Don't reveal if user exists or not, but for UX we might want to say "If email exists..."
-      // For this specific app, returning an error is fine for clarity.
       return res.status(404).json({ success: false, error: 'User with this email does not exist' });
     }
     const user = result.rows[0];
-    // Generate token and expiration (1 hour)
-    // Using a simple random string for the token. For higher security, use crypto.randomBytes
-    const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    const expires = Date.now() + 3600000; // 1 hour from now
-    // Save token to database
+    // Generate 6-digit numeric OTP code
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = Date.now() + 10 * 60 * 1000; // 10 minutes from now
+
+    // Save OTP to database (repurposing reset_password_token)
     await pool.query(
       'UPDATE users SET reset_password_token = $1, reset_password_expires = $2 WHERE id = $3',
-      [token, expires, user.id]
+      [otpCode, expires, user.id]
     );
-    // Create reset link
-    // Changes domain based on environment
-    const origin = req.headers.origin;
-    const host = req.get('host');
-    const protocol = req.protocol;
-    let clientUrl = origin || process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
-      ? `${protocol}://${host}/bvs` // Adjust if your base path is strictly /bvs
-      : 'http://localhost:3000'); // Development
 
-    // Normalize clientUrl: ensure it has /bvs subdirectory prefix if in production and not localhost/127.0.0.1
-    const isLocalhost = clientUrl.includes('localhost') || clientUrl.includes('127.0.0.1');
-    if (process.env.NODE_ENV === 'production' && !isLocalhost && !clientUrl.endsWith('/bvs') && !clientUrl.includes('/bvs/')) {
-      clientUrl = clientUrl.replace(/\/$/, '') + '/bvs';
-    }
-
-    // IMPORTANT: Frontend route will be /reset-password/:token or /reset-password?token=...
-    // We'll use query parameter for simplicity in React Router
-    const resetLink = `${clientUrl}/reset-password?token=${token}`;
     const mailOptions = {
       from: `"RoBridge Support" <${process.env.EMAIL_USER}>`,
       to: user.email,
-      subject: 'RoBridge Password Reset',
+      subject: 'RoBridge Password Reset Code',
       html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-          <h2 style="color: #007bff;">Password Reset Request</h2>
-          <p>Hi ${user.name},</p>
-          <p>You requested to reset your password for your RoBridge account.</p>
-          <p>Please click the button below to reset your password. This link is valid for 1 hour.</p>
-          <a href="${resetLink}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">Reset Password</a>
-          <p>If you didn't request this, you can safely ignore this email.</p>
-          <p>Best regards,<br>RoBridge Team</p>
+        <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+          <div style="text-align: center; border-bottom: 1px solid #f0f0f0; padding-bottom: 20px;">
+            <h2 style="color: #007bff; margin: 0;">Password Reset Request</h2>
+          </div>
+          <div style="padding: 20px 0;">
+            <p>Hi <strong>${user.name}</strong>,</p>
+            <p>You requested to reset your password for your RoBridge account. Please use the following 6-digit code to complete the process:</p>
+            <div style="font-size: 32px; font-weight: 800; letter-spacing: 5px; color: #dc3545; background: #f8f9fa; padding: 15px; text-align: center; border-radius: 8px; border: 1px dashed #dc3545; width: 200px; margin: 25px auto;">
+              ${otpCode}
+            </div>
+            <p style="color: #666; font-size: 14px; text-align: center;">This code is valid for <strong>10 minutes</strong>. If you did not request a password reset, you can safely ignore this email.</p>
+          </div>
+          <div style="border-top: 1px solid #f0f0f0; padding-top: 20px; font-size: 12px; color: #999; text-align: center;">
+            <p>Best regards,<br><strong>RoBridge Team</strong></p>
+          </div>
         </div>
       `
     };
+
     // Send email
     if (!nodemailer) {
       console.log(`⚠️ Nodemailer not loaded. Mocking email send to ${user.email}`);
-      return res.json({ success: true, message: 'Simulated: Password reset link sent (Email service unavailable)' });
+      console.log(`⚠️ Mock Reset OTP: ${otpCode}`);
+      return res.json({ success: true, message: 'Simulated: Password reset code sent (Email service unavailable)', email: user.email });
     }
     if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
       await transporter.sendMail(mailOptions);
-      console.log(`📧 Password reset email sent to ${user.email}`);
+      console.log(`📧 Password reset code email sent to ${user.email}`);
     } else {
-      console.log(`⚠️ Email credentials missing. MOCK EMAIL: Click here to reset -> ${resetLink}`);
+      console.log(`⚠️ Email credentials missing. Resend Reset OTP: ${otpCode}`);
     }
-    res.json({ success: true, message: 'Password reset link sent to your email' });
+    res.json({ success: true, message: 'Password reset code sent to your email', email: user.email });
   } catch (error) {
     console.error('Error in forgot-password:', error);
     res.status(500).json({ success: false, error: 'Failed to process request' });
   }
 });
-// Reset Password - Verify Token and Update Password
+// Reset Password - Verify OTP or Legacy Token and Update Password
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
-    const { token, newPassword } = req.body;
-    if (!token || !newPassword) {
-      return res.status(400).json({ success: false, error: 'Token and new password are required' });
+    const { token, email, otp, newPassword } = req.body;
+    if (!newPassword) {
+      return res.status(400).json({ success: false, error: 'New password is required' });
     }
     if (newPassword.length < 6) {
       return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
     }
-    // Find user with this token and check if valid/not expired
-    const result = await pool.query(
-      'SELECT id, email FROM users WHERE reset_password_token = $1 AND reset_password_expires > $2',
-      [token, Date.now()]
-    );
-    if (result.rows.length === 0) {
-      return res.status(400).json({ success: false, error: 'Password reset link is invalid or has expired' });
+
+    let result;
+    if (otp) {
+      if (!email) {
+        return res.status(400).json({ success: false, error: 'Email is required when resetting with an OTP' });
+      }
+      // OTP Flow
+      result = await pool.query(
+        'SELECT id, email FROM users WHERE email = $1 AND reset_password_token = $2 AND reset_password_expires > $3',
+        [email.toLowerCase(), otp, Date.now()]
+      );
+    } else if (token) {
+      // Legacy Token Flow
+      result = await pool.query(
+        'SELECT id, email FROM users WHERE reset_password_token = $1 AND reset_password_expires > $2',
+        [token, Date.now()]
+      );
+    } else {
+      return res.status(400).json({ success: false, error: 'Token or OTP code is required' });
     }
+
+    if (result.rows.length === 0) {
+      const errorMsg = otp ? 'Password reset code is invalid or has expired' : 'Password reset link is invalid or has expired';
+      return res.status(400).json({ success: false, error: errorMsg });
+    }
+
     const user = result.rows[0];
     // Hash new password
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    // Update user: set new password, clear token fields
+    // Update user: set new password, clear token/otp fields
     await pool.query(
       'UPDATE users SET password_hash = $1, reset_password_token = NULL, reset_password_expires = NULL WHERE id = $2',
       [passwordHash, user.id]
@@ -1931,6 +2125,7 @@ app.post('/api/esp32/scan/:deviceId', async (req, res) => {
   try {
     const { deviceId } = req.params;
     const { barcodeData, scanType, imageData, timestamp } = req.body;
+    let aiAnalysis = null;
     console.log(`📱 ESP32 scan received from device: ${deviceId}`);
     // NOTE: req.body intentionally not logged — may contain sensitive data
     console.log('🔍 Scan data:', { barcodeData, scanType, timestamp });
@@ -3465,6 +3660,10 @@ const initUsersTable = async () => {
     `;
     await pool.query(query);
     console.log('✅ Users table created/verified');
+
+    // Add columns for OTP verification
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_code VARCHAR(6);');
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_expires BIGINT;');
     // Create default admin user if no users exist
     const userCount = await pool.query('SELECT COUNT(*) FROM users');
     if (parseInt(userCount.rows[0].count) === 0) {
@@ -3623,6 +3822,7 @@ const initUserDataIsolation = async () => {
 
 // Save a scan to saved_scans table - USER SPECIFIC
 app.post('/api/save-scan', authenticateToken, async (req, res) => {
+  let sql;
   try {
     const userId = req.user.id;
     const { barcode_data, barcode_type, source, product_name, category, price, description, metadata, device_id } = req.body;
@@ -3684,7 +3884,7 @@ app.post('/api/save-scan', authenticateToken, async (req, res) => {
       }
 
       // Save the scan if no recent duplicate found
-      const sql = `
+      sql = `
         INSERT INTO saved_scans (barcode_data, barcode_type, source, product_name, category, price, description, metadata, user_id, device_id)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING id
@@ -5562,8 +5762,8 @@ app.get('/api/ims/scanner/lookup/:barcode', authenticateToken, requireWorkspace,
 
 // Record a scan event and update stock
 app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (req, res) => {
+  const { barcode, itemId, itemName, workflow, quantity, unit, batchNo, serialNo, notes, websocketScanId } = req.body;
   try {
-    const { barcode, itemId, itemName, workflow, quantity, unit, batchNo, serialNo, notes, websocketScanId } = req.body;
     if (!barcode || !workflow) return res.status(400).json({ success: false, error: 'barcode and workflow required' });
     const qty = (quantity === 0 || quantity === '0') ? 0 : (Number(quantity) || 1);
 
@@ -5579,7 +5779,7 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
       if (dupIdResult.rows.length > 0) {
         console.log(`🚫 Duplicate websocket_scan_id detected on backend: ${websocketScanId}`);
         const stockRes = await pool.query(
-          'SELECT stock FROM ims_items WHERE workspace_id = $1 AND barcode = $2 LIMIT 1',
+          'SELECT stock FROM ims_items WHERE workspace_id = $1 AND LOWER(barcode) = LOWER($2) LIMIT 1',
           [req.workspace_id, barcode]
         );
         const currentStock = Number(stockRes.rows[0]?.stock || 0);
@@ -5590,7 +5790,7 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
     // 2. Check for duplicate scans within 2 seconds window
     const timeDupResult = await pool.query(
       `SELECT id FROM ims_scan_events 
-       WHERE workspace_id = $1 AND barcode = $2 AND workflow = $3 
+       WHERE workspace_id = $1 AND LOWER(barcode) = LOWER($2) AND workflow = $3 
          AND scanned_at > NOW() - INTERVAL '2 seconds'
        ORDER BY scanned_at DESC LIMIT 1`,
       [req.workspace_id, barcode, workflow]
@@ -5598,7 +5798,7 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
     if (timeDupResult.rows.length > 0) {
       console.log(`🚫 Duplicate timestamp scan detected on backend for barcode: ${barcode}`);
       const stockRes = await pool.query(
-        'SELECT stock FROM ims_items WHERE workspace_id = $1 AND barcode = $2 LIMIT 1',
+        'SELECT stock FROM ims_items WHERE workspace_id = $1 AND LOWER(barcode) = LOWER($2) LIMIT 1',
         [req.workspace_id, barcode]
       );
       const currentStock = Number(stockRes.rows[0]?.stock || 0);
@@ -5609,7 +5809,7 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
     if (!resolvedItemId) {
       // Check if it already exists by barcode
       const existing = await pool.query(
-        'SELECT id FROM ims_items WHERE workspace_id = $1 AND barcode = $2 LIMIT 1',
+        'SELECT id FROM ims_items WHERE workspace_id = $1 AND LOWER(barcode) = LOWER($2) LIMIT 1',
         [req.workspace_id, barcode]
       );
       if (existing.rows.length > 0) {
@@ -5633,10 +5833,20 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
           resolvedAlertAt = catCheck.rows[0].alert_at || 10;
         }
 
+        // Fetch the first master catalog in the workspace to avoid orphan items
+        let masterIdVal = null;
+        const masterCheck = await pool.query(
+          'SELECT id FROM ims_masters WHERE workspace_id = $1 ORDER BY created_at ASC LIMIT 1',
+          [req.workspace_id]
+        );
+        if (masterCheck.rows.length > 0) {
+          masterIdVal = masterCheck.rows[0].id;
+        }
+
         const insertResult = await pool.query(
           `INSERT INTO ims_items (workspace_id, master_id, user_id, barcode, name, category, base_unit, tracking_mode, alert_at, stock) 
-           VALUES ($1, NULL, $2, $3, $4, $5, $6, $7, $8, 0) RETURNING id`,
-          [req.workspace_id, req.user.id, barcode, nameVal, categoryVal, baseUnitVal, resolvedTracking, resolvedAlertAt]
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0) RETURNING id`,
+          [req.workspace_id, masterIdVal, req.user.id, barcode, nameVal, categoryVal, baseUnitVal, resolvedTracking, resolvedAlertAt]
         );
         resolvedItemId = insertResult.rows[0].id;
       }
@@ -6405,7 +6615,7 @@ app.post('/api/ims/grn/verify-scan', authenticateToken, requireWorkspace, async 
               g.doc_no, g.supplier, g.type
        FROM ims_grn_items i
        JOIN ims_grn g ON g.id = i.grn_id
-       WHERE g.workspace_id = $1 AND g.type = $2 AND g.status = 'PENDING' AND i.barcode = $3
+       WHERE g.workspace_id = $1 AND g.type = $2 AND g.status = 'PENDING' AND LOWER(i.barcode) = LOWER($3)
        ORDER BY g.created_at ASC LIMIT 1`,
       [wsId, grnType, barcode]
     );
@@ -6451,7 +6661,7 @@ app.post('/api/ims/workorders/verify-scan', authenticateToken, requireWorkspace,
        FROM ims_workorders
        WHERE workspace_id = $1
          AND status IN ('IN_PROGRESS', 'PENDING')
-         AND product_barcode = $2
+         AND LOWER(product_barcode) = LOWER($2)
        ORDER BY created_at ASC LIMIT 1`,
       [wsId, barcode]
     );

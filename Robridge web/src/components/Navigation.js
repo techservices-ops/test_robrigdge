@@ -80,7 +80,8 @@ const Navigation = () => {
 
   const navItems = allNavItems.filter(item => {
     if (!user || !userRole) return false;
-    const hasRoleAccess = item.roles.includes(userRole);
+    const effectiveRole = (userRole === ROLES.ADMIN || userRole === ROLES.FULL_ACCESS) ? userRole : ROLES.EXPO_USER;
+    const hasRoleAccess = item.roles.includes(effectiveRole);
     const hasPageAccessCheck = hasPageAccess(item.path);
 
     // Apply Workspace-level role restrictions for 'user', 'member', 'viewer'
