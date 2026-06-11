@@ -36,7 +36,7 @@ const FIELD_KEYWORDS = {
 };
 
 function scoreMatch(colName, fieldKey) {
-  const col = colName.toLowerCase().replace(/[_\-\.]/g, ' ').trim();
+  const col = colName.toLowerCase().replace(/[_\-.]/g, ' ').trim();
   const keywords = FIELD_KEYWORDS[fieldKey] || [];
   for (const kw of keywords) {
     if (col === kw) return 100;

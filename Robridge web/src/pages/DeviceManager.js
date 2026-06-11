@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
-import { getServerURL } from '../config/api';
+
 import {
     FaBarcode,
     FaTimesCircle,
@@ -12,15 +12,15 @@ import {
     FaInfoCircle,
     FaCheckCircle,
     FaExclamationTriangle,
-    
     FaSignal,
+    
     FaBatteryFull,
     FaBatteryThreeQuarters,
     FaBatteryHalf,
     FaBatteryQuarter,
     FaBatteryEmpty,
     FaClock,
-    FaMapMarkerAlt,
+
     FaMicrochip,
     FaQrcode,
     FaMobileAlt,
@@ -34,7 +34,7 @@ import './DeviceManager.css';
 
 const DeviceManager = () => {
     const { showToast, showConfirm } = useUI();
-    const { imsFetch } = useWorkspace();
+    const { imsFetch, activeWorkspaceId } = useWorkspace();
     // State for paired devices (from DB)
     const [pairedDevices, setPairedDevices] = useState([]);
     const [isLoadingPaired, setIsLoadingPaired] = useState(true);
@@ -68,14 +68,28 @@ const DeviceManager = () => {
     const [showDetails, setShowDetails] = useState(false);
     const [error, setError] = useState('');
     const [displayTime, setDisplayTime] = useState('');
+    const [globalTotalScans, setGlobalTotalScans] = useState(0);
 
     // WebSocket context for live data
-    const { isConnected, esp32Devices, latestScan, isProcessingScan, socket } = useWebSocket();
+    const { isConnected, esp32Devices, latestScan, setLatestScan, isProcessingScan, socket } = useWebSocket();
 
     // Load paired devices from database
     useEffect(() => {
         loadPairedDevices();
-    }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeWorkspaceId]);
+
+    useEffect(() => {
+        // Fetch global scans from dashboard to keep it synced with Command Center
+        imsFetch('/api/ims/dashboard')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.dashboard) {
+                    setGlobalTotalScans(data.dashboard.todayMovements || 0);
+                }
+            })
+            .catch(err => console.error('Error fetching global scans:', err));
+    }, [imsFetch]);
 
     // Listen for WebSocket events
     useEffect(() => {
@@ -110,8 +124,12 @@ const DeviceManager = () => {
             const date = ts ? new Date(ts) : new Date();
             const isValid = date.getFullYear() > 2020;
             setDisplayTime(isValid ? date.toLocaleString() : new Date().toLocaleString());
+            
+            // Increment global count on new scan
+            setGlobalTotalScans(prev => prev + 1);
+            setLatestScan(null);
         }
-    }, [latestScan]);
+    }, [latestScan, showDetails, setLatestScan]);
 
     // Auto-regenerate WiFi QR code when credentials change
     useEffect(() => {
@@ -119,8 +137,9 @@ const DeviceManager = () => {
             generateWifiQR();
         } else {
             setWifiQrCodeUrl('');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         }
-    }, [wifiSSID, wifiPassword, wifiSecurityType]);
+    }, [showWifiModal, wifiSSID, wifiPassword, wifiSecurityType]);
 
     // Save WiFi credentials to localStorage whenever they change
     useEffect(() => {
@@ -169,7 +188,7 @@ const DeviceManager = () => {
             status: liveDevice ? liveDevice.status : 'offline',
             ipAddress: liveDevice?.ipAddress || 'N/A',
             totalScans: liveDevice?.totalScans || 0,
-            lastSeen: liveDevice?.lastSeen || paired.paired_at,
+            lastSeen: liveDevice?.lastSeen || liveDevice?.last_seen || paired.last_seen || paired.paired_at,
             batteryLevel: liveDevice?.batteryLevel,
             signalStrength: liveDevice?.signalStrength,
             isLive: !!liveDevice
@@ -277,71 +296,17 @@ const DeviceManager = () => {
         // Don't clear credentials - keep them for next time
     };
 
-    const handleSaveScan = async () => {
-        if (!latestScan) {
-            showToast('No scan to save', 'warning');
-            return;
-        }
 
-        const source = (latestScan.source || '').toUpperCase();
-        if (source !== 'ESP32') {
-            showToast(`Only ESP32 source scans can be saved. Current source: "${latestScan.source}"`, 'warning');
-            return;
-        }
-
-        try {
-            const serverURL = getServerURL();
-            const response = await fetch(`${serverURL}/api/save-scan`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('robridge_token')}`
-                },
-                body: JSON.stringify({
-                    barcode_data: latestScan.barcodeData,
-                    barcode_type: latestScan.scanType || 'unknown',
-                    source: latestScan.source || 'ESP32',
-                    product_name: latestScan.aiAnalysis?.title || 'Unknown Product',
-                    category: latestScan.aiAnalysis?.category || 'Unknown',
-                    price: 0,
-                    description: latestScan.aiAnalysis?.description || '',
-                    metadata: {
-                        deviceId: latestScan.deviceId,
-                        deviceName: latestScan.deviceName,
-                        aiAnalysis: latestScan.aiAnalysis,
-                        timestamp: latestScan.timestamp
-                    }
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                showToast('Scan saved successfully! View in "Saved Scans" page.', 'success');
-            } else {
-                if (result.duplicate) {
-                    showToast(result.error + '\n\nLast saved: ' + new Date(result.lastSaved).toLocaleString(), 'warning');
-                } else {
-                    showToast('Failed to save scan: ' + (result.error || 'Unknown error'), 'error');
-                }
-            }
-        } catch (error) {
-            console.error('Error saving scan:', error);
-            showToast('Error saving scan. Please ensure the server is running.', 'error');
-        }
-    };
 
     const exportDeviceData = () => {
         const csvContent = [
-            ['Device Name', 'Device ID', 'Status', 'IP Address', 'Paired At', 'Last Seen', 'Total Scans'],
+            ['Device Name', 'Device ID', 'Status', 'Paired At', 'Last Seen'],
             ...mergedDevices.map(device => [
                 device.deviceName,
                 device.deviceId,
                 device.status,
-                device.ipAddress,
                 new Date(device.pairedAt).toLocaleString(),
-                new Date(device.lastSeen).toLocaleString(),
-                device.totalScans || 0
+                new Date(device.lastSeen).toLocaleString()
             ])
         ].map(row => row.join(',')).join('\n');
 
@@ -427,7 +392,7 @@ const DeviceManager = () => {
     // Calculate stats
     const totalDevices = mergedDevices.length;
     const onlineDevices = mergedDevices.filter(d => d.status === 'connected').length;
-    const totalScansToday = mergedDevices.reduce((sum, d) => sum + (d.totalScans || 0), 0);
+    const totalScansToday = globalTotalScans;
 
     return (
         <div className="device-manager">
@@ -557,18 +522,12 @@ const DeviceManager = () => {
                                     </div>
 
                                     <div className="device-details">
-                                        <div className="detail-row">
-                                            <FaMapMarkerAlt />
-                                            <span>IP: {device.ipAddress}</span>
-                                        </div>
+
                                         <div className="detail-row">
                                             <FaClock />
                                             <span>Last Seen: {new Date(device.lastSeen).toLocaleString()}</span>
                                         </div>
-                                        <div className="detail-row">
-                                            <FaBarcode />
-                                            <span>Total Scans: {device.totalScans || 0}</span>
-                                        </div>
+
                                         {device.isLive && device.batteryLevel && (
                                             <div className="detail-row">
                                                 <span style={{ color: getBatteryColor(device.batteryLevel) }}>
@@ -611,9 +570,9 @@ const DeviceManager = () => {
                 <div className="live-scanner-feed">
                     <h2>Live Scanner Feed</h2>
                     <div className="connection-status">
-                        <div className={`status-indicator ${isConnected ? 'connected' : 'disconnected'}`}>
-                            <FaSignal />
-                            {isConnected ? 'Connected' : 'Disconnected'}
+                        <div className={`status-indicator ${isConnected && onlineDevices > 0 ? 'connected' : 'offline'}`} style={{ color: isConnected && onlineDevices > 0 ? '#4CAF50' : '#9AA0A6' }}>
+                            {isConnected && onlineDevices > 0 ? <FaCheckCircle /> : <FaExclamationTriangle />}
+                            {isConnected && onlineDevices > 0 ? 'CONNECTED' : 'OFFLINE'}
                         </div>
                     </div>
 
@@ -675,11 +634,7 @@ const DeviceManager = () => {
                                 }
                                 return null;
                             })()}
-                            <div className="save-scan-btn-container" style={{ marginTop: '15px' }}>
-                                <button className="btn btn-primary" onClick={handleSaveScan} style={{ width: '100%' }}>
-                                    Save Scan
-                                </button>
-                            </div>
+
                         </div>
                     ) : (
                         <div className="no-scan-card">
@@ -718,7 +673,9 @@ const DeviceManager = () => {
             )}
 
             {/* Details Modal */}
-            {showDetails && selectedDevice && (
+            {showDetails && selectedDevice && (() => {
+                const liveDevice = mergedDevices.find(d => d.deviceId === selectedDevice.deviceId) || selectedDevice;
+                return (
                 <div className="modal-overlay" onClick={closeDetailsModal}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
@@ -732,49 +689,39 @@ const DeviceManager = () => {
                                 <div className="detail-section">
                                     <h3>Basic Information</h3>
                                     <div className="detail-item">
-                                        <strong>Device Name:</strong> {selectedDevice.deviceName}
+                                        <strong>Device Name:</strong> {liveDevice.deviceName}
                                     </div>
                                     <div className="detail-item">
-                                        <strong>Device ID:</strong> {selectedDevice.deviceId}
+                                        <strong>Device ID:</strong> {liveDevice.deviceId}
                                     </div>
                                     <div className="detail-item">
                                         <strong>Status:</strong>
-                                        <span className="status-badge" style={{ color: getStatusColor(selectedDevice.status) }}>
-                                            {getStatusIcon(selectedDevice.status)} {selectedDevice.status}
+                                        <span className="status-badge" style={{ color: getStatusColor(liveDevice.status) }}>
+                                            {getStatusIcon(liveDevice.status)} {liveDevice.status}
                                         </span>
-                                    </div>
-                                    <div className="detail-item">
-                                        <strong>IP Address:</strong> {selectedDevice.ipAddress}
                                     </div>
                                 </div>
 
                                 <div className="detail-section">
                                     <h3>Activity</h3>
                                     <div className="detail-item">
-                                        <strong>Total Scans:</strong> {selectedDevice.totalScans || 0}
+                                        <strong>Paired At:</strong> {new Date(liveDevice.pairedAt).toLocaleString()}
                                     </div>
                                     <div className="detail-item">
-                                        <strong>Paired At:</strong> {new Date(selectedDevice.pairedAt).toLocaleString()}
+                                        <strong>Last Seen:</strong> {new Date(liveDevice.lastSeen).toLocaleString()}
                                     </div>
-                                    <div className="detail-item">
-                                        <strong>Last Seen:</strong> {new Date(selectedDevice.lastSeen).toLocaleString()}
-                                    </div>
-                                    {selectedDevice.batteryLevel && (
+                                    {liveDevice.batteryLevel && (
                                         <div className="detail-item">
-                                            <strong>Battery Level:</strong> {selectedDevice.batteryLevel}%
+                                            <strong>Battery Level:</strong> {liveDevice.batteryLevel}%
                                         </div>
                                     )}
                                 </div>
                             </div>
-                            <div className="modal-footer">
-                                <button className="btn btn-secondary" onClick={closeDetailsModal}>
-                                    Close
-                                </button>
-                            </div>
                         </div>
                     </div>
                 </div>
-            )}
+                );
+            })()}
 
             {/* WiFi Configuration Modal */}
             {showWifiModal && (

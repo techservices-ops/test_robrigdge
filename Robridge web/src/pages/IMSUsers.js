@@ -311,7 +311,7 @@ const IMSUsers = () => {
                       {new Date(member.joinedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </div>
 
-                    {isAdmin && !isYou && (
+                    {((isAdmin && member.role !== 'owner') || (isManager && ['user', 'member', 'viewer'].includes(member.role))) && !isYou && (
                       <button
                         className="member-remove-btn"
                         onClick={() => handleRemoveMember(member.id, member.name)}

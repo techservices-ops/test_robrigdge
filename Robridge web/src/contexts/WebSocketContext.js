@@ -185,16 +185,56 @@ export const WebSocketProvider = ({ children }) => {
           ]);
 
           if (dbData.success) {
-            const mergedDevices = dbData.devices.map(dbDev => {
-              const liveDev = liveData.success && liveData.devices ? liveData.devices.find(d => d.deviceId === dbDev.device_id) : null;
-              const lastSeenDate = new Date(dbDev.last_seen);
-              const isRecentlySeen = lastSeenDate > new Date(Date.now() - 5 * 60 * 1000);
+            // WORKAROUND: Forcefully ping the backend for each device to read its live memory status
+            // This bypasses the missing /api/esp32/devices endpoint on the old Render backend.
+            const liveStatuses = await Promise.all(
+              dbData.devices.map(d => 
+                fetch(`${serverURL}/api/esp32/ping/${d.device_id}`)
+                  .then(r => r.json())
+                  .catch(() => ({ success: false }))
+              )
+            );
 
-              if (liveDev) return { ...dbDev, ...liveDev, status: liveDev.status || (isRecentlySeen ? 'connected' : 'disconnected'), deviceName: dbDev.device_name, deviceId: dbDev.device_id };
-              if (isRecentlySeen) return { ...dbDev, status: 'connected', ipAddress: 'Active', deviceName: dbDev.device_name, deviceId: dbDev.device_id };
-              return { ...dbDev, status: 'disconnected', ipAddress: 'Offline', deviceName: dbDev.device_name, deviceId: dbDev.device_id };
+            setEsp32Devices(prev => {
+              const mergedDevices = dbData.devices.map((dbDev, index) => {
+                const liveDev = liveData.success && liveData.devices ? liveData.devices.find(d => d.deviceId === dbDev.device_id) : null;
+                const pingData = liveStatuses[index];
+                
+                // Prioritize the lastSeen from the current React state if it's newer (updated via WebSocket)
+                const existing = prev.find(p => p.deviceId === dbDev.device_id);
+                const existingLastSeen = existing && existing.lastSeen ? new Date(existing.lastSeen) : new Date(0);
+                
+                // Fix timezone issue: Postgres NOW() returns timestamp without timezone. Force UTC parsing.
+                const parseDbDate = (dateStr) => {
+                  if (!dateStr) return new Date(0);
+                  const str = String(dateStr);
+                  return new Date(str.endsWith('Z') || str.includes('+') ? str : str + 'Z');
+                };
+
+                // Prioritize ping data if available
+                let fetchedLastSeen = parseDbDate(dbDev.last_seen);
+                if (pingData && pingData.success && pingData.timestamp) {
+                  fetchedLastSeen = new Date(pingData.timestamp);
+                } else if (liveDev && liveDev.lastSeen) {
+                  fetchedLastSeen = new Date(liveDev.lastSeen);
+                }
+                
+                const bestLastSeen = existingLastSeen > fetchedLastSeen ? existingLastSeen : fetchedLastSeen;
+                
+                // Also give a 5-minute grace period for 'connected' status
+                const isRecentlySeen = bestLastSeen > new Date(Date.now() - 5 * 60 * 1000);
+
+                return { 
+                  ...dbDev, 
+                  ...(liveDev || {}), 
+                  status: isRecentlySeen ? 'connected' : 'disconnected',
+                  lastSeen: bestLastSeen.toISOString(),
+                  deviceName: dbDev.device_name, 
+                  deviceId: dbDev.device_id 
+                };
+              });
+              return mergedDevices;
             });
-            setEsp32Devices(mergedDevices);
           }
         } catch (error) {
           console.error('Error fetching devices:', error);

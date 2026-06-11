@@ -51,6 +51,7 @@ const RackManagement = () => {
     checkConnection();
     loadRacks();
     loadStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const checkConnection = async () => {
@@ -70,6 +71,7 @@ const RackManagement = () => {
   // Load racks when search or filter changes
   useEffect(() => {
     loadRacks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, filterStatus]);
 
   const loadRacks = async () => {
