@@ -1673,6 +1673,9 @@ app.delete('/api/workspaces/members/:userId', authenticateToken, requireWorkspac
     }
 
     if (!canRemove) {
+      if (requesterRole === 'manager' && ['owner', 'admin', 'manager'].includes(targetRole)) {
+        return res.status(403).json({ success: false, error: 'Managers cannot remove owners, admins, or other managers' });
+      }
       return res.status(403).json({ success: false, error: 'You do not have permission to remove this member' });
     }
 
