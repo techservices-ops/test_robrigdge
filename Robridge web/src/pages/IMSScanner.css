@@ -490,4 +490,45 @@
   color: #D93025;
 }
 
+/* Traceability Inputs Row in Scanner */
+.traceability-inputs {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.trace-input-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.trace-input-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.trace-input-field {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-medium);
+  font-size: 13px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.trace-input-field:focus {
+  outline: none;
+  border-color: var(--primary-orange);
+  box-shadow: 0 0 0 2px var(--primary-orange-lighter);
+}
+
 
