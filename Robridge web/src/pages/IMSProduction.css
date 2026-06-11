@@ -318,3 +318,60 @@
   font-size: 12px;
 }
 
+/* Work Order Summary Panel inside Scan Panel */
+.ims-wo-summary-card {
+  background: #fdfefe;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 18px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+}
+
+.ims-wo-summary-title {
+  font-size: 13px;
+  color: #2c3e50;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.ims-wo-summary-details {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #7f8c8d;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.ims-wo-summary-progress {
+  height: 6px;
+  background: #edf2f7;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.ims-wo-summary-progress-bar {
+  height: 100%;
+  background: #E3821E;
+  border-radius: 3px;
+  transition: width 0.4s ease-out;
+}
+
+.ims-wo-summary-pct {
+  font-size: 11px;
+  color: #718096;
+  font-weight: 700;
+  text-align: right;
+}
+
+.ims-wo-barcode-validation {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
