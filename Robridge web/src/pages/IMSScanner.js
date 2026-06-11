@@ -32,7 +32,21 @@ const IMSScanner = () => {
   const [serialNo, setSerialNo] = useState('');
   const [scanLog, setScanLog] = useState([]);
   const [showOnboard, setShowOnboard] = useState(false);
-  const [onboardForm, setOnboardForm] = useState({ name: '', category: 'General', unit: 'Unit', qty: '', tracking: 'FIFO' });
+  const [masters, setMasters] = useState([]);
+  const [pendingGrns, setPendingGrns] = useState([]);
+  const [onboardForm, setOnboardForm] = useState({
+    name: '',
+    category: 'General',
+    unit: 'Unit',
+    qty: '1',
+    tracking: 'FIFO',
+    masterId: '',
+    newMasterName: '',
+    newMasterDescription: '',
+    grnId: '',
+    newGrnSupplier: '',
+    newGrnPoRef: ''
+  });
   const [newItemBarcode, setNewItemBarcode] = useState('');
   const [autoLogEnabled, setAutoLogEnabled] = useState(true);
   const [fefoRec, setFefoRec] = useState([]);
@@ -145,6 +159,18 @@ const IMSScanner = () => {
             if (locData.locations.length > 0) {
               setSelectedLocation(locData.locations[0]);
             }
+          }
+          // Fetch master catalogs
+          const mastersRes = await imsFetch('/api/ims/masters');
+          const mastersData = await mastersRes.json();
+          if (mastersData.success) {
+            setMasters(mastersData.masters || []);
+          }
+          // Fetch pending Inward GRNs
+          const grnsRes = await imsFetch('/api/ims/grn?type=INWARD');
+          const grnsData = await grnsRes.json();
+          if (grnsData.success) {
+            setPendingGrns(grnsData.grns.filter(g => g.status === 'PENDING') || []);
           }
           fetchEvents();
         } catch (e) { console.error('IMS fetch error:', e); }
@@ -407,31 +433,91 @@ const IMSScanner = () => {
   const triggerOnboard = (barcode) => {
     setNewItemBarcode(barcode);
     const defaultCat = dynamicCategories[0] || 'General';
-    const matched = categoryDetails.find(c => c.name === defaultCat);
+    const matchedCat = categoryDetails.find(c => c.name === defaultCat);
+    
+    // Check if we already have lookup info on foundItem
+    const hasCatalogItem = foundItem && foundItem.barcode === barcode;
+    
     setOnboardForm({
-      name: '',
-      category: defaultCat,
-      unit: 'Unit',
-      qty: '',
-      tracking: matched ? matched.mode : 'FIFO'
+      name: hasCatalogItem ? (foundItem.name || '') : '',
+      category: hasCatalogItem ? (foundItem.category || defaultCat) : defaultCat,
+      unit: hasCatalogItem ? (foundItem.baseUnit || 'Unit') : 'Unit',
+      qty: '1',
+      tracking: hasCatalogItem ? (foundItem.trackingMode || 'FIFO') : (matchedCat ? matchedCat.mode : 'FIFO'),
+      masterId: hasCatalogItem ? (foundItem.masterId || '') : (masters[0]?.id || ''),
+      newMasterName: '',
+      newMasterDescription: '',
+      grnId: pendingGrns[0]?.id || '',
+      newGrnSupplier: '',
+      newGrnPoRef: ''
     });
     setShowOnboard(true);
   };
 
   const handleOnboardSave = async () => {
-    const tempItem = {
-      name: onboardForm.name || 'New Item',
-      barcode: newItemBarcode,
-      category: onboardForm.category,
-      baseUnit: onboardForm.unit,
-      trackingMode: onboardForm.tracking,
-      stock: 0
-    };
-    await recordScanEvent(tempItem, scanStage, onboardForm.qty || 1, '', '', tempItem.name);
-    setShowOnboard(false);
-    const defaultCat = dynamicCategories[0] || 'General';
-    const matched = categoryDetails.find(c => c.name === defaultCat);
-    setOnboardForm({ name: '', category: defaultCat, unit: 'Unit', qty: '', tracking: matched ? matched.mode : 'FIFO' });
+    if (!onboardForm.name) {
+      showToast('Product name is required', 'error');
+      return;
+    }
+    if (onboardForm.masterId === 'NEW' && !onboardForm.newMasterName) {
+      showToast('New master catalog name is required', 'error');
+      return;
+    }
+    if (onboardForm.grnId === 'NEW' && !onboardForm.newGrnSupplier) {
+      showToast('New GRN supplier name is required', 'error');
+      return;
+    }
+
+    try {
+      const res = await imsFetch('/api/ims/scanner/onboard', {
+        method: 'POST',
+        body: JSON.stringify({
+          barcode: newItemBarcode,
+          name: onboardForm.name,
+          category: onboardForm.category,
+          baseUnit: onboardForm.unit,
+          trackingMode: onboardForm.tracking,
+          qty: parseInt(onboardForm.qty) || 1,
+          masterId: onboardForm.masterId,
+          newMasterName: onboardForm.newMasterName,
+          newMasterDescription: onboardForm.newMasterDescription,
+          grnId: onboardForm.grnId,
+          newGrnSupplier: onboardForm.newGrnSupplier,
+          newGrnPoRef: onboardForm.newGrnPoRef
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message || 'Onboarded successfully', 'success');
+        setShowOnboard(false);
+
+        // Refresh lists
+        const mastersRes = await imsFetch('/api/ims/masters');
+        const mastersData = await mastersRes.json();
+        if (mastersData.success) setMasters(mastersData.masters || []);
+
+        const grnsRes = await imsFetch('/api/ims/grn?type=INWARD');
+        const grnsData = await grnsRes.json();
+        if (grnsData.success) {
+          setPendingGrns(grnsData.grns.filter(g => g.status === 'PENDING') || []);
+        }
+
+        // Display as a successful scan
+        setScanMatch({
+          type: 'GRN',
+          matched: true,
+          item: data.item,
+          grn: data.grn
+        });
+        setScanResult('scan_match');
+        fetchEvents();
+      } else {
+        showToast(data.error || 'Failed to onboard product', 'error');
+      }
+    } catch (e) {
+      console.error('Onboard save error:', e);
+      showToast('Network error during onboarding', 'error');
+    }
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
@@ -586,9 +672,20 @@ const IMSScanner = () => {
           ) : (
             <>
               <FaExclamationCircle style={{ fontSize: 32, color: '#e74c3c', flexShrink: 0 }} />
-              <div>
-                <div style={{ fontWeight: 700, color: '#e74c3c' }}>No match found</div>
-                <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>{scanMatch.message}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: '#e74c3c' }}>No match found</div>
+                  <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>{scanMatch.message}</div>
+                </div>
+                {scanStage === 'RECEIVE' && (
+                  <button 
+                    className="btn btn-primary" 
+                    style={{ alignSelf: 'flex-start', marginTop: 4, padding: '6px 12px', fontSize: 12, height: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}
+                    onClick={() => triggerOnboard(lastScanBarcodeRef.current)}
+                  >
+                    <FaPlus /> Onboard Product & Add to GRN
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -887,72 +984,135 @@ const IMSScanner = () => {
       {/* Unknown Barcode Onboarding Modal */}
       {showOnboard && (
         <div className="ims-modal-overlay" onClick={() => setShowOnboard(false)}>
-          <div className="ims-modal" onClick={e => e.stopPropagation()}>
+          <div className="ims-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
             <div className="modal-header">
               <FaPlus className="modal-icon" />
               <div>
-                <h2>New Barcode Detected</h2>
-                <p>Barcode <strong>{newItemBarcode}</strong> is not in your catalog. Add it now?</p>
+                <h2>Onboard Unexpected Item</h2>
+                <p>Barcode <strong>{newItemBarcode}</strong> will be registered to your Catalog and Inward GRN.</p>
               </div>
               <button className="modal-close" onClick={() => setShowOnboard(false)}><FaTimes /></button>
             </div>
-            <div className="modal-body">
-              <div className="form-group">
-                <label className="form-label">Product Name *</label>
-                <input className="form-input" placeholder="e.g. Aspirin 100mg" value={onboardForm.name}
-                  onChange={e => setOnboardForm(f => ({ ...f, name: e.target.value }))} />
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '70vh', overflowY: 'auto' }}>
+              
+              {/* Product Details Section */}
+              <div style={{ background: '#f8f9fa', padding: '16px', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: '#495057' }}>Product Information</h3>
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <label className="form-label">Product Name *</label>
+                  <input className="form-input" placeholder="e.g. Aspirin 100mg" value={onboardForm.name}
+                    onChange={e => setOnboardForm(f => ({ ...f, name: e.target.value }))} />
+                </div>
+                <div className="modal-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Category</label>
+                    <select className="form-select" value={onboardForm.category}
+                      onChange={e => {
+                        const selectedCatName = e.target.value;
+                        const matchedCat = categoryDetails.find(c => c.name === selectedCatName);
+                        setOnboardForm(f => ({
+                          ...f,
+                          category: selectedCatName,
+                          tracking: matchedCat ? matchedCat.mode : 'FIFO'
+                        }));
+                      }}>
+                      {dynamicCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Base Unit</label>
+                    <select className="form-select" value={onboardForm.unit}
+                      onChange={e => setOnboardForm(f => ({ ...f, unit: e.target.value }))}>
+                      <option>Unit</option>
+                      <option>Pack</option>
+                      <option>Box</option>
+                      <option>Case</option>
+                      <option>Piece</option>
+                      <option>Kg</option>
+                      <option>Litre</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="modal-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Tracking Mode</label>
+                    <select className="form-select" value={onboardForm.tracking}
+                      onChange={e => setOnboardForm(f => ({ ...f, tracking: e.target.value }))}>
+                      <option value="FIFO">FIFO — First In First Out</option>
+                      <option value="FEFO">FEFO — First Expire First Out</option>
+                      <option value="LIFO">LIFO — Last In First Out</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Quantity to Receive</label>
+                    <input className="form-input" type="number" min="1" placeholder="1" value={onboardForm.qty}
+                      onChange={e => setOnboardForm(f => ({ ...f, qty: e.target.value }))} />
+                  </div>
+                </div>
               </div>
-              <div className="modal-row">
+
+              {/* Master Catalog Section */}
+              <div style={{ background: '#f8f9fa', padding: '16px', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: '#495057' }}>Catalog Placement</h3>
                 <div className="form-group">
-                  <label className="form-label">Category</label>
-                  <select className="form-select" value={onboardForm.category}
-                    onChange={e => {
-                      const selectedCatName = e.target.value;
-                      const matchedCat = categoryDetails.find(c => c.name === selectedCatName);
-                      setOnboardForm(f => ({
-                        ...f,
-                        category: selectedCatName,
-                        tracking: matchedCat ? matchedCat.mode : 'FIFO'
-                      }));
-                    }}>
-                    {dynamicCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                  <label className="form-label">Master Catalog *</label>
+                  <select className="form-select" value={onboardForm.masterId}
+                    onChange={e => setOnboardForm(f => ({ ...f, masterId: e.target.value }))}>
+                    {masters.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    <option value="NEW">➕ Create New Master Catalog...</option>
                   </select>
                 </div>
+                {onboardForm.masterId === 'NEW' && (
+                  <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div className="form-group">
+                      <label className="form-label">New Catalog Name *</label>
+                      <input className="form-input" placeholder="e.g. Pharmacy Catalog" value={onboardForm.newMasterName}
+                        onChange={e => setOnboardForm(f => ({ ...f, newMasterName: e.target.value }))} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">New Catalog Description</label>
+                      <input className="form-input" placeholder="e.g. Master list of prescription drugs" value={onboardForm.newMasterDescription}
+                        onChange={e => setOnboardForm(f => ({ ...f, newMasterDescription: e.target.value }))} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* GRN Management Section */}
+              <div style={{ background: '#f8f9fa', padding: '16px', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: '#495057' }}>GRN Association</h3>
                 <div className="form-group">
-                  <label className="form-label">Base Unit</label>
-                  <select className="form-select" value={onboardForm.unit}
-                    onChange={e => setOnboardForm(f => ({ ...f, unit: e.target.value }))}>
-                    <option>Unit</option>
-                    <option>Pack</option>
-                    <option>Box</option>
-                    <option>Case</option>
-                    <option>Piece</option>
-                    <option>Kg</option>
-                    <option>Litre</option>
+                  <label className="form-label">Associate to GRN</label>
+                  <select className="form-select" value={onboardForm.grnId}
+                    onChange={e => setOnboardForm(f => ({ ...f, grnId: e.target.value }))}>
+                    <option value="">➕ Auto-create default GRN</option>
+                    {pendingGrns.map(g => (
+                      <option key={g.id} value={g.id}>{g.doc_no} — {g.supplier}</option>
+                    ))}
+                    <option value="NEW">➕ Create New Pending GRN...</option>
                   </select>
                 </div>
+                {onboardForm.grnId === 'NEW' && (
+                  <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div className="form-group">
+                      <label className="form-label">Supplier Name *</label>
+                      <input className="form-input" placeholder="e.g. Pfizer Inc" value={onboardForm.newGrnSupplier}
+                        onChange={e => setOnboardForm(f => ({ ...f, newGrnSupplier: e.target.value }))} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">PO Reference</label>
+                      <input className="form-input" placeholder="e.g. PO-8871" value={onboardForm.newGrnPoRef}
+                        onChange={e => setOnboardForm(f => ({ ...f, newGrnPoRef: e.target.value }))} />
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="modal-row">
-                <div className="form-group">
-                  <label className="form-label">Opening Quantity</label>
-                  <input className="form-input" type="number" placeholder="0" value={onboardForm.qty}
-                    onChange={e => setOnboardForm(f => ({ ...f, qty: e.target.value }))} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Tracking Mode</label>
-                  <select className="form-select" value={onboardForm.tracking}
-                    onChange={e => setOnboardForm(f => ({ ...f, tracking: e.target.value }))}>
-                    <option value="FIFO">FIFO — First In First Out</option>
-                    <option value="FEFO">FEFO — First Expire First Out</option>
-                    <option value="LIFO">LIFO — Last In First Out</option>
-                  </select>
-                </div>
-              </div>
+
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowOnboard(false)}>Skip for Now</button>
               <button className="btn btn-primary" onClick={handleOnboardSave}>
-                <FaSave /> Add to Catalog
+                <FaSave /> Onboard & Receive
               </button>
             </div>
           </div>
