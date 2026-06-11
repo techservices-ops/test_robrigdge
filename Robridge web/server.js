@@ -216,6 +216,10 @@ const initDatabase = async () => {
       await client.query('DROP FUNCTION IF EXISTS create_default_workspace CASCADE;');
       await client.query('DROP FUNCTION IF EXISTS auto_create_workspace() CASCADE;');
       await client.query('DROP FUNCTION IF EXISTS auto_create_workspace CASCADE;');
+      await client.query('DROP FUNCTION IF EXISTS create_default_workspace_trigger() CASCADE;');
+      await client.query('DROP FUNCTION IF EXISTS create_default_workspace_trigger CASCADE;');
+      await client.query('DROP FUNCTION IF EXISTS auto_create_workspace_trigger() CASCADE;');
+      await client.query('DROP FUNCTION IF EXISTS auto_create_workspace_trigger CASCADE;');
     } catch (triggerErr) {
       console.error('⚠️ Warning dropping triggers:', triggerErr.message);
     }
