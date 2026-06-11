@@ -419,6 +419,7 @@ const initDatabase = async () => {
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS custom_fields JSONB DEFAULT '{}'`);
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS item_type VARCHAR(50) DEFAULT 'Raw Material'`);
         await client.query(`ALTER TABLE ims_items ADD COLUMN IF NOT EXISTS image_url TEXT`);
+        await client.query(`ALTER TABLE ims_workflows ADD COLUMN IF NOT EXISTS direction VARCHAR(20) DEFAULT 'NEUTRAL'`);
       } catch (alterErr) { console.log('Notice: Could not alter tables (might be fresh DB)'); }
       /*
       console.log('Starting user migration (batch mode)...');
@@ -465,7 +466,7 @@ const initDatabase = async () => {
           CREATE INDEX IF NOT EXISTS idx_ims_items_ws
           ON ims_items(workspace_id);
         `);
-      } catch(idxErr) { /* indexes might already exist */ }
+      } catch (idxErr) { /* indexes might already exist */ }
       console.log('✅ Checked/Updated schema for IMS Core Operational tables (masters, items, scan_events)');
       // ── NEW TABLES ──────────────────────────────────────────────────
       try {
@@ -575,7 +576,7 @@ const initDatabase = async () => {
           );
         `);
         console.log('✅ New IMS tables (Work Orders, GRN, Locations, Production) ready');
-      } catch(newTblErr) { console.log('Notice (new tables):', newTblErr.message); }
+      } catch (newTblErr) { console.log('Notice (new tables):', newTblErr.message); }
     } catch (schemaErr) {
       console.error('⚠️ Schema update warning:', schemaErr.message);
     }
@@ -813,13 +814,13 @@ app.post('/api/auth/register', async (req, res) => {
     let clientUrl = origin || process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
       ? `${protocol}://${host}/bvs`
       : 'http://localhost:3000');
-    
+
     // Normalize clientUrl: ensure it has /bvs subdirectory prefix if in production and not localhost/127.0.0.1
     const isLocalhost = clientUrl.includes('localhost') || clientUrl.includes('127.0.0.1');
     if (process.env.NODE_ENV === 'production' && !isLocalhost && !clientUrl.endsWith('/bvs') && !clientUrl.includes('/bvs/')) {
       clientUrl = clientUrl.replace(/\/$/, '') + '/bvs';
     }
-    
+
     const verificationLink = `${clientUrl}/verify-email?token=${verificationToken}`;
     const mailOptions = {
       from: `"RoBridge Support" <${process.env.EMAIL_USER}>`,
@@ -881,7 +882,7 @@ app.get('/api/auth/check-verification', async (req, res) => {
         JWT_SECRET,
         { expiresIn: '7d' }
       );
-      
+
       // Set JWT in httpOnly cookie
       res.cookie('token', jwtToken, {
         httpOnly: true,
@@ -927,14 +928,14 @@ app.get('/api/auth/verify-email', async (req, res) => {
       'UPDATE users SET email_verified = TRUE, email_verification_token = NULL WHERE id = $1',
       [user.id]
     );
-    
+
     // Generate JWT token
     const jwtToken = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
-    
+
     // Set JWT in httpOnly cookie
     res.cookie('token', jwtToken, {
       httpOnly: true,
@@ -943,8 +944,8 @@ app.get('/api/auth/verify-email', async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Email verified successfully!',
       token: jwtToken,
       user: {
@@ -991,6 +992,7 @@ app.post('/api/auth/login', async (req, res) => {
         error: 'Incorrect password'
       });
     }
+    // SSO check removed
     // Check if email is verified
     if (!user.email_verified) {
       return res.status(403).json({
@@ -1030,7 +1032,7 @@ app.post('/api/auth/login', async (req, res) => {
       if (wsCheck.rows.length > 0) {
         defaultWorkspaceId = wsCheck.rows[0].workspace_id;
       }
-    } catch(err) { console.error('Error fetching workspace for login:', err); }
+    } catch (err) { console.error('Error fetching workspace for login:', err); }
     // Set JWT in httpOnly cookie
     res.cookie('token', token, {
       httpOnly: true,
@@ -1222,20 +1224,35 @@ const requireRole = (allowedRoles) => {
     if (!req.workspace_role) {
       return res.status(403).json({ success: false, error: 'Workspace role not verified' });
     }
-    
+
     // Owner and Admin bypass restrictions
     if (req.workspace_role === 'owner' || req.workspace_role === 'admin') {
       return next();
     }
     if (!allowedRoles.includes(req.workspace_role)) {
-      return res.status(403).json({ 
-        success: false, 
-        error: `Access denied. Requires one of: ${allowedRoles.join(', ')}` 
+      return res.status(403).json({
+        success: false,
+        error: `Access denied. Requires one of: ${allowedRoles.join(', ')}`
       });
     }
     next();
   };
 };
+
+// Audit Log Helper
+const logAudit = async (workspaceId, userId, action, entityType, entityId, details, req) => {
+  try {
+    const ipAddress = req ? (req.headers['x-forwarded-for'] || req.socket.remoteAddress) : null;
+    await pool.query(
+      `INSERT INTO ims_audit_log (workspace_id, user_id, action, entity_type, entity_id, details, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [workspaceId, userId, action, entityType, entityId, JSON.stringify(details || {}), ipAddress]
+    );
+  } catch (err) {
+    console.error('Failed to log audit event:', err);
+  }
+};
+
 // ======================
 // WORKSPACES ENDPOINTS
 // ======================
@@ -1265,20 +1282,20 @@ app.post('/api/workspaces', authenticateToken, async (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ success: false, error: 'Workspace name is required' });
-    
+
     await pool.query('BEGIN');
-    
+
     const wsResult = await pool.query(
       'INSERT INTO ims_workspaces (name, owner_id) VALUES ($1, $2) RETURNING *',
       [name, req.user.id]
     );
     const workspace = wsResult.rows[0];
-    
+
     await pool.query(
       "INSERT INTO ims_workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'owner')",
       [workspace.id, req.user.id]
     );
-    
+
     await pool.query('COMMIT');
     res.json({ success: true, workspace });
   } catch (error) {
@@ -1297,7 +1314,7 @@ app.post('/api/workspaces/invites/generate', authenticateToken, requireWorkspace
       return res.status(403).json({ success: false, error: 'Only admins and managers can generate invite links' });
     }
     const { role = 'member', expiryDays = 7 } = req.body;
-    
+
     // Managers can only invite 'user' / 'member' / 'viewer' role
     if (req.workspace_role === 'manager' && !['user', 'member', 'viewer'].includes(role)) {
       return res.status(403).json({ success: false, error: 'Managers are restricted to inviting User role only' });
@@ -1997,6 +2014,14 @@ app.post('/api/esp32/scan/:deviceId', async (req, res) => {
         );
       } else {
         console.log(`⚠️  Device ${deviceId} is not paired to any workspace`);
+        // --- ENFORCE BLOCK UNPAIRED POLICY ---
+        const globalBlockRes = await pool.query(
+          `SELECT preferences FROM ims_settings WHERE (preferences->'security'->>'blockUnpaired')::boolean = true LIMIT 1`
+        );
+        if (globalBlockRes.rows.length > 0) {
+          console.log(`🚫 Rejecting scan from unpaired device ${deviceId} due to Block Unpaired Scans policy.`);
+          return res.status(403).json({ success: false, error: 'Access denied: Scanning device is not paired to any active workspace.' });
+        }
       }
     } catch (pairingError) {
       console.error('Error checking device pairing:', pairingError);
@@ -2071,7 +2096,7 @@ app.post('/api/esp32/scan/:deviceId', async (req, res) => {
           const newItemResult = await pool.query(
             `INSERT INTO ims_items (workspace_id, master_id, user_id, barcode, name, category, stock) 
              VALUES ($1, NULL, NULL, $2, $3, 'Uncategorized', 0) RETURNING id`,
-             [wsId, barcodeData, `Scanned Item (${barcodeData})`]
+            [wsId, barcodeData, `Scanned Item (${barcodeData})`]
           );
           itemId = newItemResult.rows[0].id;
         }
@@ -2557,7 +2582,7 @@ app.put('/api/barcodes/:id/data', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { newBarcodeData, originalBarcodeData } = req.body;
     const userId = req.user.id;
-    
+
     console.log(`✏️ Editing barcode data for ID: ${id} by user ${userId}. New Value: ${newBarcodeData}`);
     if (!newBarcodeData) {
       return res.status(400).json({ success: false, error: 'New barcode data is required' });
@@ -2571,14 +2596,14 @@ app.put('/api/barcodes/:id/data', authenticateToken, async (req, res) => {
       }
       const scan = scanResult.rows[0];
       const actualOriginalBarcode = originalBarcodeData || scan.barcode_data;
-      
+
       let metadata = {};
       try {
         metadata = typeof scan.metadata === 'string' ? JSON.parse(scan.metadata || '{}') : (scan.metadata || {});
       } catch (e) {
         metadata = {};
       }
-      
+
       // Clean up AI analysis as requested
       delete metadata.aiAnalysis;
       delete metadata.description;
@@ -2595,7 +2620,7 @@ app.put('/api/barcodes/:id/data', authenticateToken, async (req, res) => {
             category = $5
         WHERE id = $6 AND user_id = $7
       `, [newBarcodeData, JSON.stringify(metadata), description, productName, category, id, userId]);
-      
+
       // 2. Update saved_scans
       await client.query(`
         UPDATE saved_scans
@@ -2614,7 +2639,7 @@ app.put('/api/barcodes/:id/data', authenticateToken, async (req, res) => {
         console.log('Skipping stock_track update (table might not exist yet):', stockErr.message);
       }
       await client.query('COMMIT');
-      
+
       res.json({
         success: true,
         message: 'Barcode updated successfully across all tables',
@@ -4927,13 +4952,14 @@ app.post('/api/ims/settings', authenticateToken, requireWorkspace, async (req, r
     // We update based on workspace_id. First check if exists
     const check = await pool.query('SELECT id FROM ims_settings WHERE workspace_id = $1', [req.workspace_id]);
     if (check.rows.length > 0) {
-       await pool.query('UPDATE ims_settings SET preferences = $1, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = $2', [JSON.stringify(settings), req.workspace_id]);
+      await pool.query('UPDATE ims_settings SET preferences = $1, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = $2', [JSON.stringify(settings), req.workspace_id]);
     } else {
-       await pool.query(
-         'INSERT INTO ims_settings (user_id, workspace_id, preferences) VALUES ($1, $2, $3)',
-         [req.user.id, req.workspace_id, JSON.stringify(settings)]
-       );
+      await pool.query(
+        'INSERT INTO ims_settings (user_id, workspace_id, preferences) VALUES ($1, $2, $3)',
+        [req.user.id, req.workspace_id, JSON.stringify(settings)]
+      );
     }
+    await logAudit(req.workspace_id, req.user.id, 'update_settings', 'settings', null, { settings }, req);
     res.json({ success: true, message: 'Settings saved.' });
   } catch (error) {
     console.error('Error saving settings:', error);
@@ -4976,7 +5002,7 @@ app.delete('/api/ims/roles/:id', authenticateToken, requireWorkspace, async (req
 // --- WORKFLOWS ---
 app.get('/api/ims/workflows', authenticateToken, requireWorkspace, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, name, color FROM ims_workflows WHERE workspace_id = $1 ORDER BY id ASC', [req.workspace_id]);
+    const result = await pool.query('SELECT id, name, color, direction FROM ims_workflows WHERE workspace_id = $1 ORDER BY id ASC', [req.workspace_id]);
     res.json({ success: true, workflows: result.rows });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to fetch workflows' });
@@ -4985,12 +5011,27 @@ app.get('/api/ims/workflows', authenticateToken, requireWorkspace, async (req, r
 
 app.post('/api/ims/workflows', authenticateToken, requireWorkspace, async (req, res) => {
   try {
-    const { name, color } = req.body;
-    const result = await pool.query(
-      'INSERT INTO ims_workflows (user_id, workspace_id, name, color) VALUES ($1, $2, $3, $4) RETURNING id',
-      [req.user.id, req.workspace_id, name, color || '#3498db']
+    const { name, color, direction } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, error: 'Operation name is required' });
+    }
+
+    // Check for duplicate workflow names in the workspace
+    const nameCheck = await pool.query(
+      'SELECT id FROM ims_workflows WHERE LOWER(name) = LOWER($1) AND workspace_id = $2 LIMIT 1',
+      [name.trim(), req.workspace_id]
     );
-    res.json({ success: true, workflow: { id: result.rows[0].id, name, color } });
+    if (nameCheck.rows.length > 0) {
+      return res.status(400).json({ success: false, error: 'A scanner operation with this name already exists in this workspace.' });
+    }
+
+    const result = await pool.query(
+      'INSERT INTO ims_workflows (user_id, workspace_id, name, color, direction) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [req.user.id, req.workspace_id, name.trim(), color || '#3498db', direction || 'NEUTRAL']
+    );
+    const wfId = result.rows[0].id;
+    await logAudit(req.workspace_id, req.user.id, 'create_workflow', 'workflow', wfId, { name: name.trim(), direction: direction || 'NEUTRAL' }, req);
+    res.json({ success: true, workflow: { id: wfId, name: name.trim(), color, direction: direction || 'NEUTRAL' } });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to add workflow' });
   }
@@ -4999,6 +5040,7 @@ app.post('/api/ims/workflows', authenticateToken, requireWorkspace, async (req, 
 app.delete('/api/ims/workflows/:id', authenticateToken, requireWorkspace, async (req, res) => {
   try {
     await pool.query('DELETE FROM ims_workflows WHERE id = $1 AND workspace_id = $2', [req.params.id, req.workspace_id]);
+    await logAudit(req.workspace_id, req.user.id, 'delete_workflow', 'workflow', req.params.id, {}, req);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to delete workflow' });
@@ -5022,7 +5064,9 @@ app.post('/api/ims/categories', authenticateToken, requireWorkspace, async (req,
       'INSERT INTO ims_categories (user_id, workspace_id, name, mode, alert_at, reorder_at, color) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
       [req.user.id, req.workspace_id, name, mode, alertAt, reorderAt, color || '#3498db']
     );
-    res.json({ success: true, category: { id: result.rows[0].id, name, mode, alertAt, reorderAt, color } });
+    const catId = result.rows[0].id;
+    await logAudit(req.workspace_id, req.user.id, 'create_category', 'category', catId, { name, mode, alertAt, reorderAt }, req);
+    res.json({ success: true, category: { id: catId, name, mode, alertAt, reorderAt, color } });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to add category' });
   }
@@ -5031,6 +5075,7 @@ app.post('/api/ims/categories', authenticateToken, requireWorkspace, async (req,
 app.delete('/api/ims/categories/:id', authenticateToken, requireWorkspace, async (req, res) => {
   try {
     await pool.query('DELETE FROM ims_categories WHERE id = $1 AND workspace_id = $2', [req.params.id, req.workspace_id]);
+    await logAudit(req.workspace_id, req.user.id, 'delete_category', 'category', req.params.id, {}, req);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to delete category' });
@@ -5059,12 +5104,12 @@ app.get('/api/ims/masters', authenticateToken, requireWorkspace, async (req, res
        LIMIT $2 OFFSET $3`,
       [req.workspace_id, limit, offset]
     );
-    
+
     const total = result.rows.length > 0 ? result.rows[0].total_count : 0;
     const totalPages = Math.ceil(total / limit);
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       masters: result.rows,
       pagination: { total, page, limit, totalPages }
     });
@@ -5081,18 +5126,26 @@ app.post('/api/ims/masters', authenticateToken, requireWorkspace, async (req, re
       'INSERT INTO ims_masters (user_id, workspace_id, name, description, category) VALUES ($1, $2, $3, $4, $5) RETURNING *',
       [req.user.id, req.workspace_id, name, description || '', category || 'General']
     );
-    res.json({ success: true, master: { ...result.rows[0], count: 0 } });
+    const m = result.rows[0];
+    await logAudit(req.workspace_id, req.user.id, 'create_master', 'master', m.id, { name, description, category }, req);
+    res.json({ success: true, master: { ...m, count: 0 } });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to create master catalog' });
   }
 });
 
 app.delete('/api/ims/masters/:id', authenticateToken, requireWorkspace, requireRole(['manager']), async (req, res) => {
+  const { id } = req.params;
+  const wsId = req.workspace_id;
+
+  // --- ENFORCE IMMUTABLE AUDIT TRAIL ---
+  const settings = await getWorkspaceSettings(wsId);
+  if (settings?.security?.immutableLogs) {
+    return res.status(403).json({ success: false, error: 'Immutable Audit Trail is enabled. Master catalog deletion is locked to prevent scan history deletion.' });
+  }
+
   const client = await pool.connect();
   try {
-    const { id } = req.params;
-    const wsId = req.workspace_id;
-
     // Verify ownership
     const check = await client.query('SELECT id FROM ims_masters WHERE id = $1 AND workspace_id = $2', [id, wsId]);
     if (check.rows.length === 0) return res.status(404).json({ success: false, error: 'Master catalog not found' });
@@ -5113,6 +5166,7 @@ app.delete('/api/ims/masters/:id', authenticateToken, requireWorkspace, requireR
     await client.query('DELETE FROM ims_masters WHERE id = $1 AND workspace_id = $2', [id, wsId]);
 
     await client.query('COMMIT');
+    await logAudit(wsId, req.user.id, 'delete_master', 'master', id, {}, req);
     res.json({ success: true, deletedItems: deleted.rowCount });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -5175,16 +5229,29 @@ app.post('/api/ims/masters/:masterId/items', authenticateToken, requireWorkspace
   try {
     const { barcode, name, category, baseUnit, stock, trackingMode, parentBarcode, multiplier, supplier, locations, bom, weight, cost, imageUrl } = req.body;
     if (!barcode || !name) return res.status(400).json({ success: false, error: 'Barcode and name are required' });
+
+    // Lookup Category Mode & Alert Threshold
+    const catCheck = await pool.query(
+      'SELECT mode, alert_at FROM ims_categories WHERE LOWER(name) = LOWER($1) AND workspace_id = $2 LIMIT 1',
+      [category ? category.trim() : 'General', req.workspace_id]
+    );
+    let resolvedTracking = trackingMode || 'FIFO';
+    let resolvedAlertAt = 10;
+    if (catCheck.rows.length > 0) {
+      resolvedTracking = catCheck.rows[0].mode || resolvedTracking;
+      resolvedAlertAt = catCheck.rows[0].alert_at || 10;
+    }
+
     const result = await pool.query(
       `INSERT INTO ims_items 
-        (master_id, user_id, workspace_id, barcode, name, category, base_unit, stock, tracking_mode, parent_barcode, multiplier, supplier, locations, bom, weight, cost, image_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        (master_id, user_id, workspace_id, barcode, name, category, base_unit, stock, tracking_mode, alert_at, parent_barcode, multiplier, supplier, locations, bom, weight, cost, image_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        ON CONFLICT (master_id, barcode)
-       DO UPDATE SET name=$5, category=$6, base_unit=$7, stock=$8, tracking_mode=$9, parent_barcode=$10, multiplier=$11, supplier=$12, locations=$13, bom=$14, weight=$15, cost=$16, image_url=$17, updated_at=CURRENT_TIMESTAMP
+       DO UPDATE SET name=$5, category=$6, base_unit=$7, stock=$8, tracking_mode=$9, alert_at=$10, parent_barcode=$11, multiplier=$12, supplier=$13, locations=$14, bom=$15, weight=$16, cost=$17, image_url=$18, updated_at=CURRENT_TIMESTAMP
        RETURNING *`,
-      [req.params.masterId, req.user.id, req.workspace_id, barcode, name, category||'General', baseUnit||'Unit',
-       Number(stock)||0, trackingMode||'FIFO', parentBarcode||null, multiplier?Number(multiplier):null,
-       supplier||null, JSON.stringify(locations||[]), JSON.stringify(bom||[]), weight?Number(weight):null, cost?Number(cost):null, imageUrl||null]
+      [req.params.masterId, req.user.id, req.workspace_id, barcode, name, category || 'General', baseUnit || 'Unit',
+      Number(stock) || 0, resolvedTracking, resolvedAlertAt, parentBarcode || null, multiplier ? Number(multiplier) : null,
+      supplier || null, JSON.stringify(locations || []), JSON.stringify(bom || []), weight ? Number(weight) : null, cost ? Number(cost) : null, imageUrl || null]
     );
     const r = result.rows[0];
 
@@ -5214,14 +5281,18 @@ app.post('/api/ims/masters/:masterId/items', authenticateToken, requireWorkspace
       }
     }
 
-    res.json({ success: true, item: {
-      id: r.id, masterId: r.master_id, barcode: r.barcode, name: r.name,
-      category: r.category, baseUnit: r.base_unit, stock: Number(r.stock),
-      trackingMode: r.tracking_mode, parentBarcode: r.parent_barcode || '',
-      multiplier: r.multiplier ? Number(r.multiplier) : null,
-      supplier: r.supplier || '', locations: r.locations || [], bom: r.bom || [],
-      imageUrl: r.image_url
-    }});
+    await logAudit(req.workspace_id, req.user.id, 'create_item', 'item', r.id, { barcode: r.barcode, name: r.name, stock: Number(r.stock) }, req);
+
+    res.json({
+      success: true, item: {
+        id: r.id, masterId: r.master_id, barcode: r.barcode, name: r.name,
+        category: r.category, baseUnit: r.base_unit, stock: Number(r.stock),
+        trackingMode: r.tracking_mode, parentBarcode: r.parent_barcode || '',
+        multiplier: r.multiplier ? Number(r.multiplier) : null,
+        supplier: r.supplier || '', locations: r.locations || [], bom: r.bom || [],
+        imageUrl: r.image_url
+      }
+    });
   } catch (error) {
     console.error('Error saving item:', error);
     res.status(500).json({ success: false, error: 'Failed to save item' });
@@ -5230,23 +5301,50 @@ app.post('/api/ims/masters/:masterId/items', authenticateToken, requireWorkspace
 
 app.put('/api/ims/masters/:masterId/items/:itemId', authenticateToken, requireWorkspace, async (req, res) => {
   try {
-    const { barcode, name, category, baseUnit, stock, trackingMode, parentBarcode, multiplier, supplier, locations, bom, weight, cost, imageUrl } = req.body;
-    
-    // Get old barcode to clear its zone assignments if it changed
+    const { barcode, name, category, baseUnit, stock, trackingMode, parentBarcode, multiplier, supplier, locations, bom, weight, cost, imageUrl, supervisorPin } = req.body;
+
+    // Get old item to check if stock or barcode changed
     const oldItemResult = await pool.query(
-      `SELECT barcode FROM ims_items WHERE id=$1 AND workspace_id=$2`,
+      `SELECT barcode, stock FROM ims_items WHERE id=$1 AND workspace_id=$2`,
       [req.params.itemId, req.workspace_id]
     );
-    const oldBarcode = oldItemResult.rows[0]?.barcode;
+    if (oldItemResult.rows.length === 0) return res.status(404).json({ success: false, error: 'Item not found' });
+    const oldItem = oldItemResult.rows[0];
+    const oldBarcode = oldItem.barcode;
+    const oldStock = Number(oldItem.stock);
+    const newStock = Number(stock);
+
+    if (oldStock !== newStock) {
+      // Stock is being changed manually!
+      const settings = await getWorkspaceSettings(req.workspace_id);
+      if (settings?.security?.managerApproval) {
+        const expectedPin = settings.security.supervisorPin || '1234';
+        if (req.workspace_role !== 'owner' && req.workspace_role !== 'admin' && supervisorPin !== expectedPin) {
+          return res.status(403).json({ success: false, error: 'Manager Overrides is enabled. A valid Supervisor PIN is required to manually adjust stock quantity.' });
+        }
+      }
+    }
+
+    // Lookup Category Mode & Alert Threshold
+    const catCheck = await pool.query(
+      'SELECT mode, alert_at FROM ims_categories WHERE LOWER(name) = LOWER($1) AND workspace_id = $2 LIMIT 1',
+      [category ? category.trim() : 'General', req.workspace_id]
+    );
+    let resolvedTracking = trackingMode || 'FIFO';
+    let resolvedAlertAt = 10;
+    if (catCheck.rows.length > 0) {
+      resolvedTracking = catCheck.rows[0].mode || resolvedTracking;
+      resolvedAlertAt = catCheck.rows[0].alert_at || 10;
+    }
 
     const result = await pool.query(
-      `UPDATE ims_items SET barcode=$1, name=$2, category=$3, base_unit=$4, stock=$5, tracking_mode=$6,
-       parent_barcode=$7, multiplier=$8, supplier=$9, locations=$10, bom=$11, weight=$12, cost=$13, image_url=$14, updated_at=CURRENT_TIMESTAMP
-       WHERE id=$15 AND master_id=$16 AND workspace_id=$17 RETURNING *`,
-      [barcode, name, category||'General', baseUnit||'Unit', Number(stock)||0, trackingMode||'FIFO',
-       parentBarcode||null, multiplier?Number(multiplier):null, supplier||null,
-       JSON.stringify(locations||[]), JSON.stringify(bom||[]), weight?Number(weight):null, cost?Number(cost):null, imageUrl||null,
-       req.params.itemId, req.params.masterId, req.workspace_id]
+      `UPDATE ims_items SET barcode=$1, name=$2, category=$3, base_unit=$4, stock=$5, tracking_mode=$6, alert_at=$7,
+       parent_barcode=$8, multiplier=$9, supplier=$10, locations=$11, bom=$12, weight=$13, cost=$14, image_url=$15, updated_at=CURRENT_TIMESTAMP
+       WHERE id=$16 AND master_id=$17 AND workspace_id=$18 RETURNING *`,
+      [barcode, name, category || 'General', baseUnit || 'Unit', newStock || 0, resolvedTracking, resolvedAlertAt,
+        parentBarcode || null, multiplier ? Number(multiplier) : null, supplier || null,
+        JSON.stringify(locations || []), JSON.stringify(bom || []), weight ? Number(weight) : null, cost ? Number(cost) : null, imageUrl || null,
+        req.params.itemId, req.params.masterId, req.workspace_id]
     );
     if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Item not found' });
 
@@ -5270,7 +5368,7 @@ app.put('/api/ims/masters/:masterId/items/:itemId', authenticateToken, requireWo
           );
           if (locCheck.rows.length > 0) {
             const locationId = locCheck.rows[0].id;
-            const locQty = Number(loc.qty) || Number(stock) || 0;
+            const locQty = Number(loc.qty) || newStock || 0;
             await pool.query(
               `INSERT INTO ims_location_stock (location_id, workspace_id, barcode, item_name, qty)
                VALUES ($1,$2,$3,$4,$5)
@@ -5282,6 +5380,7 @@ app.put('/api/ims/masters/:masterId/items/:itemId', authenticateToken, requireWo
       }
     }
 
+    await logAudit(req.workspace_id, req.user.id, 'update_item', 'item', req.params.itemId, { barcode, name, oldStock, newStock }, req);
     res.json({ success: true });
   } catch (error) {
     console.error('Error updating item:', error);
@@ -5292,6 +5391,7 @@ app.put('/api/ims/masters/:masterId/items/:itemId', authenticateToken, requireWo
 app.delete('/api/ims/masters/:masterId/items/:itemId', authenticateToken, requireWorkspace, async (req, res) => {
   try {
     await pool.query('DELETE FROM ims_items WHERE id=$1 AND master_id=$2 AND workspace_id=$3', [req.params.itemId, req.params.masterId, req.workspace_id]);
+    await logAudit(req.workspace_id, req.user.id, 'delete_item', 'item', req.params.itemId, {}, req);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to delete item' });
@@ -5307,7 +5407,7 @@ app.post('/api/ims/masters/:masterId/import', authenticateToken, requireWorkspac
     if (!mapping || typeof mapping !== 'object') return res.status(400).json({ success: false, error: 'mapping object required' });
 
     // Known IMS fields
-    const KNOWN_FIELDS = new Set(['barcode','name','category','baseUnit','stock','trackingMode','supplier','alertAt','cost','weight']);
+    const KNOWN_FIELDS = new Set(['barcode', 'name', 'category', 'baseUnit', 'stock', 'trackingMode', 'supplier', 'alertAt', 'cost', 'weight']);
     // Reverse-map: imsField -> excelColumn
     const m = mapping; // e.g. { barcode: 'Item Code', name: 'Product Name', ... }
 
@@ -5326,7 +5426,7 @@ app.post('/api/ims/masters/:masterId/import', authenticateToken, requireWorkspac
     // Build mapped items
     const items = rows.map(row => {
       const barcode = String(get(row, 'barcode', '') || '').trim();
-      const name    = String(get(row, 'name', '')    || '').trim();
+      const name = String(get(row, 'name', '') || '').trim();
       // Collect all unmapped columns as custom_fields
       const custom_fields = {};
       for (const col of unmappedCols) {
@@ -5337,20 +5437,20 @@ app.post('/api/ims/masters/:masterId/import', authenticateToken, requireWorkspac
       return {
         barcode,
         name,
-        category:     String(get(row, 'category', 'General')),
-        baseUnit:     String(get(row, 'baseUnit', 'Unit')),
-        stock:        Number(get(row, 'stock', 0)) || 0,
+        category: String(get(row, 'category', 'General')),
+        baseUnit: String(get(row, 'baseUnit', 'Unit')),
+        stock: Number(get(row, 'stock', 0)) || 0,
         trackingMode: String(get(row, 'trackingMode', 'FIFO')),
-        supplier:     String(get(row, 'supplier', '') || '') || null,
-        alertAt:      Number(get(row, 'alertAt', 0)) || 0,
-        cost:         Number(get(row, 'cost', 0)) || null,
-        weight:       Number(get(row, 'weight', 0)) || null,
+        supplier: String(get(row, 'supplier', '') || '') || null,
+        alertAt: Number(get(row, 'alertAt', 0)) || 0,
+        cost: Number(get(row, 'cost', 0)) || null,
+        weight: Number(get(row, 'weight', 0)) || null,
         custom_fields,
       };
     });
 
     const validRows = items.filter(r => r.barcode && r.name);
-    const skipped   = items.length - validRows.length;
+    const skipped = items.length - validRows.length;
 
     if (validRows.length === 0) {
       return res.json({ success: true, imported: 0, skipped, message: 'No valid rows — the mapped Barcode and Name columns must have values.' });
@@ -5367,19 +5467,19 @@ app.post('/api/ims/masters/:masterId/import', authenticateToken, requireWorkspac
     const uniqueValidRows = Array.from(uniqueMap.values());
 
     // Batch unnest insert
-    const barcodes      = uniqueValidRows.map(r => r.barcode);
-    const names         = uniqueValidRows.map(r => r.name);
-    const categories    = uniqueValidRows.map(r => r.category);
-    const units         = uniqueValidRows.map(r => r.baseUnit);
-    const stocks        = uniqueValidRows.map(r => r.stock);
-    const trackings     = uniqueValidRows.map(r => r.trackingMode);
-    const suppliers     = uniqueValidRows.map(r => r.supplier);
-    const alertAts      = uniqueValidRows.map(r => r.alertAt);
-    const costs         = uniqueValidRows.map(r => r.cost);
-    const customFields  = uniqueValidRows.map(r => JSON.stringify(r.custom_fields));
-    const masterIdArr   = uniqueValidRows.map(() => parseInt(req.params.masterId));
-    const userIdArr     = uniqueValidRows.map(() => req.user.id);
-    const wsIdArr       = uniqueValidRows.map(() => req.workspace_id);
+    const barcodes = uniqueValidRows.map(r => r.barcode);
+    const names = uniqueValidRows.map(r => r.name);
+    const categories = uniqueValidRows.map(r => r.category);
+    const units = uniqueValidRows.map(r => r.baseUnit);
+    const stocks = uniqueValidRows.map(r => r.stock);
+    const trackings = uniqueValidRows.map(r => r.trackingMode);
+    const suppliers = uniqueValidRows.map(r => r.supplier);
+    const alertAts = uniqueValidRows.map(r => r.alertAt);
+    const costs = uniqueValidRows.map(r => r.cost);
+    const customFields = uniqueValidRows.map(r => JSON.stringify(r.custom_fields));
+    const masterIdArr = uniqueValidRows.map(() => parseInt(req.params.masterId));
+    const userIdArr = uniqueValidRows.map(() => req.user.id);
+    const wsIdArr = uniqueValidRows.map(() => req.workspace_id);
 
     await pool.query(
       `INSERT INTO ims_items
@@ -5404,7 +5504,7 @@ app.post('/api/ims/masters/:masterId/import', authenticateToken, requireWorkspac
          custom_fields = ims_items.custom_fields || EXCLUDED.custom_fields,
          updated_at    = CURRENT_TIMESTAMP`,
       [masterIdArr, userIdArr, wsIdArr, barcodes, names, categories, units, stocks,
-       trackings, suppliers, alertAts, costs, customFields]
+        trackings, suppliers, alertAts, costs, customFields]
     );
 
     res.json({
@@ -5440,15 +5540,17 @@ app.get('/api/ims/scanner/lookup/:barcode', authenticateToken, requireWorkspace,
       [req.workspace_id, req.params.barcode]
     );
 
-    res.json({ success: true, found: true, item: {
-      id: r.id, masterId: r.master_id, masterName: r.master_name,
-      barcode: r.barcode, name: r.name, category: r.category,
-      baseUnit: r.base_unit, stock: Number(r.stock),
-      trackingMode: r.tracking_mode, supplier: r.supplier,
-      locations: r.locations || [],
-      customFields: r.custom_fields || {},
-      children: childrenRes.rows
-    }});
+    res.json({
+      success: true, found: true, item: {
+        id: r.id, masterId: r.master_id, masterName: r.master_name,
+        barcode: r.barcode, name: r.name, category: r.category,
+        baseUnit: r.base_unit, stock: Number(r.stock),
+        trackingMode: r.tracking_mode, supplier: r.supplier,
+        locations: r.locations || [],
+        customFields: r.custom_fields || {},
+        children: childrenRes.rows
+      }
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Lookup failed' });
   }
@@ -5461,11 +5563,7 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
     if (!barcode || !workflow) return res.status(400).json({ success: false, error: 'barcode and workflow required' });
     const qty = (quantity === 0 || quantity === '0') ? 0 : (Number(quantity) || 1);
 
-    // --- ENFORCE IMS DYNAMIC SETTINGS ---
-    const settings = await getWorkspaceSettings(req.workspace_id);
-    if (settings?.security?.batchStrict && !batchNo && !serialNo) {
-      return res.status(403).json({ success: false, error: 'Strict Traceability is enabled. Batch No or Serial No is required for this operation.' });
-    }
+
 
     // ── DEDUPLICATION CHECK ──
     // 1. Check if this websocketScanId has already been recorded
@@ -5518,11 +5616,23 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
         const trackingModeVal = req.body.trackingMode || 'FIFO';
         const baseUnitVal = unit || 'Unit';
         const nameVal = itemName || `Scanned Item (${barcode})`;
-        
+
+        // Lookup Category Mode & Alert Threshold
+        const catCheck = await pool.query(
+          'SELECT mode, alert_at FROM ims_categories WHERE LOWER(name) = LOWER($1) AND workspace_id = $2 LIMIT 1',
+          [categoryVal.trim(), req.workspace_id]
+        );
+        let resolvedTracking = trackingModeVal;
+        let resolvedAlertAt = 10;
+        if (catCheck.rows.length > 0) {
+          resolvedTracking = catCheck.rows[0].mode || resolvedTracking;
+          resolvedAlertAt = catCheck.rows[0].alert_at || 10;
+        }
+
         const insertResult = await pool.query(
-          `INSERT INTO ims_items (workspace_id, master_id, user_id, barcode, name, category, base_unit, tracking_mode, stock) 
-           VALUES ($1, NULL, $2, $3, $4, $5, $6, $7, 0) RETURNING id`,
-          [req.workspace_id, req.user.id, barcode, nameVal, categoryVal, baseUnitVal, trackingModeVal]
+          `INSERT INTO ims_items (workspace_id, master_id, user_id, barcode, name, category, base_unit, tracking_mode, alert_at, stock) 
+           VALUES ($1, NULL, $2, $3, $4, $5, $6, $7, $8, 0) RETURNING id`,
+          [req.workspace_id, req.user.id, barcode, nameVal, categoryVal, baseUnitVal, resolvedTracking, resolvedAlertAt]
         );
         resolvedItemId = insertResult.rows[0].id;
       }
@@ -5532,19 +5642,37 @@ app.post('/api/ims/scanner/scan', authenticateToken, requireWorkspace, async (re
     await pool.query(
       `INSERT INTO ims_scan_events (user_id, workspace_id, barcode, item_id, item_name, workflow, quantity, unit, batch_no, serial_no, notes, websocket_scan_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [req.user.id, req.workspace_id, barcode, resolvedItemId||null, itemName||null, workflow, qty, unit||null, batchNo||null, serialNo||null, notes||null, websocketScanId||null]
+      [req.user.id, req.workspace_id, barcode, resolvedItemId || null, itemName || null, workflow, qty, unit || null, batchNo || null, serialNo || null, notes || null, websocketScanId || null]
     );
+
+    // Lookup workflow direction from database if it exists
+    let resolvedDirection = 'NEUTRAL';
+    const wfCheck = await pool.query(
+      'SELECT direction FROM ims_workflows WHERE LOWER(name) = LOWER($1) AND workspace_id = $2 LIMIT 1',
+      [workflow.trim(), req.workspace_id]
+    );
+    if (wfCheck.rows.length > 0) {
+      resolvedDirection = wfCheck.rows[0].direction || 'NEUTRAL';
+    } else {
+      // Fallback to substring matching for built-in or default actions
+      const wf = workflow.toUpperCase();
+      const inOps = ['RECEIVE', 'IN', 'RETURN', 'RESTOCK'];
+      const outOps = ['DISPATCH', 'OUT', 'PICK', 'ISSUE', 'SHIP'];
+      if (inOps.some(op => wf.includes(op))) {
+        resolvedDirection = 'IN';
+      } else if (outOps.some(op => wf.includes(op))) {
+        resolvedDirection = 'OUT';
+      }
+    }
 
     // Adjust stock if item exists in catalog
     let updatedStock = 0;
     if (resolvedItemId) {
       const wf = workflow.toUpperCase();
-      const inOps = ['RECEIVE', 'IN', 'RETURN', 'RESTOCK'];
-      const outOps = ['DISPATCH', 'OUT', 'PICK', 'ISSUE', 'SHIP'];
-      if (inOps.some(op => wf.includes(op))) {
+      if (resolvedDirection === 'IN') {
         const updateRes = await pool.query('UPDATE ims_items SET stock = stock + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND workspace_id = $3 RETURNING stock', [qty, resolvedItemId, req.workspace_id]);
         updatedStock = Number(updateRes.rows[0]?.stock || 0);
-      } else if (outOps.some(op => wf.includes(op))) {
+      } else if (resolvedDirection === 'OUT') {
         const updateRes = await pool.query('UPDATE ims_items SET stock = GREATEST(stock - $1, 0), updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND workspace_id = $3 RETURNING stock', [qty, resolvedItemId, req.workspace_id]);
         updatedStock = Number(updateRes.rows[0]?.stock || 0);
       } else {
@@ -5621,16 +5749,16 @@ app.post('/api/ims/rfid/scan', authenticateToken, requireWorkspace, async (req, 
       `SELECT barcode, name FROM ims_items WHERE workspace_id=$1 AND barcode=$2 LIMIT 1`,
       [req.workspace_id, rfidTag] // In many systems, RFID EPC translates directly to barcode/SKU
     );
-    
+
     if (itemRes.rows.length === 0) return res.status(404).json({ success: false, error: 'RFID Tag not linked to any item' });
-    
+
     const item = itemRes.rows[0];
-    
+
     // Log RFID scan as INWARD or LOCATION_UPDATE
     await pool.query(
       `INSERT INTO ims_scan_events (user_id, workspace_id, barcode, item_name, workflow, quantity, notes)
        VALUES ($1,$2,$3,$4,'RFID_DETECTED',1,$5)`,
-      [req.user.id, req.workspace_id, item.barcode, item.name, `Detected at location ${locationId||'unknown'} by device ${deviceId||'unknown'}`]
+      [req.user.id, req.workspace_id, item.barcode, item.name, `Detected at location ${locationId || 'unknown'} by device ${deviceId || 'unknown'}`]
     );
 
     res.json({ success: true, message: 'RFID detected', item });
@@ -5907,13 +6035,13 @@ app.post('/api/ims/components/replace', authenticateToken, requireWorkspace, asy
     if (!parentBarcode || !oldComponentBarcode || !newComponentBarcode || !reason) {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
-    
+
     // Log the replacement in scan_events
     await pool.query(
       `INSERT INTO ims_scan_events (user_id, workspace_id, barcode, workflow, quantity, notes)
        VALUES ($1,$2,$3,$4,1,$5)`,
-      [req.user.id, req.workspace_id, parentBarcode, 'COMPONENT_REPLACEMENT', 
-       `Replaced ${oldComponentBarcode} with ${newComponentBarcode}. Reason: ${reason}`]
+      [req.user.id, req.workspace_id, parentBarcode, 'COMPONENT_REPLACEMENT',
+      `Replaced ${oldComponentBarcode} with ${newComponentBarcode}. Reason: ${reason}`]
     );
 
     // Unlink old component
@@ -5950,12 +6078,12 @@ app.get('/api/ims/workorders', authenticateToken, requireWorkspace, async (req, 
        LIMIT $2 OFFSET $3`,
       [req.workspace_id, limit, offset]
     );
-    
+
     const total = result.rows.length > 0 ? result.rows[0].total_count : 0;
     const totalPages = Math.ceil(total / limit);
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       workorders: result.rows,
       pagination: { total, page, limit, totalPages }
     });
@@ -5981,7 +6109,7 @@ app.post('/api/ims/workorders', authenticateToken, requireWorkspace, async (req,
     const wo = await client.query(
       `INSERT INTO ims_workorders (workspace_id, user_id, wo_number, product_barcode, product_name, target_qty, built_qty, status, priority, due_date, notes)
        VALUES ($1,$2,$3,$4,$5,$6,0,'PENDING',$7,$8,$9) RETURNING *`,
-      [req.workspace_id, req.user.id, woNum, productBarcode||null, productName, Number(targetQty), priority||'NORMAL', dueDate||null, notes||null]
+      [req.workspace_id, req.user.id, woNum, productBarcode || null, productName, Number(targetQty), priority || 'NORMAL', dueDate || null, notes || null]
     );
     const woId = wo.rows[0].id;
     // Pull BOM from catalog if productBarcode exists
@@ -5992,7 +6120,7 @@ app.post('/api/ims/workorders', authenticateToken, requireWorkspace, async (req,
           const avail = await client.query(`SELECT stock FROM ims_items WHERE barcode=$1 AND workspace_id=$2 LIMIT 1`, [b.barcode, req.workspace_id]);
           await client.query(
             `INSERT INTO ims_wo_items (wo_id, barcode, name, required_qty, available_qty, unit) VALUES ($1,$2,$3,$4,$5,$6)`,
-            [woId, b.barcode, b.name||b.barcode, Number(b.qty || b.needed || b.quantity || 1)*Number(targetQty), avail.rows[0]?.stock||0, b.unit||'pcs']
+            [woId, b.barcode, b.name || b.barcode, Number(b.qty || b.needed || b.quantity || 1) * Number(targetQty), avail.rows[0]?.stock || 0, b.unit || 'pcs']
           );
         }
       }
@@ -6007,7 +6135,7 @@ app.put('/api/ims/workorders/:id/status', authenticateToken, requireWorkspace, a
   const client = await pool.connect();
   try {
     const { status, builtQty } = req.body;
-    const allowed = ['PENDING','IN_PROGRESS','QC','COMPLETE','CANCELLED'];
+    const allowed = ['PENDING', 'IN_PROGRESS', 'QC', 'COMPLETE', 'CANCELLED'];
     if (!allowed.includes(status)) return res.status(400).json({ success: false, error: 'Invalid status' });
     await client.query('BEGIN');
     const wo = await client.query('SELECT * FROM ims_workorders WHERE id=$1 AND workspace_id=$2', [req.params.id, req.workspace_id]);
@@ -6050,7 +6178,7 @@ app.put('/api/ims/workorders/:id/status', authenticateToken, requireWorkspace, a
     }
     await client.query(
       `UPDATE ims_workorders SET status=$1, built_qty=COALESCE($2,built_qty), updated_at=CURRENT_TIMESTAMP WHERE id=$3`,
-      [status, builtQty||null, req.params.id]
+      [status, builtQty || null, req.params.id]
     );
     await client.query('COMMIT');
     res.json({ success: true });
@@ -6076,15 +6204,15 @@ app.get('/api/ims/grn', authenticateToken, requireWorkspace, async (req, res) =>
     const limit = parseInt(req.query.limit) || 50;
     const offset = (page - 1) * limit;
     const q = type ? 'SELECT *, COUNT(*) OVER()::int as total_count FROM ims_grn WHERE workspace_id=$1 AND type=$2 ORDER BY created_at DESC LIMIT $3 OFFSET $4'
-                   : 'SELECT *, COUNT(*) OVER()::int as total_count FROM ims_grn WHERE workspace_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3';
+      : 'SELECT *, COUNT(*) OVER()::int as total_count FROM ims_grn WHERE workspace_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3';
     const params = type ? [req.workspace_id, type, limit, offset] : [req.workspace_id, limit, offset];
-    
+
     const result = await pool.query(q, params);
-    
+
     const total = result.rows.length > 0 ? result.rows[0].total_count : 0;
     const totalPages = Math.ceil(total / limit);
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       grns: result.rows,
       pagination: { total, page, limit, totalPages }
     });
@@ -6093,7 +6221,7 @@ app.get('/api/ims/grn', authenticateToken, requireWorkspace, async (req, res) =>
 app.get('/api/ims/grn/:id/items', authenticateToken, requireWorkspace, async (req, res) => {
   try {
     const grnId = parseInt(req.params.id);
-    const wsId  = parseInt(req.workspace_id);
+    const wsId = parseInt(req.workspace_id);
     if (isNaN(grnId) || isNaN(wsId)) {
       return res.status(400).json({ success: false, error: 'Invalid GRN or workspace id' });
     }
@@ -6113,14 +6241,14 @@ app.post('/api/ims/grn', authenticateToken, requireWorkspace, async (req, res) =
     if (!type || !supplier) return res.status(400).json({ success: false, error: 'type and supplier required' });
     const prefix = type === 'INWARD' ? 'GRN' : 'DN';
     const docNo = prefix + '-' + Date.now().toString().slice(-8);
-    
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       const grn = await client.query(
         `INSERT INTO ims_grn (workspace_id, user_id, doc_no, type, supplier, po_ref, vehicle_no, notes, status)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'PENDING') RETURNING *`,
-        [req.workspace_id, req.user.id, docNo, type, supplier, poRef||null, vehicleNo||null, notes||null]
+        [req.workspace_id, req.user.id, docNo, type, supplier, poRef || null, vehicleNo || null, notes || null]
       );
       const grnId = grn.rows[0].id;
       if (items && items.length > 0) {
@@ -6130,7 +6258,7 @@ app.post('/api/ims/grn', authenticateToken, requireWorkspace, async (req, res) =
           await client.query(
             `INSERT INTO ims_grn_items (grn_id, barcode, name, ordered_qty, received_qty, unit, condition, note)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [grnId, it.barcode, it.name, ord, rec, it.unit||'pcs', it.condition||'Good', it.note||null]
+            [grnId, it.barcode, it.name, ord, rec, it.unit || 'pcs', it.condition || 'Good', it.note || null]
           );
         }
       }
@@ -6144,7 +6272,7 @@ app.post('/api/ims/grn', authenticateToken, requireWorkspace, async (req, res) =
     }
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
-app.post('/api/ims/grn/:id/approve', authenticateToken, requireWorkspace, requireRole(['manager','admin','owner']), async (req, res) => {
+app.post('/api/ims/grn/:id/approve', authenticateToken, requireWorkspace, requireRole(['manager', 'admin', 'owner']), async (req, res) => {
   const client = await pool.connect();
   try {
     const grn = await client.query('SELECT * FROM ims_grn WHERE id=$1 AND workspace_id=$2', [req.params.id, req.workspace_id]);
@@ -6181,7 +6309,7 @@ app.post('/api/ims/grn/:id/approve', authenticateToken, requireWorkspace, requir
   } catch (e) { await client.query('ROLLBACK'); res.status(500).json({ success: false, error: e.message }); }
   finally { client.release(); }
 });
-app.post('/api/ims/grn/:id/reject', authenticateToken, requireWorkspace, requireRole(['manager','admin','owner']), async (req, res) => {
+app.post('/api/ims/grn/:id/reject', authenticateToken, requireWorkspace, requireRole(['manager', 'admin', 'owner']), async (req, res) => {
   try {
     await pool.query(`UPDATE ims_grn SET status='REJECTED' WHERE id=$1 AND workspace_id=$2`, [req.params.id, req.workspace_id]);
     res.json({ success: true });
@@ -6206,8 +6334,10 @@ app.post('/api/ims/grn/verify-scan', authenticateToken, requireWorkspace, async 
       [wsId, grnType, barcode]
     );
     if (itemResult.rows.length === 0) {
-      return res.json({ success: true, matched: false,
-        message: `Barcode not on any pending ${mode === 'DISPATCH' ? 'Dispatch Note' : 'GRN'}` });
+      return res.json({
+        success: true, matched: false,
+        message: `Barcode not on any pending ${mode === 'DISPATCH' ? 'Dispatch Note' : 'GRN'}`
+      });
     }
     const item = itemResult.rows[0];
     const updated = await pool.query(
@@ -6221,7 +6351,8 @@ app.post('/api/ims/grn/verify-scan', authenticateToken, requireWorkspace, async 
       name: item.name, receivedQty: newQty, orderedQty: item.ordered_qty,
       fullyReceived, docNo: item.doc_no
     });
-    res.json({ success: true, matched: true,
+    res.json({
+      success: true, matched: true,
       item: { name: item.name, barcode, orderedQty: item.ordered_qty, receivedQty: newQty, unit: item.unit, fullyReceived },
       grn: { id: item.grn_id, docNo: item.doc_no, supplier: item.supplier }
     });
@@ -6324,7 +6455,7 @@ app.post('/api/ims/locations', authenticateToken, requireWorkspace, async (req, 
     if (!name) return res.status(400).json({ success: false, error: 'name required' });
     const result = await pool.query(
       `INSERT INTO ims_locations (workspace_id, user_id, name, type, description) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [req.workspace_id, req.user.id, name, type||'WAREHOUSE', description||null]
+      [req.workspace_id, req.user.id, name, type || 'WAREHOUSE', description || null]
     );
     res.json({ success: true, location: result.rows[0] });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -6362,11 +6493,11 @@ app.post('/api/ims/locations/transfer', authenticateToken, requireWorkspace, asy
       `INSERT INTO ims_location_stock (location_id, workspace_id, barcode, item_name, qty)
        VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT (location_id, barcode) DO UPDATE SET qty=ims_location_stock.qty+$5, updated_at=CURRENT_TIMESTAMP`,
-      [toLocationId, req.workspace_id, barcode, itemName||barcode, qty]
+      [toLocationId, req.workspace_id, barcode, itemName || barcode, qty]
     );
     // Log as scan event
     await client.query(`INSERT INTO ims_scan_events (user_id,workspace_id,barcode,item_name,workflow,quantity,notes) VALUES ($1,$2,$3,$4,'TRANSFER',$5,'Zone transfer')`,
-      [req.user.id, req.workspace_id, barcode, itemName||barcode, qty]);
+      [req.user.id, req.workspace_id, barcode, itemName || barcode, qty]);
     await client.query('COMMIT');
     res.json({ success: true });
   } catch (e) { await client.query('ROLLBACK'); res.status(500).json({ success: false, error: e.message }); }
@@ -6397,8 +6528,8 @@ app.get('/api/ims/production/events', authenticateToken, requireWorkspace, async
     const { woId, stageId } = req.query;
     let q = 'SELECT p.*, u.name as operator_name FROM ims_production_events p LEFT JOIN users u ON u.id=p.user_id WHERE p.workspace_id=$1';
     const params = [req.workspace_id];
-    if (woId) { q += ` AND p.wo_id=$${params.length+1}`; params.push(woId); }
-    if (stageId) { q += ` AND p.stage_id=$${params.length+1}`; params.push(stageId); }
+    if (woId) { q += ` AND p.wo_id=$${params.length + 1}`; params.push(woId); }
+    if (stageId) { q += ` AND p.stage_id=$${params.length + 1}`; params.push(stageId); }
     q += ' ORDER BY p.created_at DESC LIMIT 200';
     const result = await pool.query(q, params);
     res.json({ success: true, events: result.rows });
@@ -6412,13 +6543,13 @@ app.post('/api/ims/production/scan', authenticateToken, requireWorkspace, async 
     if (!barcode || !stageId || !outcome) return res.status(400).json({ success: false, error: 'barcode, stageId and outcome required' });
     const allowed = ['FORWARD', 'REWORK', 'REJECT'];
     if (!allowed.includes(outcome)) return res.status(400).json({ success: false, error: 'outcome must be FORWARD, REWORK, or REJECT' });
-    
+
     await client.query('BEGIN');
-    
+
     const result = await client.query(
       `INSERT INTO ims_production_events (workspace_id, user_id, wo_id, barcode, item_name, stage_id, stage_name, outcome, qty, batch_no, notes)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-      [req.workspace_id, req.user.id, woId||null, barcode, itemName||barcode, stageId, stageName||'', outcome, Number(qty)||1, batchNo||null, notes||null]
+      [req.workspace_id, req.user.id, woId || null, barcode, itemName || barcode, stageId, stageName || '', outcome, Number(qty) || 1, batchNo || null, notes || null]
     );
 
     // BOM Auto-Execution on FORWARD
@@ -6426,9 +6557,9 @@ app.post('/api/ims/production/scan', authenticateToken, requireWorkspace, async 
       const itemRes = await client.query('SELECT bom FROM ims_items WHERE barcode=$1 AND workspace_id=$2 LIMIT 1', [barcode, req.workspace_id]);
       if (itemRes.rows.length > 0 && itemRes.rows[0].bom) {
         let bom = [];
-        try { bom = typeof itemRes.rows[0].bom === 'string' ? JSON.parse(itemRes.rows[0].bom) : itemRes.rows[0].bom; } catch(e){}
+        try { bom = typeof itemRes.rows[0].bom === 'string' ? JSON.parse(itemRes.rows[0].bom) : itemRes.rows[0].bom; } catch (e) { }
         const multiplier = Number(qty) || 1;
-        
+
         for (const comp of bom) {
           if (!comp.sku || !comp.needed) continue;
           const deductQty = Number(comp.needed) * multiplier;
@@ -6439,7 +6570,7 @@ app.post('/api/ims/production/scan', authenticateToken, requireWorkspace, async 
           await client.query(
             `INSERT INTO ims_scan_events (user_id, workspace_id, barcode, item_name, workflow, quantity, notes)
              VALUES ($1,$2,$3,$4,'BOM_CONSUMPTION',$5,'Auto-deducted for assembly of '||$6)`,
-            [req.user.id, req.workspace_id, comp.sku, comp.name||comp.sku, deductQty, barcode]
+            [req.user.id, req.workspace_id, comp.sku, comp.name || comp.sku, deductQty, barcode]
           );
         }
       }
@@ -6479,21 +6610,21 @@ app.get('/api/ims/reports/scan-history', authenticateToken, requireWorkspace, as
 
     let q = `SELECT e.*, u.name as operator, COUNT(*) OVER()::int as total_count FROM ims_scan_events e LEFT JOIN users u ON u.id=e.user_id WHERE e.workspace_id=$1`;
     const params = [req.workspace_id];
-    if (from) { q += ` AND e.scanned_at >= $${params.length+1}`; params.push(from); }
-    if (to) { q += ` AND e.scanned_at <= $${params.length+1}`; params.push(to); }
-    if (workflow) { q += ` AND e.workflow=$${params.length+1}`; params.push(workflow); }
-    if (barcode) { q += ` AND e.barcode ILIKE $${params.length+1}`; params.push('%'+barcode+'%'); }
-    
-    q += ` ORDER BY e.scanned_at DESC LIMIT $${params.length+1} OFFSET $${params.length+2}`;
+    if (from) { q += ` AND e.scanned_at >= $${params.length + 1}`; params.push(from); }
+    if (to) { q += ` AND e.scanned_at <= $${params.length + 1}`; params.push(to); }
+    if (workflow) { q += ` AND e.workflow=$${params.length + 1}`; params.push(workflow); }
+    if (barcode) { q += ` AND e.barcode ILIKE $${params.length + 1}`; params.push('%' + barcode + '%'); }
+
+    q += ` ORDER BY e.scanned_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limitParams, offset);
-    
+
     const result = await pool.query(q, params);
-    
+
     const total = result.rows.length > 0 ? result.rows[0].total_count : 0;
     const totalPages = Math.ceil(total / limitParams);
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       events: result.rows,
       pagination: { total, page, limit: limitParams, totalPages }
     });
@@ -6573,9 +6704,9 @@ app.post('/api/ims/erp/sync', authenticateToken, requireWorkspace, async (req, r
   const client = await pool.connect();
   try {
     const { action, payload } = req.body;
-    
+
     await client.query('BEGIN');
-    
+
     if (action === 'IMPORT_PO') {
       const result = await client.query(
         `INSERT INTO ims_grn (workspace_id, user_id, doc_no, doc_type, status, items)
@@ -6585,13 +6716,13 @@ app.post('/api/ims/erp/sync', authenticateToken, requireWorkspace, async (req, r
       await client.query('COMMIT');
       return res.json({ success: true, message: 'PO imported to GRN', grn: result.rows[0] });
     }
-    
+
     if (action === 'SYNC_STOCK') {
       const items = await client.query('SELECT barcode, name, stock, cost FROM ims_items WHERE workspace_id=$1', [req.workspace_id]);
       await client.query('COMMIT');
       return res.json({ success: true, message: 'Stock exported for ERP', stock: items.rows });
     }
-    
+
     await client.query('ROLLBACK');
     res.status(400).json({ success: false, error: 'Unknown ERP action. Use IMPORT_PO or SYNC_STOCK' });
   } catch (e) {
@@ -6606,13 +6737,27 @@ app.get('/api/ims/fefo-recommendation', authenticateToken, requireWorkspace, asy
   try {
     const { barcode } = req.query;
     if (!barcode) return res.status(400).json({ success: false, error: 'barcode required' });
-    
+
     // Find batches that came IN, subtract OUT, and order by expiry_date ASC
     const result = await pool.query(
       `WITH batch_stock AS (
          SELECT batch_no, expiry_date, 
-                SUM(CASE WHEN workflow IN ('INWARD', 'ADD') THEN quantity ELSE 0 END) - 
-                SUM(CASE WHEN workflow IN ('OUTWARD', 'REMOVE', 'BOM_CONSUMPTION') THEN quantity ELSE 0 END) as current_qty
+                SUM(CASE WHEN (
+                  LOWER(workflow) LIKE '%receive%' OR 
+                  LOWER(workflow) LIKE '%in%' OR 
+                  LOWER(workflow) LIKE '%return%' OR 
+                  LOWER(workflow) LIKE '%restock%' OR
+                  LOWER(workflow) LIKE '%add%'
+                ) THEN quantity ELSE 0 END) - 
+                SUM(CASE WHEN (
+                  LOWER(workflow) LIKE '%dispatch%' OR 
+                  LOWER(workflow) LIKE '%out%' OR 
+                  LOWER(workflow) LIKE '%pick%' OR 
+                  LOWER(workflow) LIKE '%issue%' OR 
+                  LOWER(workflow) LIKE '%ship%' OR 
+                  LOWER(workflow) = 'bom_consumption' OR
+                  LOWER(workflow) LIKE '%remove%'
+                ) THEN quantity ELSE 0 END) as current_qty
          FROM ims_scan_events 
          WHERE workspace_id=$1 AND barcode=$2 AND batch_no IS NOT NULL AND expiry_date IS NOT NULL
          GROUP BY batch_no, expiry_date
@@ -6620,7 +6765,7 @@ app.get('/api/ims/fefo-recommendation', authenticateToken, requireWorkspace, asy
        SELECT * FROM batch_stock WHERE current_qty > 0 ORDER BY expiry_date ASC LIMIT 5`,
       [req.workspace_id, barcode]
     );
-    
+
     res.json({ success: true, recommendation: result.rows });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -6836,4 +6981,4 @@ const gracefulShutdown = async (signal) => {
 };
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

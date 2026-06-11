@@ -11,6 +11,7 @@ import {
 import './IMSCatalog.css';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { useConfirm } from '../components/ConfirmModal';
+import { useToast } from '../components/Toast';
 import ImportMapper from '../components/ImportMapper';
 import BOMAnalyzerDialog from '../components/BOMAnalyzerDialog';
 
@@ -59,8 +60,9 @@ const compressImage = (file, maxW = 300, maxH = 300) => {
 const DEFAULT_CATEGORIES = ['All', 'Pharmacy', 'PPE', 'Hygiene', 'General', 'Electronics', 'Food & Beverage'];
 
 const IMSCatalog = () => {
-  const { imsFetch, activeWorkspaceId } = useWorkspace();
+  const { imsFetch, activeWorkspaceId, activeWorkspace } = useWorkspace();
   const confirm = useConfirm();
+  const showToast = useToast();
 
   const [masters, setMasters] = useState([]);
   const [activeMaster, setActiveMaster] = useState(null);
@@ -68,6 +70,7 @@ const IMSCatalog = () => {
   const [masterForm, setMasterForm] = useState({ name: '', description: '', category: 'All' });
   const [, setLoading] = useState(false);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [categoryDetails, setCategoryDetails] = useState([]);
   const [, setWorkflows] = useState(['RECEIVE', 'DISPATCH', 'PUTAWAY', 'PICK', 'RETURN']);
 
   const [products, setProducts] = useState([]);
@@ -104,6 +107,7 @@ const IMSCatalog = () => {
       .then(r => r.json())
       .then(d => {
         if (d.success && d.categories.length > 0) {
+          setCategoryDetails(d.categories);
           const dynamicCats = d.categories.map(c => c.name);
           // Merge dynamic with defaults, keeping 'All' at front
           const merged = ['All', ...new Set([...dynamicCats])];
@@ -149,29 +153,100 @@ const IMSCatalog = () => {
 
   const handleDelete = async (id) => {
     if (!activeMaster) return;
-    await imsFetch(`/api/ims/masters/${activeMaster.id}/items/${id}`, { method: 'DELETE' });
-    setProducts(prev => prev.filter(p => p.id !== id));
-    setMasters(prev => prev.map(m => m.id === activeMaster.id ? { ...m, count: Math.max(0, (m.count || 0) - 1) } : m));
+    const ok = await confirm({
+      title: 'Delete Product?',
+      message: 'Are you sure you want to permanently delete this product?',
+      type: 'danger',
+      confirmLabel: 'Delete'
+    });
+    if (!ok) return;
+    try {
+      const res = await imsFetch(`/api/ims/masters/${activeMaster.id}/items/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setProducts(prev => prev.filter(p => p.id !== id));
+        setMasters(prev => prev.map(m => m.id === activeMaster.id ? { ...m, count: Math.max(0, (m.count || 0) - 1) } : m));
+        showToast('Product deleted successfully', 'success');
+      } else {
+        showToast(data.error || 'Failed to delete product', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error deleting product', 'error');
+    }
   };
 
   const generateBarcode = () => setForm(f => ({ ...f, barcode: 'GEN-' + Math.floor(100000 + Math.random() * 900000) }));
 
   const handleSave = async () => {
     if (!form.barcode || !form.name || !activeMaster) return;
-    const payload = { ...form, stock: Number(form.stock) || 0, multiplier: form.multiplier ? Number(form.multiplier) : null, masterId: activeMaster.id };
-    if (editProduct) {
-      const res = await imsFetch(`/api/ims/masters/${activeMaster.id}/items/${editProduct.id}`, { method: 'PUT', body: JSON.stringify(payload) });
-      const data = await res.json();
-      if (data.success) setProducts(prev => prev.map(p => p.id === editProduct.id ? { ...payload, id: p.id } : p));
-    } else {
-      const res = await imsFetch(`/api/ims/masters/${activeMaster.id}/items`, { method: 'POST', body: JSON.stringify(payload) });
-      const data = await res.json();
-      if (data.success) {
-        setProducts(prev => [...prev, data.item]);
-        setMasters(prev => prev.map(m => m.id === activeMaster.id ? { ...m, count: (m.count || 0) + 1 } : m));
+    
+    let supervisorPin = undefined;
+    
+    if (editProduct && Number(form.stock) !== Number(editProduct.stock)) {
+      try {
+        const settingsRes = await imsFetch('/api/ims/settings');
+        const settingsData = await settingsRes.json();
+        if (settingsData.success && settingsData.settings) {
+          const settings = settingsData.settings;
+          if (settings.security?.managerApproval) {
+            const role = activeWorkspace?.currentUserRole;
+            const isUserAdminOrOwner = ['owner', 'admin'].includes(role);
+            if (!isUserAdminOrOwner) {
+              const enteredPin = prompt("Manager Overrides is enabled. Please enter the Supervisor PIN to adjust stock quantity:");
+              if (enteredPin === null) {
+                return;
+              }
+              supervisorPin = enteredPin;
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error checking settings for overrides", err);
       }
     }
-    setShowModal(false);
+
+    const payload = { 
+      ...form, 
+      stock: Number(form.stock) || 0, 
+      multiplier: form.multiplier ? Number(form.multiplier) : null, 
+      masterId: activeMaster.id,
+      supervisorPin
+    };
+
+    try {
+      if (editProduct) {
+        const res = await imsFetch(`/api/ims/masters/${activeMaster.id}/items/${editProduct.id}`, { 
+          method: 'PUT', 
+          body: JSON.stringify(payload) 
+        });
+        const data = await res.json();
+        if (data.success) {
+          setProducts(prev => prev.map(p => p.id === editProduct.id ? { ...payload, id: p.id } : p));
+          setShowModal(false);
+          showToast('Product updated successfully.', 'success');
+        } else {
+          showToast(data.error || 'Failed to update product', 'error');
+        }
+      } else {
+        const res = await imsFetch(`/api/ims/masters/${activeMaster.id}/items`, { 
+          method: 'POST', 
+          body: JSON.stringify(payload) 
+        });
+        const data = await res.json();
+        if (data.success) {
+          setProducts(prev => [...prev, data.item]);
+          setMasters(prev => prev.map(m => m.id === activeMaster.id ? { ...m, count: (m.count || 0) + 1 } : m));
+          setShowModal(false);
+          showToast('Product added successfully.', 'success');
+        } else {
+          showToast(data.error || 'Failed to add product', 'error');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error saving product', 'error');
+    }
   };
 
 
@@ -214,9 +289,13 @@ const IMSCatalog = () => {
       if (data.success) {
         setMasters(prev => prev.filter(m => m.id !== master.id));
         setProducts(prev => prev.filter(p => p.masterId !== master.id));
+        showToast('Master catalog deleted successfully', 'success');
+      } else {
+        showToast(data.error || 'Failed to delete master catalog', 'error');
       }
     } catch (err) {
       console.error('Failed to delete master', err);
+      showToast('Error deleting master catalog', 'error');
     }
   };
 
@@ -503,7 +582,15 @@ const IMSCatalog = () => {
                   <div className="modal-row">
                     <div className="form-group">
                       <label className="form-label">Category</label>
-                      <select className="form-select" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                      <select className="form-select" value={form.category} onChange={e => {
+                        const selectedCatName = e.target.value;
+                        const matchedCat = categoryDetails.find(c => c.name === selectedCatName);
+                        setForm(f => ({ 
+                          ...f, 
+                          category: selectedCatName,
+                          trackingMode: matchedCat ? matchedCat.mode : 'FIFO'
+                        }));
+                      }}>
                         {categories.filter(c => c !== 'All').map(c => <option key={c}>{c}</option>)}
                       </select>
                     </div>

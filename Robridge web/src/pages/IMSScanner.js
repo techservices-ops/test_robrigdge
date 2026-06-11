@@ -37,6 +37,7 @@ const IMSScanner = () => {
   const [autoLogEnabled, setAutoLogEnabled] = useState(true);
   const [fefoRec, setFefoRec] = useState([]);
   const [dynamicCategories, setDynamicCategories] = useState(['General', 'Pharmacy', 'PPE', 'Hygiene', 'Electronics', 'Food & Beverage']);
+  const [categoryDetails, setCategoryDetails] = useState([]);
   const inputRef = useRef(null);
   const isScanningRef = useRef(false); // guard against concurrent doScan() calls
   const lastScanTimeRef = useRef(0);
@@ -132,6 +133,7 @@ const IMSScanner = () => {
           const catRes = await imsFetch('/api/ims/categories');
           const catData = await catRes.json();
           if (catData.success && catData.categories.length > 0) {
+            setCategoryDetails(catData.categories);
             setDynamicCategories(catData.categories.map(c => c.name));
           }
           // Fetch workspace locations
@@ -250,8 +252,7 @@ const IMSScanner = () => {
           } else {
              if (scanStage === 'RECEIVE') {
                 setScanResult('unknown');
-                setNewItemBarcode(val);
-                setShowOnboard(true);
+                triggerOnboard(val);
              } else {
                 setScanResult('error');
                 showToast(`Item with barcode ${val} not found in catalog.`, 'error');
@@ -359,8 +360,7 @@ const IMSScanner = () => {
         // Item not found in catalog
         if (scanStage === 'RECEIVE') {
           setScanResult('unknown');
-          setNewItemBarcode(val);
-          setShowOnboard(true);
+          triggerOnboard(val);
         } else {
           setScanResult('error');
           showToast(`Item with barcode ${val} not found in catalog.`, 'error');
@@ -385,6 +385,20 @@ const IMSScanner = () => {
   };
 
 
+  const triggerOnboard = (barcode) => {
+    setNewItemBarcode(barcode);
+    const defaultCat = dynamicCategories[0] || 'General';
+    const matched = categoryDetails.find(c => c.name === defaultCat);
+    setOnboardForm({
+      name: '',
+      category: defaultCat,
+      unit: 'Unit',
+      qty: '',
+      tracking: matched ? matched.mode : 'FIFO'
+    });
+    setShowOnboard(true);
+  };
+
   const handleOnboardSave = async () => {
     const tempItem = {
       name: onboardForm.name || 'New Item',
@@ -396,7 +410,9 @@ const IMSScanner = () => {
     };
     await recordScanEvent(tempItem, scanStage, onboardForm.qty || 1, '', '', tempItem.name);
     setShowOnboard(false);
-    setOnboardForm({ name: '', category: 'General', unit: 'Unit', qty: '', tracking: 'FIFO' });
+    const defaultCat = dynamicCategories[0] || 'General';
+    const matched = categoryDetails.find(c => c.name === defaultCat);
+    setOnboardForm({ name: '', category: defaultCat, unit: 'Unit', qty: '', tracking: matched ? matched.mode : 'FIFO' });
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
@@ -843,7 +859,15 @@ const IMSScanner = () => {
                 <div className="form-group">
                   <label className="form-label">Category</label>
                   <select className="form-select" value={onboardForm.category}
-                    onChange={e => setOnboardForm(f => ({ ...f, category: e.target.value }))}>
+                    onChange={e => {
+                      const selectedCatName = e.target.value;
+                      const matchedCat = categoryDetails.find(c => c.name === selectedCatName);
+                      setOnboardForm(f => ({
+                        ...f,
+                        category: selectedCatName,
+                        tracking: matchedCat ? matchedCat.mode : 'FIFO'
+                      }));
+                    }}>
                     {dynamicCategories.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
