@@ -257,4 +257,46 @@ describe('Security & Audit Compliance API Tests', () => {
     expect(actions).toContain('update_item');
     expect(actions).toContain('delete_master');
   });
+
+  test('Hierarchical workspace member removal permissions for managers', async () => {
+    // 1. Create a regular User to be deleted
+    const passwordHash = await bcrypt.hash('TestPassword123!', 10);
+    const regularUserRes = await pool.query(
+      `INSERT INTO users (email, password_hash, name, role, email_verified)
+       VALUES ('test-compliance-regular@robridge.com', $1, 'Regular User', 'expo_user', true)
+       RETURNING id`,
+      [passwordHash]
+    );
+    const regularUser = regularUserRes.rows[0];
+
+    // 2. Add regular User to the workspace with the 'user' role
+    await pool.query(
+      `INSERT INTO ims_workspace_members (workspace_id, user_id, role, status)
+       VALUES ($1, $2, 'user', 'active')`,
+      [workspaceId, regularUser.id]
+    );
+
+    // 3. Attempt to delete regular User as a Manager -> Should succeed (200 OK)
+    let res = await request(app)
+      .delete(`/api/workspaces/members/${regularUser.id}`)
+      .set('Authorization', `Bearer ${managerToken}`)
+      .set('x-workspace-id', workspaceId);
+    expect(res.statusCode).toEqual(200);
+
+    // 4. Attempt to delete the Admin (adminUser) as a Manager -> Should fail (403 Forbidden)
+    res = await request(app)
+      .delete(`/api/workspaces/members/${adminUser.id}`)
+      .set('Authorization', `Bearer ${managerToken}`)
+      .set('x-workspace-id', workspaceId);
+    expect(res.statusCode).toEqual(403);
+    expect(res.body.error).toContain('Managers cannot remove owners, admins, or other managers');
+
+    // 5. Attempt to delete another Manager (managerUser) as a Manager -> Should fail (403 Forbidden)
+    res = await request(app)
+      .delete(`/api/workspaces/members/${managerUser.id}`)
+      .set('Authorization', `Bearer ${managerToken}`)
+      .set('x-workspace-id', workspaceId);
+    expect(res.statusCode).toEqual(403);
+    expect(res.body.error).toContain('Managers cannot remove owners, admins, or other managers');
+  });
 });

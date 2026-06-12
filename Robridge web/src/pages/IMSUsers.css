@@ -217,14 +217,8 @@
   border-radius: 20px;
   font-size: 12px;
   font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
+  cursor: default;
   white-space: nowrap;
-}
-
-.member-role-badge:hover {
-  filter: brightness(1.1);
-  transform: scale(1.03);
 }
 
 .member-role-editor {

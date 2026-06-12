@@ -216,6 +216,10 @@ const initDatabase = async () => {
       await client.query('DROP FUNCTION IF EXISTS create_default_workspace CASCADE;');
       await client.query('DROP FUNCTION IF EXISTS auto_create_workspace() CASCADE;');
       await client.query('DROP FUNCTION IF EXISTS auto_create_workspace CASCADE;');
+      await client.query('DROP FUNCTION IF EXISTS create_default_workspace_trigger() CASCADE;');
+      await client.query('DROP FUNCTION IF EXISTS create_default_workspace_trigger CASCADE;');
+      await client.query('DROP FUNCTION IF EXISTS auto_create_workspace_trigger() CASCADE;');
+      await client.query('DROP FUNCTION IF EXISTS auto_create_workspace_trigger CASCADE;');
     } catch (triggerErr) {
       console.error('⚠️ Warning dropping triggers:', triggerErr.message);
     }
@@ -1669,6 +1673,9 @@ app.delete('/api/workspaces/members/:userId', authenticateToken, requireWorkspac
     }
 
     if (!canRemove) {
+      if (requesterRole === 'manager' && ['owner', 'admin', 'manager'].includes(targetRole)) {
+        return res.status(403).json({ success: false, error: 'Managers cannot remove owners, admins, or other managers' });
+      }
       return res.status(403).json({ success: false, error: 'You do not have permission to remove this member' });
     }
 

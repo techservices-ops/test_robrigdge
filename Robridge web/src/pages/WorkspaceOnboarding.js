@@ -10,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 import './WorkspaceOnboarding.css';
 
 export default function WorkspaceOnboarding() {
-  const { createWorkspace, imsFetch, fetchWorkspaces, switchWorkspace } = useWorkspace();
+  const { workspaces, createWorkspace, imsFetch, fetchWorkspaces, switchWorkspace } = useWorkspace();
   const { getUserInfo } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -151,6 +151,11 @@ export default function WorkspaceOnboarding() {
           {/* Step 1: Mode selection */}
           {step === 1 && (
             <div className="ws-ob-step ws-ob-step-enter">
+              {workspaces && workspaces.length > 0 && (
+                <button className="ws-ob-back" onClick={() => navigate('/')} style={{ marginBottom: '20px' }}>
+                  <FaArrowLeft /> Exit & Go back to Workspace
+                </button>
+              )}
               <div className="ws-ob-greeting">
                 <div className="ws-ob-avatar">{user?.name?.charAt(0)?.toUpperCase() || 'U'}</div>
                 <div>
